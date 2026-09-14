@@ -1,0 +1,31 @@
+{
+  "name": "hyt-wayfinder",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "next": "15.1.6",
+    "@react-three/fiber": "^8.17.10",
+    "@react-three/drei": "^9.119.1",
+    "three": "^0.171.0",
+    "nipplejs": "^0.10.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3",
+    "@types/node": "^22.10.5",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@types/three": "^0.171.0",
+    "postcss": "^8.5.1",
+    "tailwindcss": "^3.4.17",
+    "eslint": "^9.18.0",
+    "eslint-config-next": "15.1.6"
+  }
+}
