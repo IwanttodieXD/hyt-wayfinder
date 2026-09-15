@@ -1,0 +1,16 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "context-mode PreToolUse",
+      "trigger": "PreToolUse",
+      "description": "Routes large-output tools through context-mode sandbox to protect the context window",
+      "matcher": "execute_pwsh|read_file|grep_search|remote_web_search|web_fetch",
+      "action": {
+        "type": "command",
+        "command": "context-mode hook kiro pretooluse",
+        "timeout": 30
+      }
+    }
+  ]
+}

@@ -1,16 +1,43 @@
 export default function Controls() {
   return (
-    <div className="absolute bottom-8 left-8 bg-black/50 backdrop-blur-sm px-6 py-4 rounded-lg border border-cyan-400/30">
-      <div className="space-y-2 text-white text-sm">
-        <p className="font-semibold text-cyan-300 uppercase tracking-wide">Desktop Controls</p>
-        <div className="space-y-1">
-          <p><span className="font-mono bg-gray-700 px-2 py-1 rounded">W A S D</span> - Move</p>
-          <p><span className="font-mono bg-gray-700 px-2 py-1 rounded">Mouse</span> - Look Around</p>
-          <p><span className="font-mono bg-gray-700 px-2 py-1 rounded">Space</span> - Jump</p>
-        </div>
-        <p className="font-semibold text-cyan-300 uppercase tracking-wide mt-4">Mobile</p>
-        <p>Use virtual joystick</p>
+    <div className="absolute bottom-6 left-6 z-20 bg-black/40 backdrop-blur-md border border-white/10 rounded-xl px-4 py-3 w-52 select-none">
+      {/* Header */}
+      <p className="text-[10px] font-bold text-cyan-400 uppercase tracking-widest mb-2.5">
+        Controls
+      </p>
+
+      {/* Commands */}
+      <div className="space-y-1.5">
+        <Row keys={['W', 'A', 'S', 'D']} label="Move" />
+        <Row keys={['Mouse']} label="Look around" />
+        <Row keys={['Esc']} label="Pause / show menu" />
       </div>
+
+      {/* Divider */}
+      <div className="my-2.5 border-t border-white/10" />
+
+      {/* Mobile note */}
+      <p className="text-[10px] text-slate-500 leading-relaxed">
+        Mobile: left drag to move, right drag to look
+      </p>
+    </div>
+  );
+}
+
+function Row({ keys, label }: { keys: string[]; label: string }) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center gap-1">
+        {keys.map((k) => (
+          <kbd
+            key={k}
+            className="inline-flex items-center justify-center px-1.5 py-0.5 rounded bg-white/10 border border-white/20 text-white font-mono text-[10px] leading-none min-w-[22px]"
+          >
+            {k}
+          </kbd>
+        ))}
+      </div>
+      <span className="text-slate-400 text-[11px] text-right leading-tight">{label}</span>
     </div>
   );
 }

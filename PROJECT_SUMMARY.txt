@@ -1,0 +1,156 @@
+================================================================================
+  HYT WAYFINDER — PROJECT FILE SUMMARY
+  Virtual 3D Tour of HYT Global Institute
+================================================================================
+
+--------------------------------------------------------------------------------
+PAGES  (app/)
+--------------------------------------------------------------------------------
+
+app/page.tsx
+  PURPOSE : Landing / home page shown at the root URL (/)
+  WHAT TO EDIT :
+    - Title, subtitle, button text
+    - Background colors / glow effects (inline style and Tailwind classes)
+    - Stats bar values at the bottom (5 Floors, 3D Navigation, 360° Exploration)
+    - handleEnter() — controls the fade-out and navigation delay to /tour
+
+app/tour/page.tsx
+  PURPOSE : The tour route (/tour). Loads the 3D scene.
+  WHAT TO EDIT :
+    - Pointer lock cleanup (already handled — releases lock on unmount/tab switch)
+    - Loading fallback component (currently LoadingScreen)
+
+app/layout.tsx
+  PURPOSE : Root HTML wrapper applied to every page.
+  WHAT TO EDIT :
+    - Browser tab title and meta description (title, description fields)
+    - Add global fonts or third-party scripts here
+
+app/globals.css
+  PURPOSE : Global CSS. Sets up Tailwind and resets margin/padding/box-sizing.
+  WHAT TO EDIT :
+    - Custom CSS variables (--background, --foreground)
+    - Body font (currently Arial/Helvetica)
+    - Overflow settings (currently hidden to prevent scrollbars in the 3D view)
+
+--------------------------------------------------------------------------------
+COMPONENTS  (components/)
+--------------------------------------------------------------------------------
+
+components/Scene.tsx
+  PURPOSE : Main 3D scene container. Orchestrates all 3D and UI elements.
+  WHAT TO EDIT :
+    - "Click to Start" overlay text and styling
+    - "Return to Home" button (already added — shows when cursor is visible)
+    - Starting camera position: position: [0, 1.6, 10]
+    - Field of view: fov: 75  (higher = wider angle, lower = zoomed in)
+    - Lighting: ambientLight intensity, directionalLight position/intensity
+    - Shadow map resolution: shadow-mapSize={[2048, 2048]}
+    - Pixel ratio cap: dpr={[1, 2]}
+
+components/Building.tsx
+  PURPOSE : Generates all 3D geometry for the building (floors, walls, doors, windows).
+  WHAT TO EDIT :
+    - Building size: buildingWidth = 40, buildingDepth = 30
+    - Floor height: floorHeight = 4
+    - Number of floors: change the 5 in "for (let i = 0; i < 5; i++)"
+    - Wall color: wallMaterial color '#e0e0e0'
+    - Floor color: hsl() formula inside the floor loop
+    - Door color: doorMaterial color '#8B4513'
+    - Window color/opacity: windowMaterial color '#87CEEB', opacity 0.6
+    - Roof color: roofMaterial color '#4a5568'
+    - Add rooms/walls by inserting new <mesh> elements inside the floor group
+    - Staircase position: the stairs array at the bottom of the component
+
+components/Camera.tsx
+  PURPOSE : Thin bridge component — connects first-person controls and mobile
+            controls to the scene, and reports floor/lock state back to Scene.
+  WHAT TO EDIT :
+    - Rarely needs editing. Change if you want to add new input sources.
+
+components/FloorIndicator.tsx
+  PURPOSE : HUD element in the top-right corner showing current floor number.
+  WHAT TO EDIT :
+    - Label text (currently "Floor")
+    - Dot colors: bg-cyan-400 (active), bg-gray-600 (inactive)
+    - Number of floor dots: update the [1,2,3,4,5] array to match floor count
+
+components/Controls.tsx
+  PURPOSE : Controls hint panel in the bottom-left corner (desktop only).
+  WHAT TO EDIT :
+    - Key labels and descriptions
+    - To hide it entirely: remove {!isMobile && <Controls />} from Scene.tsx
+
+components/LoadingScreen.tsx
+  PURPOSE : Shown while the 3D scene is loading (before Three.js initialises).
+  WHAT TO EDIT :
+    - Loading text ("Loading 3D Environment", "Preparing HYT Global Institute tour")
+    - Spinner style or colors
+    - Background color (currently #080d1a to match the landing page)
+
+components/PerformanceStats.tsx
+  PURPOSE : FPS counter toggled by a button in the top-left corner.
+  WHAT TO EDIT :
+    - FPS thresholds: 30 = Good, 60 = Excellent
+    - To remove it: delete <PerformanceStats /> from Scene.tsx
+
+--------------------------------------------------------------------------------
+HOOKS  (hooks/)
+--------------------------------------------------------------------------------
+
+hooks/useFirstPersonControls.ts
+  PURPOSE : Handles all keyboard (WASD/arrows) and mouse movement for desktop.
+  WHAT TO EDIT :
+    - Movement speed: const speed = 10.0
+    - Mouse look sensitivity: the 0.002 multipliers in handleMouseMove()
+    - Collision boundaries (how far you can walk):
+        buildingBounds: { minX: -19.5, maxX: 19.5, minZ: -14.5, maxZ: 14.5 }
+    - Floor detection: the formula in getCurrentFloor()
+    - A/D direction: direction.current.x assignment (already fixed)
+
+hooks/useMobileControls.ts
+  PURPOSE : Handles touch input for mobile. Left side = joystick, right side = look.
+  WHAT TO EDIT :
+    - Mobile movement speed: const speed = 8.0
+    - Touch look sensitivity: the 0.003 multipliers in handleTouchMove()
+    - Joystick force scaling: the / 50 divisor in joystick distance calculation
+
+--------------------------------------------------------------------------------
+CONFIG FILES
+--------------------------------------------------------------------------------
+
+package.json         — Project dependencies and npm scripts (npm run dev, build, etc.)
+next.config.js       — Next.js configuration (add image domains, redirects, etc.)
+tailwind.config.ts   — Tailwind CSS config (add custom colors, fonts, breakpoints)
+tsconfig.json        — TypeScript config (@/ path alias points to project root)
+.eslintrc.json       — ESLint rules for code quality
+
+--------------------------------------------------------------------------------
+KEY RELATIONSHIPS
+--------------------------------------------------------------------------------
+
+  page.tsx  ──(navigates to)──▶  tour/page.tsx
+                                      │
+                                      ▼
+                                  Scene.tsx
+                                 /    |    \
+                        Camera.tsx  Building.tsx  FloorIndicator.tsx
+                           /  \                   Controls.tsx
+    useFirstPersonControls.ts  useMobileControls.ts   PerformanceStats.tsx
+
+--------------------------------------------------------------------------------
+QUICK REFERENCE — MOST COMMON EDITS
+--------------------------------------------------------------------------------
+
+  Change landing page text       →  app/page.tsx
+  Change browser tab title       →  app/layout.tsx
+  Change building size/floors    →  components/Building.tsx
+  Change movement speed          →  hooks/useFirstPersonControls.ts  (speed = 10.0)
+  Change camera start position   →  components/Scene.tsx  (position: [0, 1.6, 10])
+  Change floor count             →  Building.tsx (loop) + FloorIndicator.tsx (dots)
+  Hide controls panel            →  Scene.tsx (remove <Controls />)
+  Hide FPS counter               →  Scene.tsx (remove <PerformanceStats />)
+  Add a room/wall                →  components/Building.tsx (add <mesh> in floor loop)
+
+================================================================================

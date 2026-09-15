@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "context-mode PostToolUse",
+      "trigger": "PostToolUse",
+      "description": "Captures session events after each tool call for context-mode session tracking",
+      "action": {
+        "type": "command",
+        "command": "context-mode hook kiro posttooluse",
+        "timeout": 30
+      }
+    }
+  ]
+}

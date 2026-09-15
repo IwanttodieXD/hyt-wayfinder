@@ -130,13 +130,13 @@ export function useFirstPersonControls() {
   useFrame((state, delta) => {
     if (!isLocked) return;
 
-    const speed = 10.0;
+    const speed = 2.0;
 
     velocity.current.x -= velocity.current.x * 10.0 * delta;
     velocity.current.z -= velocity.current.z * 10.0 * delta;
 
     direction.current.z = Number(movement.current.forward) - Number(movement.current.backward);
-    direction.current.x = Number(movement.current.right) - Number(movement.current.left);
+    direction.current.x = Number(movement.current.left) - Number(movement.current.right);
     direction.current.normalize();
 
     if (movement.current.forward || movement.current.backward) {
