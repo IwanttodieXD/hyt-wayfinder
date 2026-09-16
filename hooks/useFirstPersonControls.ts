@@ -158,15 +158,13 @@ export function useFirstPersonControls() {
     newPosition.addScaledVector(moveVector, -velocity.current.z);
     newPosition.addScaledVector(strafeVector, -velocity.current.x);
 
-    // Collision detection
-    if (
-      newPosition.x >= buildingBounds.minX &&
-      newPosition.x <= buildingBounds.maxX &&
-      newPosition.z >= buildingBounds.minZ &&
-      newPosition.z <= buildingBounds.maxZ
-    ) {
-      camera.position.copy(newPosition);
-    }
+    // Collision detection — test X and Z independently so the player
+    // slides along walls instead of getting stuck (no stutter)
+    const clampedX = Math.max(buildingBounds.minX, Math.min(buildingBounds.maxX, newPosition.x));
+    const clampedZ = Math.max(buildingBounds.minZ, Math.min(buildingBounds.maxZ, newPosition.z));
+
+    camera.position.x = clampedX;
+    camera.position.z = clampedZ;
   });
 
   // Calculate current floor based on Y position

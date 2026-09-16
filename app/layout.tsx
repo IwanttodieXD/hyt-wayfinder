@@ -4,6 +4,9 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "HYT WAYFINDER",
   description: "Virtual 3D tour of HYT Global Institute building",
+  icons: {
+    icon: "/hyt_logo.png",
+  },
 };
 
 export default function RootLayout({
