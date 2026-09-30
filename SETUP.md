@@ -97,14 +97,33 @@ npm run dev -- -p 3001
 - [ ] 3D scene loads
 - [ ] WASD/mouse controls working
 - [ ] Floor indicator updating
+- [ ] **Barista mini-game accessible (Ground Floor, Left Wing)**
+
+## Barista Mini-Game Quick Test
+
+After setup, test the interactive barista training:
+
+1. Click "Enter Tour" from homepage
+2. Navigate to **Ground Floor, Left Wing** (turn left, walk forward)
+3. Find the brown counter with coffee equipment
+4. Click the **green button** on the grinder to start
+5. Follow on-screen HUD instructions
+6. Test the hold-and-release measurement mechanics
+
+**Expected behavior:**
+- HUD overlay appears with instructions
+- Progress bars show real-time measurements
+- Coffee/water/milk containers fill visually in 3D
+- Score calculated based on precision (90+ = TESDA certified!)
 
 ## Next Steps After Setup
 
 1. Test all controls (WASD, mouse, mobile touch)
 2. Verify collision detection (can't walk through walls)
 3. Check floor transitions
-4. Test on mobile device (open http://YOUR_IP:3000)
-5. Replace placeholder building with actual HYT 3D assets
+4. **Test barista mini-game (see Quick Test above)**
+5. Test on mobile device (open http://YOUR_IP:3000)
+6. Replace placeholder building with actual HYT 3D assets
 
 ## Performance Tips
 

@@ -1,6 +1,6 @@
 # HYT WAYFINDER
 
-A browser-based 3D touring simulator for the HYT Global Institute building.
+A browser-based 3D navigation simulator for the HYT Global Institute building.
 
 ## Features
 
@@ -66,8 +66,6 @@ npm run dev
 hyt-wayfinder/
 ├── app/
 │   ├── page.tsx          # Landing page
-│   ├── tour/
-│   │   └── page.tsx      # 3D tour page
 │   ├── layout.tsx        # Root layout
 │   └── globals.css       # Global styles
 ├── components/

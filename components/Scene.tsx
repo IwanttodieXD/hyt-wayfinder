@@ -9,11 +9,15 @@ import Camera from './Camera';
 import FloorIndicator from './FloorIndicator';
 import Controls from './Controls';
 import PerformanceStats from './PerformanceStats';
+import BaristaGameHUD from './BaristaGameHUD';
+import Crosshair from './Crosshair';
+import CrosshairRaycaster from './CrosshairRaycaster';
 
 export default function Scene() {
   const [currentFloor, setCurrentFloor] = useState(1);
   const [isLocked, setIsLocked] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [isTargeting, setIsTargeting] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -25,6 +29,10 @@ export default function Scene() {
       document.exitPointerLock();
     }
     router.push('/');
+  };
+
+  const handleTargetChange = (targeting: boolean, objectName?: string) => {
+    setIsTargeting(targeting);
   };
 
   return (
@@ -50,6 +58,12 @@ export default function Scene() {
       <PerformanceStats />
       <FloorIndicator currentFloor={currentFloor} />
       {!isMobile && <Controls />}
+      
+      {/* Crosshair - shows when pointer is locked */}
+      {isLocked && <Crosshair isTargeting={isTargeting} />}
+      
+      {/* Barista Game HUD - Outside Canvas */}
+      <BaristaGameHUD />
 
       <Canvas
         camera={{
@@ -76,6 +90,7 @@ export default function Scene() {
         <pointLight position={[0, 10, 0]} intensity={0.5} />
 
         <Building />
+        <CrosshairRaycaster onTargetChange={handleTargetChange} />
         <Camera 
           onFloorChange={setCurrentFloor} 
           onLockChange={setIsLocked}

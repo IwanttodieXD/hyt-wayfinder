@@ -1,7 +1,23 @@
 ================================================================================
   HYT WAYFINDER — PROJECT FILE SUMMARY
-  Virtual 3D Tour of HYT Global Institute
+  Virtual 3D Tour + Student QR Clock-In & Wayfinding System
 ================================================================================
+
+--------------------------------------------------------------------------------
+FEATURES
+--------------------------------------------------------------------------------
+
+1. 3D BUILDING TOUR
+   - First-person exploration of HYT Global Institute (5 floors)
+   - Desktop controls (WASD + mouse) and mobile touch controls
+   - Interactive floor navigation with real-time position tracking
+
+2. STUDENT QR CLOCK-IN SYSTEM ★ NEW ★
+   - Dual-view interface: Student Mobile App + Lobby Kiosk Station
+   - Animated QR scanner with laser scan effects
+   - Real-time clock-in/out tracking with timestamps
+   - Interactive 3D wayfinding with animated route visualization
+   - Guest check-in simulation with ID scanning
 
 --------------------------------------------------------------------------------
 PAGES  (app/)
@@ -9,148 +25,263 @@ PAGES  (app/)
 
 app/page.tsx
   PURPOSE : Landing / home page shown at the root URL (/)
+  NEW FEATURES :
+    - "Student Clock-In" button added to navigate to /clock-in
   WHAT TO EDIT :
     - Title, subtitle, button text
     - Background colors / glow effects (inline style and Tailwind classes)
     - Stats bar values at the bottom (5 Floors, 3D Navigation, 360° Exploration)
-    - handleEnter() — controls the fade-out and navigation delay to /tour
+
+app/clock-in/page.tsx  ★ NEW ★
+  PURPOSE : Student QR Clock-In & 3D Wayfinding System (/clock-in)
+  FEATURES :
+    - ViewModeSwitcher (toggle between Mobile/Kiosk views)
+    - StudentMobileView (QR scanner + 3D route visualization)
+    - KioskStationView (large QR code + metrics dashboard)
+  WHAT TO EDIT :
+    - Header logo and system status indicator
+    - Font Awesome CDN URL (currently v6.5.1)
 
 app/tour/page.tsx
   PURPOSE : The tour route (/tour). Loads the 3D scene.
   WHAT TO EDIT :
-    - Pointer lock cleanup (already handled — releases lock on unmount/tab switch)
+    - Pointer lock cleanup (already handled)
     - Loading fallback component (currently LoadingScreen)
 
 app/layout.tsx
   PURPOSE : Root HTML wrapper applied to every page.
   WHAT TO EDIT :
-    - Browser tab title and meta description (title, description fields)
-    - Add global fonts or third-party scripts here
+    - Browser tab title and meta description
 
 app/globals.css
-  PURPOSE : Global CSS. Sets up Tailwind and resets margin/padding/box-sizing.
+  PURPOSE : Global CSS with Tailwind utilities and custom animations.
+  NEW FEATURES :
+    - .glass-panel class for frosted glass effect
+    - @keyframes scan, scale-in, fade-in for animations
   WHAT TO EDIT :
-    - Custom CSS variables (--background, --foreground)
-    - Body font (currently Arial/Helvetica)
-    - Overflow settings (currently hidden to prevent scrollbars in the 3D view)
+    - Animation timing and easing functions
+    - Glass panel blur radius (backdrop-filter: blur(12px))
 
 --------------------------------------------------------------------------------
 COMPONENTS  (components/)
 --------------------------------------------------------------------------------
 
+ORIGINAL 3D TOUR COMPONENTS:
+
 components/Scene.tsx
-  PURPOSE : Main 3D scene container. Orchestrates all 3D and UI elements.
-  WHAT TO EDIT :
-    - "Click to Start" overlay text and styling
-    - "Return to Home" button (already added — shows when cursor is visible)
-    - Starting camera position: position: [0, 1.6, 10]
-    - Field of view: fov: 75  (higher = wider angle, lower = zoomed in)
-    - Lighting: ambientLight intensity, directionalLight position/intensity
-    - Shadow map resolution: shadow-mapSize={[2048, 2048]}
-    - Pixel ratio cap: dpr={[1, 2]}
+  PURPOSE : Main 3D scene container for building tour.
 
 components/Building.tsx
-  PURPOSE : Generates all 3D geometry for the building (floors, walls, doors, windows).
-  WHAT TO EDIT :
-    - Building size: buildingWidth = 40, buildingDepth = 30
-    - Floor height: floorHeight = 4
-    - Number of floors: change the 5 in "for (let i = 0; i < 5; i++)"
-    - Wall color: wallMaterial color '#e0e0e0'
-    - Floor color: hsl() formula inside the floor loop
-    - Door color: doorMaterial color '#8B4513'
-    - Window color/opacity: windowMaterial color '#87CEEB', opacity 0.6
-    - Roof color: roofMaterial color '#4a5568'
-    - Add rooms/walls by inserting new <mesh> elements inside the floor group
-    - Staircase position: the stairs array at the bottom of the component
+  PURPOSE : Generates all 3D geometry (floors, walls, doors, windows).
 
 components/Camera.tsx
-  PURPOSE : Thin bridge component — connects first-person controls and mobile
-            controls to the scene, and reports floor/lock state back to Scene.
-  WHAT TO EDIT :
-    - Rarely needs editing. Change if you want to add new input sources.
+  PURPOSE : Bridge between first-person/mobile controls and scene.
 
 components/FloorIndicator.tsx
-  PURPOSE : HUD element in the top-right corner showing current floor number.
-  WHAT TO EDIT :
-    - Label text (currently "Floor")
-    - Dot colors: bg-cyan-400 (active), bg-gray-600 (inactive)
-    - Number of floor dots: update the [1,2,3,4,5] array to match floor count
+  PURPOSE : HUD showing current floor number.
 
 components/Controls.tsx
-  PURPOSE : Controls hint panel in the bottom-left corner (desktop only).
-  WHAT TO EDIT :
-    - Key labels and descriptions
-    - To hide it entirely: remove {!isMobile && <Controls />} from Scene.tsx
+  PURPOSE : Controls hint panel (desktop only).
 
 components/LoadingScreen.tsx
-  PURPOSE : Shown while the 3D scene is loading (before Three.js initialises).
-  WHAT TO EDIT :
-    - Loading text ("Loading 3D Environment", "Preparing HYT Global Institute tour")
-    - Spinner style or colors
-    - Background color (currently #080d1a to match the landing page)
+  PURPOSE : Loading screen for 3D scene initialization.
 
 components/PerformanceStats.tsx
-  PURPOSE : FPS counter toggled by a button in the top-left corner.
+  PURPOSE : FPS counter toggle.
+
+NEW CLOCK-IN SYSTEM COMPONENTS:
+
+components/ViewModeSwitcher.tsx  ★ NEW ★
+  PURPOSE : Toggle button to switch between Mobile and Kiosk views.
   WHAT TO EDIT :
-    - FPS thresholds: 30 = Good, 60 = Excellent
-    - To remove it: delete <PerformanceStats /> from Scene.tsx
+    - Button labels and icons (fa-mobile-screen-button, fa-desktop)
+    - Active state colors (cyan-500/20)
+
+components/StudentMobileView.tsx  ★ NEW ★
+  PURPOSE : Mobile phone frame container with status bar and app header.
+  FEATURES :
+    - Student profile display (name, ID, destination)
+    - Clock-in status badge (NOT CLOCKED IN / CLOCKED IN)
+    - Switches between QRScanner and RouteVisualization
+  WHAT TO EDIT :
+    - Mobile device frame styling (rounded-3xl, border-4)
+    - Status bar icons and time display
+    - Destination info card layout
+
+components/QRScanner.tsx  ★ NEW ★
+  PURPOSE : Animated QR scanner with camera viewfinder simulation.
+  FEATURES :
+    - Laser scan animation (2-second cycle)
+    - Corner brackets for targeting reticle
+    - Success animation on scan (green checkmark)
+    - "Simulate Scan Kiosk QR" button
+  WHAT TO EDIT :
+    - Viewfinder size (max-w-xs aspect-square)
+    - Laser color (via-cyan-400)
+    - Scan animation timing (2000ms intervals)
+    - Camera feed background gradient
+
+components/KioskStationView.tsx  ★ NEW ★
+  PURPOSE : Full-screen kiosk interface with QR code and metrics.
+  FEATURES :
+    - Large QR code display (256x256px)
+    - Real-time metrics: Active Students, Daily Visits, Current Time
+    - Guest check-in simulation with ID data extraction
+    - Thermal badge printing animation
+  DEPENDENCIES : react-qr-code (npm install react-qr-code)
+  WHAT TO EDIT :
+    - QR code value ("HYT-KIOSK-01-CHECKIN-STATION")
+    - Metrics layout (3-column grid)
+    - Guest data (Maria Santos, G-2026-5521)
+    - Kiosk terminal ID and location
+
+components/RouteVisualization.tsx  ★ NEW ★
+  PURPOSE : Interactive 3D wayfinding with animated route visualization.
+  FEATURES :
+    - Three.js canvas with 6-waypoint route system
+    - Animated glowing pathway (cyan-colored line)
+    - Play/Pause/Reset route animation controls
+    - Waypoint stage indicators with progress tracking
+    - Clock-out button to return to scanner
+  WAYPOINTS :
+    1. Main Lobby (0, 0, 0)
+    2. Hallway A (5, 0, 3)
+    3. Elevator 3F (10, 0, 5)
+    4. 3rd Floor Landing (10, 10, 5)
+    5. Corridor B (15, 10, 8)
+    6. Room 304 (20, 10, 10) — TESDA Electronics Lab
+  WHAT TO EDIT :
+    - Waypoint positions and labels (waypoints array)
+    - Animation speed (2000ms delay between waypoints)
+    - Path line color (#06b6d4) and width (3)
+    - Camera initial position ([-10, 15, 20])
+    - Lighting: pointLight positions and colors
+
+--------------------------------------------------------------------------------
+STATE MANAGEMENT  (store/)
+--------------------------------------------------------------------------------
+
+store/clockInStore.ts  ★ NEW ★
+  PURPOSE : Zustand global state for clock-in system.
+  STATE :
+    - viewMode: 'mobile' | 'kiosk'
+    - student: { id, name, destination, building, room }
+    - clockInTime: Date | null
+    - status: 'not-clocked-in' | 'clocked-in' | 'viewing-route'
+    - activeStudents: number (default: 47)
+    - dailyVisits: number (default: 203)
+    - isRouteAnimating: boolean
+    - currentWaypoint: number (0-5)
+  ACTIONS :
+    - setViewMode(), clockIn(), clockOut(), startRouteView()
+    - setRouteAnimating(), setCurrentWaypoint(), resetRoute()
+  WHAT TO EDIT :
+    - Student profile (Alex Rivera → your student name/ID)
+    - Initial metrics (activeStudents, dailyVisits)
+    - QR expiry logic (currently manual)
 
 --------------------------------------------------------------------------------
 HOOKS  (hooks/)
 --------------------------------------------------------------------------------
 
 hooks/useFirstPersonControls.ts
-  PURPOSE : Handles all keyboard (WASD/arrows) and mouse movement for desktop.
-  WHAT TO EDIT :
-    - Movement speed: const speed = 10.0
-    - Mouse look sensitivity: the 0.002 multipliers in handleMouseMove()
-    - Collision boundaries (how far you can walk):
-        buildingBounds: { minX: -19.5, maxX: 19.5, minZ: -14.5, maxZ: 14.5 }
-    - Floor detection: the formula in getCurrentFloor()
-    - A/D direction: direction.current.x assignment (already fixed)
+  PURPOSE : Desktop keyboard/mouse controls for 3D building tour.
 
 hooks/useMobileControls.ts
-  PURPOSE : Handles touch input for mobile. Left side = joystick, right side = look.
-  WHAT TO EDIT :
-    - Mobile movement speed: const speed = 8.0
-    - Touch look sensitivity: the 0.003 multipliers in handleTouchMove()
-    - Joystick force scaling: the / 50 divisor in joystick distance calculation
+  PURPOSE : Touch controls for mobile 3D building tour.
 
 --------------------------------------------------------------------------------
-CONFIG FILES
+CONFIG & DEPENDENCIES
 --------------------------------------------------------------------------------
 
-package.json         — Project dependencies and npm scripts (npm run dev, build, etc.)
-next.config.js       — Next.js configuration (add image domains, redirects, etc.)
-tailwind.config.ts   — Tailwind CSS config (add custom colors, fonts, breakpoints)
-tsconfig.json        — TypeScript config (@/ path alias points to project root)
-.eslintrc.json       — ESLint rules for code quality
+package.json
+  NEW DEPENDENCIES :
+    - react-qr-code: ^2.0.15  (QR code generation)
+  EXISTING :
+    - zustand: ^5.0.15  (state management)
+    - @react-three/fiber: ^8.17.7  (Three.js React renderer)
+    - @react-three/drei: ^9.114.3  (Three.js helpers)
+    - three: ^0.169.0  (3D engine)
+
+tailwind.config.ts   — Tailwind CSS config
+tsconfig.json        — TypeScript config (@/ alias)
+.eslintrc.json       — ESLint rules
+
+--------------------------------------------------------------------------------
+DOCUMENTATION FILES  ★ NEW ★
+--------------------------------------------------------------------------------
+
+CLOCK_IN_SYSTEM.md
+  PURPOSE : Complete technical documentation for clock-in system
+  INCLUDES :
+    - Feature overview and user flows
+    - Component architecture and state management
+    - 3D route system technical details
+    - Styling guide and customization instructions
+    - Integration with future VMS database
+    - Troubleshooting and performance optimization
+
+QUICK_START.md
+  PURPOSE : Quick reference for testing and running the clock-in system
+  INCLUDES :
+    - Installation commands
+    - Access URLs
+    - Testing procedures for both views
+    - Common issues and solutions
+
+DATABASE_SETUP.md
+  PURPOSE : PostgreSQL + Prisma setup guide for future VMS integration
+  INCLUDES :
+    - Database schema (5 tables)
+    - Installation steps
+    - Migration commands
+    - Seed data script
 
 --------------------------------------------------------------------------------
 KEY RELATIONSHIPS
 --------------------------------------------------------------------------------
 
-  page.tsx  ──(navigates to)──▶  tour/page.tsx
-                                      │
-                                      ▼
-                                  Scene.tsx
-                                 /    |    \
-                        Camera.tsx  Building.tsx  FloorIndicator.tsx
-                           /  \                   Controls.tsx
-    useFirstPersonControls.ts  useMobileControls.ts   PerformanceStats.tsx
+ORIGINAL TOUR:
+  page.tsx  ──▶  tour/page.tsx  ──▶  Scene.tsx
+                                        │
+                                        ▼
+                                  Camera.tsx, Building.tsx, FloorIndicator.tsx
+
+NEW CLOCK-IN SYSTEM:
+  page.tsx  ──▶  clock-in/page.tsx
+                      │
+                      ├──▶ ViewModeSwitcher  (toggle Mobile/Kiosk)
+                      │
+                      ├──▶ StudentMobileView
+                      │      ├──▶ QRScanner  (not-clocked-in/clocked-in states)
+                      │      └──▶ RouteVisualization  (viewing-route state)
+                      │
+                      └──▶ KioskStationView  (QR code + metrics)
+                             └──▶ react-qr-code  (QR generation)
+
+  clockInStore.ts  ◀──▶  All Clock-In Components  (shared state)
 
 --------------------------------------------------------------------------------
 QUICK REFERENCE — MOST COMMON EDITS
 --------------------------------------------------------------------------------
 
-  Change landing page text       →  app/page.tsx
-  Change browser tab title       →  app/layout.tsx
-  Change building size/floors    →  components/Building.tsx
+BUILDING TOUR:
   Change movement speed          →  hooks/useFirstPersonControls.ts  (speed = 10.0)
+  Change building size/floors    →  components/Building.tsx
   Change camera start position   →  components/Scene.tsx  (position: [0, 1.6, 10])
-  Change floor count             →  Building.tsx (loop) + FloorIndicator.tsx (dots)
-  Hide controls panel            →  Scene.tsx (remove <Controls />)
-  Hide FPS counter               →  Scene.tsx (remove <PerformanceStats />)
-  Add a room/wall                →  components/Building.tsx (add <mesh> in floor loop)
+
+CLOCK-IN SYSTEM:
+  Change student profile         →  store/clockInStore.ts  (student object)
+  Change destination/room        →  store/clockInStore.ts + waypoints array
+  Adjust waypoint positions      →  components/RouteVisualization.tsx  (waypoints)
+  Modify QR code value           →  components/KioskStationView.tsx  (QRCode value)
+  Change animation speed         →  RouteVisualization.tsx  (setTimeout 2000ms)
+  Update kiosk metrics           →  store/clockInStore.ts  (activeStudents, dailyVisits)
+  Customize scanner colors       →  QRScanner.tsx  (border-cyan-400, bg-cyan-500)
+
+TO RUN:
+  npm install react-qr-code      →  Install QR code dependency
+  npm run dev                    →  Start dev server
+  Visit: http://localhost:3000/clock-in
 
 ================================================================================

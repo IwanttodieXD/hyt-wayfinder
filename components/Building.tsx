@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import * as THREE from 'three';
+import BaristaGame3D from './BaristaGame3D';
 
 // Optimized materials (reuse instead of creating new ones)
 const floorMaterial = new THREE.MeshStandardMaterial({ color: '#2a4858' });
@@ -130,6 +131,9 @@ export default function Building() {
         <boxGeometry args={[42, 0.5, 32]} />
         <primitive object={roofMaterial} attach="material" />
       </mesh>
+
+      {/* TESDA Barista Game - Ground Floor */}
+      <BaristaGame3D position={[-12, 0.5, -8]} />
     </group>
   );
 }
