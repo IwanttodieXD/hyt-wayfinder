@@ -156,7 +156,7 @@ export default function RegisterPage() {
                 <label className="block text-sm font-medium text-blue-200 mb-2">
                   Account Type
                 </label>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-3 gap-3">
                   <button
                     type="button"
                     onClick={() => setFormData({ ...formData, role: 'trainer' })}
@@ -176,6 +176,28 @@ export default function RegisterPage() {
                       formData.role === 'trainer' ? 'text-white' : 'text-slate-300'
                     }`}>
                       Trainer
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, role: 'trainee' })}
+                    className={`
+                      p-4 rounded-lg border-2 transition-all
+                      ${
+                        formData.role === 'trainee'
+                          ? 'border-orange-500 bg-orange-500/20'
+                          : 'border-blue-500/30 bg-slate-900/50 hover:border-blue-400/50'
+                      }
+                    `}
+                  >
+                    <i className={`fa-solid fa-user-graduate text-2xl mb-2 ${
+                      formData.role === 'trainee' ? 'text-orange-400' : 'text-blue-300'
+                    }`}></i>
+                    <p className={`font-semibold text-sm ${
+                      formData.role === 'trainee' ? 'text-white' : 'text-slate-300'
+                    }`}>
+                      Trainee
                     </p>
                   </button>
 

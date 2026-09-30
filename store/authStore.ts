@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { supabase } from '@/lib/supabase';
 
-export type UserRole = 'admin' | 'trainer' | 'visitor';
+export type UserRole = 'admin' | 'trainer' | 'trainee' | 'visitor';
 
 export interface User {
   id: string;
@@ -10,6 +10,7 @@ export interface User {
   name: string;
   role: UserRole;
   avatar?: string;
+  qrCode?: string;
   createdAt: Date;
 }
 
@@ -76,6 +77,7 @@ export const useAuthStore = create<AuthState>()(
             name: userData.name,
             role: userData.role as UserRole,
             avatar: userData.avatar || undefined,
+            qrCode: `HYT-USER:${userData.id}`,
             createdAt: new Date(userData.created_at),
           };
 
@@ -117,7 +119,7 @@ export const useAuthStore = create<AuthState>()(
           await new Promise(resolve => setTimeout(resolve, 500));
 
           // Create user profile in users table (linked via foreign key)
-          const avatar = data.role === 'admin' ? '👨‍💼' : data.role === 'trainer' ? '👨‍🏫' : '👩‍🎓';
+          const avatar = data.role === 'admin' ? '👨‍💼' : data.role === 'trainer' ? '👨‍🏫' : data.role === 'trainee' ? '🎓' : '👩‍🎓';
           
           const { data: userData, error: userError } = await supabase
             .from('users')
@@ -160,6 +162,7 @@ export const useAuthStore = create<AuthState>()(
             name: userData.name,
             role: userData.role as UserRole,
             avatar: userData.avatar || undefined,
+            qrCode: `HYT-USER:${userData.id}`,
             createdAt: new Date(userData.created_at),
           };
 
@@ -216,6 +219,7 @@ export const useAuthStore = create<AuthState>()(
             name: userData.name,
             role: userData.role as UserRole,
             avatar: userData.avatar || undefined,
+            qrCode: `HYT-USER:${userData.id}`,
             createdAt: new Date(userData.created_at),
           };
 

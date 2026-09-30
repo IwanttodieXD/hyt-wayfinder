@@ -15,7 +15,7 @@ export default function ClockInPage() {
 
   // Auto-set mobile view for trainers/visitors
   useEffect(() => {
-    if (isAuthenticated && user && (user.role === 'trainer' || user.role === 'visitor')) {
+    if (isAuthenticated && user && (user.role === 'trainer' || user.role === 'trainee' || user.role === 'visitor')) {
       setViewMode('mobile');
     }
   }, [isAuthenticated, user, setViewMode]);
@@ -37,7 +37,7 @@ export default function ClockInPage() {
 
       <div className="w-full h-screen bg-slate-950 flex flex-col overflow-hidden">
         {/* Header with View Switcher */}
-        <header className="flex-shrink-0 border-b border-slate-800 bg-slate-900/50 backdrop-blur-sm px-6 py-4">
+        <header className="flex-shrink-0 border-b border-slate-800 bg-slate-900/50 backdrop-blur-sm px-6 py-4 relative z-50">
           <div className="max-w-7xl mx-auto flex items-center justify-between">
             {/* Logo */}
             <div className="flex items-center gap-3">

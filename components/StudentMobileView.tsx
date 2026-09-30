@@ -1,11 +1,26 @@
 'use client';
 
+import { useState } from 'react';
 import { useClockInStore } from '@/store/clockInStore';
+import { useRecordsStore } from '@/store/recordsStore';
+import { useAuthStore } from '@/store/authStore';
 import QRScanner from './QRScanner';
 import RouteVisualization from './RouteVisualization';
 
 export default function StudentMobileView() {
-  const { status, student, clockInTime } = useClockInStore();
+  const { status, student, clockInTime, clockOut, activeRecordId } = useClockInStore();
+  const { clockOutRecord } = useRecordsStore();
+  const { user } = useAuthStore();
+  const [clockingOut, setClockingOut] = useState(false);
+
+  const handleClockOut = async () => {
+    setClockingOut(true);
+    if (activeRecordId) {
+      await clockOutRecord(activeRecordId);
+    }
+    clockOut();
+    setClockingOut(false);
+  };
 
   return (
     <div className="w-full h-full bg-slate-950 flex items-center justify-center p-4">
@@ -76,6 +91,29 @@ export default function StudentMobileView() {
             <RouteVisualization />
           )}
         </div>
+
+        {/* Fallback Clock-Out button (when clocked in, not viewing route) */}
+        {status === 'clocked-in' && (
+          <div className="flex-shrink-0 px-6 pb-1">
+            <button
+              onClick={handleClockOut}
+              disabled={clockingOut}
+              className="
+                w-full py-3 rounded-xl font-bold text-sm text-white
+                bg-gradient-to-r from-red-500 to-rose-600
+                shadow-lg shadow-red-500/30
+                hover:shadow-xl hover:shadow-red-500/40 hover:scale-[1.02]
+                active:scale-95
+                transition-all duration-200
+                disabled:opacity-50 disabled:cursor-not-allowed
+                flex items-center justify-center gap-2
+              "
+            >
+              <i className={`fa-solid ${clockingOut ? 'fa-spinner fa-spin' : 'fa-right-from-bracket'}`}></i>
+              {clockingOut ? 'Clocking Out...' : 'Clock Out'}
+            </button>
+          </div>
+        )}
 
         {/* Home Indicator (iOS style) */}
         <div className="bg-slate-950 py-2 flex items-center justify-center">

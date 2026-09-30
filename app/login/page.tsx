@@ -185,17 +185,6 @@ export default function LoginPage() {
               </Link>
             </div>
           </div>
-
-          {/* Back to Home */}
-          <div className="mt-6 text-center">
-            <Link
-              href="/"
-              className="text-blue-300 hover:text-blue-200 text-sm flex items-center justify-center gap-2 transition-colors"
-            >
-              <i className="fa-solid fa-arrow-left"></i>
-              <span>Back to Home</span>
-            </Link>
-          </div>
         </div>
       </div>
     </>

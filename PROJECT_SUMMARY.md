@@ -287,6 +287,460 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-anon-key>
 - **Individual Duration** - Per visit
 - **User Activity** - Per person history
 
+## 🏛️ Data Architecture
+
+### **System Architecture Diagram**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         CLIENT LAYER                             │
+├─────────────────────────────────────────────────────────────────┤
+│  Next.js 14 (React 18) - Server-Side Rendered                   │
+│  ┌────────────┬────────────┬────────────┬──────────────┐       │
+│  │   Pages    │ Components │   Store    │    Hooks     │       │
+│  │            │            │  (Zustand) │              │       │
+│  │  /login    │  QRScanner │  authStore │ useFirstPer- │       │
+│  │  /register │  Route3D   │  records   │ sonControls  │       │
+│  │  /admin    │  Building  │  clockIn   │ useMobile-   │       │
+│  │  /clock-in │  Scene     │            │ Controls     │       │
+│  └────────────┴────────────┴────────────┴──────────────┘       │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓ ↑
+                    Supabase Client SDK
+                              ↓ ↑
+┌─────────────────────────────────────────────────────────────────┐
+│                      SUPABASE LAYER                              │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌──────────────────┐  ┌──────────────────┐                    │
+│  │  Auth Service    │  │  Database API    │                    │
+│  │                  │  │   (PostgREST)    │                    │
+│  │  - signUp        │  │  - RESTful API   │                    │
+│  │  - signIn        │  │  - Auto-gen API  │                    │
+│  │  - signOut       │  │  - Row Level     │                    │
+│  │  - getSession    │  │    Security      │                    │
+│  └──────────────────┘  └──────────────────┘                    │
+│                              ↓ ↑                                 │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │              PostgreSQL Database                          │  │
+│  │  ┌─────────────────────────────────────────────────────┐ │  │
+│  │  │  auth.users (Managed by Supabase)                   │ │  │
+│  │  │  - id (PK)                                           │ │  │
+│  │  │  - email, encrypted_password, etc.                  │ │  │
+│  │  └─────────────────────────────────────────────────────┘ │  │
+│  │           │                                                │  │
+│  │           │ (FK) 1:1                                      │  │
+│  │           ↓                                                │  │
+│  │  ┌─────────────────────────────────────────────────────┐ │  │
+│  │  │  public.users (Your Profiles)                       │ │  │
+│  │  │  - id (PK, FK → auth.users.id)                      │ │  │
+│  │  │  - email, name, role, avatar                        │ │  │
+│  │  └─────────────────────────────────────────────────────┘ │  │
+│  │           │                                                │  │
+│  │           │ 1:many                                        │  │
+│  │           ↓                                                │  │
+│  │  ┌────────────────────────┬───────────────────────────┐  │  │
+│  │  │ public.clock_in_records│   public.schedules        │  │  │
+│  │  │ - id (PK)              │   - id (PK)               │  │  │
+│  │  │ - user_id (FK)         │   - user_id (FK)          │  │  │
+│  │  │ - destination          │   - destination           │  │  │
+│  │  │ - time_in, time_out    │   - scheduled_start/end   │  │  │
+│  │  │ - schedule_id (FK) ────┼──→ - status, notes        │  │  │
+│  │  └────────────────────────┴───────────────────────────┘  │  │
+│  └──────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### **Entity Relationship Diagram (ERD)**
+
+```
+┌──────────────────────┐
+│    auth.users        │
+│  (Supabase Auth)     │
+├──────────────────────┤
+│ • id (PK)            │
+│   email              │
+│   encrypted_password │
+│   created_at         │
+└──────────┬───────────┘
+           │
+           │ 1:1 (CASCADE)
+           │
+           ↓
+┌──────────────────────┐
+│   public.users       │
+│  (User Profiles)     │
+├──────────────────────┤
+│ • id (PK, FK)        │◄──────┐
+│   email (UNIQUE)     │       │
+│   name               │       │
+│   role               │       │
+│   avatar             │       │
+│   created_at         │       │
+│   updated_at         │       │
+└──────────┬───────────┘       │
+           │                    │
+           │ 1:many             │
+           │                    │
+   ┌───────┴────────┐          │
+   ↓                ↓           │
+┌──────────────┐  ┌─────────────────┐
+│  schedules   │  │ clock_in_records│
+├──────────────┤  ├─────────────────┤
+│ • id (PK)    │  │ • id (PK)       │
+│   user_id ───┼──┘   user_id (FK) │
+│   destination│      destination   │
+│   building   │      building      │
+│   room       │      room          │
+│   scheduled_ │      time_in       │
+│   start      │      time_out      │
+│   scheduled_ │      status        │
+│   end        │      duration      │
+│   status     │      schedule_id ──┼──┐
+│   notes      │      created_at    │  │
+│   created_at │      updated_at    │  │
+│   updated_at │                    │  │
+└──────────────┘  └─────────────────┘  │
+       ↑                                 │
+       └─────────────────────────────────┘
+              1:1 (OPTIONAL)
+```
+
+### **Data Flow Architecture**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    PRESENTATION LAYER                            │
+│  (React Components - UI)                                         │
+└──────────────┬──────────────────────────────────┬───────────────┘
+               │                                   │
+               ↓                                   ↓
+┌──────────────────────────────┐    ┌─────────────────────────────┐
+│     STATE MANAGEMENT         │    │    3D RENDERING ENGINE      │
+│     (Zustand Stores)         │    │    (React Three Fiber)      │
+│                              │    │                             │
+│  • authStore                 │    │  • Three.js Scene           │
+│  • recordsStore              │    │  • Waypoint Markers         │
+│  • clockInStore              │    │  • Walking Avatar           │
+└──────────┬───────────────────┘    │  • Camera Controls          │
+           │                         └─────────────────────────────┘
+           │
+           ↓
+┌─────────────────────────────────────────────────────────────────┐
+│                     API LAYER                                    │
+│     (Supabase Client - lib/supabase.ts)                         │
+│                                                                  │
+│  Methods:                                                        │
+│  • supabase.auth.signUp()                                       │
+│  • supabase.auth.signInWithPassword()                          │
+│  • supabase.from('users').select()                             │
+│  • supabase.from('clock_in_records').insert()                  │
+└──────────┬──────────────────────────────────────────────────────┘
+           │
+           │ HTTPS / WebSocket
+           │
+           ↓
+┌─────────────────────────────────────────────────────────────────┐
+│                 DATABASE LAYER                                   │
+│            (Supabase PostgreSQL)                                 │
+│                                                                  │
+│  Security:                                                       │
+│  • Row Level Security (RLS)                                     │
+│  • JWT-based authentication                                     │
+│  • Policy-based access control                                  │
+│                                                                  │
+│  Optimization:                                                   │
+│  • Indexes on foreign keys                                      │
+│  • Automatic timestamp triggers                                 │
+│  • Materialized views (future)                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## 📈 System Flowcharts
+
+### **1. User Registration Flow**
+
+```mermaid
+flowchart TD
+    Start([User Visits /register]) --> Form[Fill Registration Form]
+    Form --> Validate{Validation<br/>Passes?}
+    
+    Validate -->|No| ShowError[Show Error Message]
+    ShowError --> Form
+    
+    Validate -->|Yes| CreateAuth[Create Auth User<br/>Supabase Auth]
+    CreateAuth --> AuthSuccess{Auth<br/>Created?}
+    
+    AuthSuccess -->|No| RateLimit{Rate Limit<br/>Error?}
+    RateLimit -->|Yes| ShowRateLimit[Show: Too Many Attempts<br/>Try Again Later]
+    RateLimit -->|No| ShowAuthError[Show: Registration Failed]
+    
+    AuthSuccess -->|Yes| CreateProfile[Create User Profile<br/>public.users table]
+    CreateProfile --> ProfileSuccess{Profile<br/>Created?}
+    
+    ProfileSuccess -->|No| Cleanup[Delete Auth User]
+    Cleanup --> ShowProfileError[Show: Profile Creation Failed]
+    
+    ProfileSuccess -->|Yes| AutoLogin[Auto-Login User]
+    AutoLogin --> CheckRole{User<br/>Role?}
+    
+    CheckRole -->|Admin| RedirectAdmin[Redirect to /admin]
+    CheckRole -->|Trainer/Visitor| RedirectClockIn[Redirect to /clock-in]
+    
+    RedirectAdmin --> End([Dashboard Loaded])
+    RedirectClockIn --> End
+    ShowRateLimit --> End
+    ShowAuthError --> End
+    ShowProfileError --> End
+```
+
+### **2. Login Flow**
+
+```mermaid
+flowchart TD
+    Start([User Visits /login]) --> Enter[Enter Email & Password]
+    Enter --> Submit[Click Sign In]
+    Submit --> AuthCheck[Supabase Auth Check]
+    
+    AuthCheck --> AuthValid{Credentials<br/>Valid?}
+    
+    AuthValid -->|No| ShowError[Show: Invalid Credentials]
+    ShowError --> Enter
+    
+    AuthValid -->|Yes| FetchProfile[Fetch User Profile<br/>from public.users]
+    FetchProfile --> ProfileFound{Profile<br/>Exists?}
+    
+    ProfileFound -->|No| ShowNoProfile[Show: Profile Not Found]
+    ShowNoProfile --> End([End])
+    
+    ProfileFound -->|Yes| SetState[Update Auth State<br/>Store in Zustand]
+    SetState --> CheckRole{User<br/>Role?}
+    
+    CheckRole -->|Admin| RedirectAdmin[Redirect to /admin<br/>Dashboard]
+    CheckRole -->|Trainer| RedirectClockIn[Redirect to /clock-in<br/>QR Scanner]
+    CheckRole -->|Visitor| RedirectClockIn
+    
+    RedirectAdmin --> End
+    RedirectClockIn --> End
+```
+
+### **3. Clock-In Flow**
+
+```mermaid
+flowchart TD
+    Start([User at /clock-in]) --> CheckAuth{User<br/>Logged In?}
+    
+    CheckAuth -->|No| RedirectLogin[Redirect to /login]
+    RedirectLogin --> End([End])
+    
+    CheckAuth -->|Yes| ShowScanner[Display QR Scanner UI]
+    ShowScanner --> WaitScan[Wait for QR Scan]
+    WaitScan --> Scan[User Clicks<br/>'Simulate Scan']
+    
+    Scan --> CreateRecord[Create Clock-In Record<br/>in database]
+    CreateRecord --> DBInsert[INSERT INTO<br/>clock_in_records]
+    
+    DBInsert --> InsertSuccess{Insert<br/>Success?}
+    
+    InsertSuccess -->|No| ShowDBError[Show: Database Error]
+    ShowDBError --> ShowScanner
+    
+    InsertSuccess -->|Yes| UpdateState[Update Local State<br/>clockInStore]
+    UpdateState --> Show3DRoute[Display 3D Route<br/>Animation]
+    
+    Show3DRoute --> RouteAnimate[Animate Walking Avatar<br/>Through Waypoints]
+    RouteAnimate --> ReachDestination[Reach Destination<br/>Room 304]
+    
+    ReachDestination --> ShowClockOut[Show Clock Out<br/>Button]
+    ShowClockOut --> WaitClockOut[Wait for User Action]
+    
+    WaitClockOut --> ClockOut{User Clicks<br/>Clock Out?}
+    
+    ClockOut -->|No| WaitClockOut
+    ClockOut -->|Yes| UpdateRecord[UPDATE clock_in_records<br/>SET time_out, status, duration]
+    
+    UpdateRecord --> UpdateSuccess{Update<br/>Success?}
+    
+    UpdateSuccess -->|No| ShowUpdateError[Show: Error Clocking Out]
+    UpdateSuccess -->|Yes| Complete[Show: Successfully<br/>Clocked Out]
+    Complete --> RedirectHome[Redirect to /<br/>Home Page]
+    
+    RedirectHome --> End
+    ShowUpdateError --> End
+```
+
+### **4. Admin Dashboard Data Flow**
+
+```mermaid
+flowchart TD
+    Start([Admin Visits /admin]) --> CheckAuth{Admin<br/>Role?}
+    
+    CheckAuth -->|No| Redirect403[Redirect to /login]
+    Redirect403 --> End([End])
+    
+    CheckAuth -->|Yes| FetchData[Fetch Today's Records]
+    FetchData --> SQLQuery[SQL Query:<br/>SELECT with JOIN]
+    
+    SQLQuery --> Query[SELECT clock_in_records.*,<br/>users.name<br/>FROM clock_in_records<br/>JOIN users<br/>WHERE time_in >= today]
+    
+    Query --> ProcessData[Process Records<br/>in recordsStore]
+    ProcessData --> Calculate[Calculate Metrics]
+    
+    Calculate --> CalcActive[Active Count:<br/>status = 'active']
+    Calculate --> CalcToday[Today's Total:<br/>all records today]
+    Calculate --> CalcTotal[Total Records:<br/>all time count]
+    
+    CalcActive --> RenderUI[Render Dashboard UI]
+    CalcToday --> RenderUI
+    CalcTotal --> RenderUI
+    
+    RenderUI --> ShowMetrics[Display Live Metrics<br/>Cards]
+    ShowMetrics --> ShowRecent[Display Recent<br/>Activity List]
+    ShowRecent --> ShowActions[Display Quick<br/>Action Cards]
+    
+    ShowActions --> WaitAction[Wait for User Action]
+    WaitAction --> UserAction{User<br/>Action?}
+    
+    UserAction -->|View Records| NavigateRecords[Navigate to<br/>/admin/records]
+    UserAction -->|View QR| NavigateQR[Navigate to<br/>/clock-in]
+    UserAction -->|View Tour| NavigateTour[Navigate to<br/>/tour]
+    UserAction -->|Refresh| FetchData
+    
+    NavigateRecords --> End
+    NavigateQR --> End
+    NavigateTour --> End
+```
+
+### **5. 3D Route Navigation Flow**
+
+```mermaid
+flowchart TD
+    Start([Route Component Loads]) --> InitScene[Initialize Three.js Scene]
+    InitScene --> CreateElements[Create 3D Elements]
+    
+    CreateElements --> CreateBuilding[Create Building<br/>Structure]
+    CreateElements --> CreatePath[Create Route Path<br/>Line]
+    CreateElements --> CreateMarkers[Create Waypoint<br/>Markers]
+    CreateElements --> CreateAvatar[Create Walking<br/>Avatar]
+    
+    CreateBuilding --> WaitPlay[Wait for User<br/>to Click Play]
+    CreatePath --> WaitPlay
+    CreateMarkers --> WaitPlay
+    CreateAvatar --> WaitPlay
+    
+    WaitPlay --> Play{Play<br/>Clicked?}
+    
+    Play -->|No| WaitPlay
+    Play -->|Yes| StartAnimation[Start Route Animation]
+    
+    StartAnimation --> SetWaypoint[Set Current Waypoint = 0]
+    SetWaypoint --> AnimateLoop[Animation Loop]
+    
+    AnimateLoop --> UpdateAvatar[Update Avatar Position<br/>Interpolate to Next Waypoint]
+    UpdateAvatar --> UpdateCamera{Camera<br/>Follow Mode?}
+    
+    UpdateCamera -->|Yes| MoveCamera[Smoothly Move Camera<br/>Follow Avatar]
+    UpdateCamera -->|No| FreeCamera[User Controls Camera<br/>OrbitControls]
+    
+    MoveCamera --> UpdateMarkers[Update Waypoint Markers<br/>Highlight Current]
+    FreeCamera --> UpdateMarkers
+    
+    UpdateMarkers --> CheckProgress{Reached<br/>Waypoint?}
+    
+    CheckProgress -->|No| AnimateLoop
+    CheckProgress -->|Yes| IncrementWaypoint[Increment Waypoint Index]
+    
+    IncrementWaypoint --> CheckComplete{All Waypoints<br/>Complete?}
+    
+    CheckComplete -->|No| Wait3Sec[Wait 3 Seconds]
+    Wait3Sec --> AnimateLoop
+    
+    CheckComplete -->|Yes| StopAnimation[Stop Animation]
+    StopAnimation --> ShowComplete[Show: Route Complete]
+    ShowComplete --> EnableReplay[Enable Replay Button]
+    
+    EnableReplay --> WaitNext[Wait for User Action]
+    WaitNext --> NextAction{User<br/>Action?}
+    
+    NextAction -->|Replay| StartAnimation
+    NextAction -->|Reset| SetWaypoint
+    NextAction -->|Clock Out| ClockOutFlow[Clock Out Flow]
+    NextAction -->|Toggle Camera| SwitchCamera[Switch Camera Mode]
+    
+    SwitchCamera --> AnimateLoop
+    ClockOutFlow --> End([End])
+```
+
+### **6. Data Synchronization Flow**
+
+```mermaid
+flowchart TD
+    Start([User Action Triggered]) --> ActionType{Action<br/>Type?}
+    
+    ActionType -->|Create| CreateFlow[Create Flow]
+    ActionType -->|Read| ReadFlow[Read Flow]
+    ActionType -->|Update| UpdateFlow[Update Flow]
+    ActionType -->|Delete| DeleteFlow[Delete Flow]
+    
+    CreateFlow --> LocalCreate[Update Local State<br/>Zustand Store]
+    LocalCreate --> APICreate[API Call:<br/>supabase.insert()]
+    APICreate --> CreateDB[Database INSERT]
+    CreateDB --> CreateSuccess{Success?}
+    
+    CreateSuccess -->|No| RollbackCreate[Rollback Local State]
+    RollbackCreate --> ShowError1[Show Error]
+    
+    CreateSuccess -->|Yes| UpdateUI1[Update UI<br/>Show Success]
+    UpdateUI1 --> End([End])
+    
+    ReadFlow --> CheckCache{Data in<br/>State?}
+    CheckCache -->|Yes| ReturnCache[Return Cached Data]
+    CheckCache -->|No| APIRead[API Call:<br/>supabase.select()]
+    
+    APIRead --> ReadDB[Database SELECT<br/>with JOIN]
+    ReadDB --> ReadSuccess{Success?}
+    
+    ReadSuccess -->|No| ShowError2[Show Error]
+    ReadSuccess -->|Yes| CacheData[Cache in Zustand]
+    CacheData --> ReturnCache
+    
+    ReturnCache --> End
+    
+    UpdateFlow --> LocalUpdate[Optimistic Update<br/>Local State]
+    LocalUpdate --> APIUpdate[API Call:<br/>supabase.update()]
+    APIUpdate --> UpdateDB[Database UPDATE]
+    UpdateDB --> UpdateSuccess{Success?}
+    
+    UpdateSuccess -->|No| RollbackUpdate[Rollback Local State]
+    RollbackUpdate --> ShowError3[Show Error]
+    
+    UpdateSuccess -->|Yes| UpdateUI2[Update UI<br/>Show Success]
+    UpdateUI2 --> End
+    
+    DeleteFlow --> LocalDelete[Mark as Deleted<br/>Local State]
+    LocalDelete --> APIDelete[API Call:<br/>supabase.delete()]
+    APIDelete --> DeleteDB[Database DELETE<br/>CASCADE]
+    DeleteDB --> DeleteSuccess{Success?}
+    
+    DeleteSuccess -->|No| RollbackDelete[Rollback Local State]
+    RollbackDelete --> ShowError4[Show Error]
+    
+    DeleteSuccess -->|Yes| RemoveUI[Remove from UI]
+    RemoveUI --> End
+    
+    ShowError1 --> End
+    ShowError2 --> End
+    ShowError3 --> End
+    ShowError4 --> End
+```
+
+## 📊 Key Metrics Tracked
+
+- **Active Clock-Ins** - Real-time count
+- **Today's Total** - Daily attendance
+- **Total Records** - All-time count
+- **Individual Duration** - Per visit
+- **User Activity** - Per person history
+
 ## 🔄 Data Flow
 
 ### **Registration**

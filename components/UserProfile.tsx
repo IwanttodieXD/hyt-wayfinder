@@ -3,11 +3,13 @@
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
+import QRCode from 'react-qr-code';
 
 export default function UserProfile() {
   const router = useRouter();
   const { user, logout } = useAuthStore();
   const [isOpen, setIsOpen] = useState(false);
+  const [showQR, setShowQR] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -34,6 +36,8 @@ export default function UserProfile() {
         return 'bg-red-500/20 text-red-300 border-red-500/30';
       case 'trainer':
         return 'bg-blue-500/20 text-blue-300 border-blue-500/30';
+      case 'trainee':
+        return 'bg-teal-500/20 text-teal-300 border-teal-500/30';
       case 'visitor':
         return 'bg-purple-500/20 text-purple-300 border-purple-500/30';
       default:
@@ -47,6 +51,8 @@ export default function UserProfile() {
         return 'fa-user-shield';
       case 'trainer':
         return 'fa-chalkboard-user';
+      case 'trainee':
+        return 'fa-user-graduate';
       case 'visitor':
         return 'fa-id-card';
       default:
@@ -71,7 +77,7 @@ export default function UserProfile() {
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-64 glass-panel border-slate-700 rounded-xl shadow-2xl shadow-black/50 overflow-hidden animate-fade-in">
+        <div className="absolute right-0 mt-2 w-64 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl shadow-black/50 overflow-hidden animate-fade-in z-50">
           {/* Profile Header */}
           <div className="p-4 border-b border-slate-700">
             <div className="flex items-center gap-3 mb-3">
@@ -115,7 +121,31 @@ export default function UserProfile() {
                 </button>
               </>
             )}
-            
+
+            <button
+              onClick={() => setShowQR(!showQR)}
+              className="w-full px-4 py-2.5 rounded-lg text-left text-slate-300 hover:bg-slate-800/50 hover:text-white transition-all flex items-center gap-3"
+            >
+              <i className="fa-solid fa-qrcode w-5"></i>
+              <span>My QR Code</span>
+            </button>
+
+            {showQR && user.qrCode && (
+              <div className="px-4 py-3 flex flex-col items-center">
+                <div className="bg-white p-3 rounded-lg">
+                  <QRCode
+                    value={user.qrCode}
+                    size={150}
+                    style={{ height: 'auto', maxWidth: '100%', width: '100%' }}
+                    viewBox="0 0 150 150"
+                  />
+                </div>
+                <p className="text-slate-400 text-xs mt-2 text-center">
+                  Show this at the kiosk to clock in
+                </p>
+              </div>
+            )}
+
             <button
               onClick={() => {
                 setIsOpen(false);

@@ -20,10 +20,11 @@ interface RecordsState {
   isLoading: boolean;
   
   // Actions
-  addRecord: (record: Omit<ClockInRecord, 'id' | 'status' | 'timeOut' | 'duration' | 'scheduleId'>) => Promise<{ success: boolean; error?: string }>;
+  addRecord: (record: Omit<ClockInRecord, 'id' | 'status' | 'timeOut' | 'duration' | 'scheduleId'>) => Promise<{ success: boolean; error?: string; recordId?: string }>;
   clockOutRecord: (recordId: string) => Promise<{ success: boolean; error?: string }>;
   getActiveCount: () => number;
   getTodayCount: () => number;
+  getCompletedTodayCount: () => number;
   getAllRecords: () => ClockInRecord[];
   getRecordsByDate: (date: Date) => ClockInRecord[];
   fetchRecords: () => Promise<void>;
@@ -79,10 +80,12 @@ export const useRecordsStore = create<RecordsState>((set, get) => ({
           scheduleId: recordData.schedule_id || undefined,
         };
 
-        set((state) => ({ 
+        set((state) => ({
           records: [newRecord, ...state.records],
-          isLoading: false 
+          isLoading: false
         }));
+
+        return { success: true, recordId: recordData.id };
       }
 
       return { success: true };
@@ -153,6 +156,19 @@ export const useRecordsStore = create<RecordsState>((set, get) => ({
       const recordDate = new Date(r.timeIn);
       recordDate.setHours(0, 0, 0, 0);
       return recordDate.getTime() === today.getTime();
+    }).length;
+  },
+
+  getCompletedTodayCount: () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return get().records.filter((r) => {
+      const recordDate = new Date(r.timeIn);
+      recordDate.setHours(0, 0, 0, 0);
+      return (
+        recordDate.getTime() === today.getTime() &&
+        r.status === 'completed'
+      );
     }).length;
   },
 

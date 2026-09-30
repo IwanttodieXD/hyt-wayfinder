@@ -20,9 +20,10 @@ interface ClockInState {
   student: StudentProfile;
   clockInTime: Date | null;
   status: ClockInStatus;
+  activeRecordId: string | null;
 
   // Clock-in actions
-  clockIn: () => void;
+  clockIn: (recordId?: string) => void;
   clockOut: () => void;
   startRouteView: () => void;
   setStudentName: (name: string) => void;
@@ -51,6 +52,7 @@ export const useClockInStore = create<ClockInState>((set) => ({
   },
   clockInTime: null,
   status: 'not-clocked-in',
+  activeRecordId: null,
   activeStudents: 47,
   dailyVisits: 203,
   isRouteAnimating: false,
@@ -62,10 +64,11 @@ export const useClockInStore = create<ClockInState>((set) => ({
   setStudentName: (name) =>
     set((state) => ({ student: { ...state.student, name } })),
 
-  clockIn: () =>
+  clockIn: (recordId) =>
     set((state) => ({
       clockInTime: new Date(),
       status: 'clocked-in',
+      activeRecordId: recordId ?? null,
       activeStudents: state.activeStudents + 1,
       dailyVisits: state.dailyVisits + 1,
     })),
@@ -74,6 +77,7 @@ export const useClockInStore = create<ClockInState>((set) => ({
     set((state) => ({
       clockInTime: null,
       status: 'not-clocked-in',
+      activeRecordId: null,
       isRouteAnimating: false,
       currentWaypoint: 0,
       activeStudents: Math.max(0, state.activeStudents - 1),
