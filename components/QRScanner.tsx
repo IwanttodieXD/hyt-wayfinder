@@ -59,17 +59,20 @@ export default function QRScanner() {
       setScannerActive(false);
       setScanning(true);
 
-      // Run the clock-in flow + DB record
-      clockIn();
+      // Run the clock-in flow + DB record. Keep the returned record id so the
+      // "Clock Out" button can close the same row (time_out).
+      let recordId: string | undefined;
       if (user) {
-        await addRecord({
+        const result = await addRecord({
           userId: user.id,
           destination: student.destination,
           building: student.building,
           room: student.room,
           timeIn: new Date(),
         });
+        recordId = result.recordId;
       }
+      clockIn(recordId);
 
       setTimeout(() => {
         startRouteView();
@@ -214,13 +217,6 @@ export default function QRScanner() {
           </div>
         </div>
 
-        {/* LIVE indicator */}
-        {scannerActive && !showQR && (
-          <div className='absolute top-2 right-2 px-2 py-1 rounded-full bg-orange-500/20 border border-orange-500/30 flex items-center gap-1.5'>
-            <div className='w-2 h-2 rounded-full bg-red-500 animate-pulse'></div>
-            <span className='text-orange-300 text-xs font-semibold'>LIVE</span>
-          </div>
-        )}
         {/* Personal QR code shown in place of the camera */}
         {showQR && (
           <div className='absolute inset-0 z-20 bg-paper flex flex-col items-center justify-center p-4'>

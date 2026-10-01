@@ -3,6 +3,7 @@
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, Line, PerspectiveCamera } from '@react-three/drei';
 import { useClockInStore } from '@/store/clockInStore';
+import { useRecordsStore } from '@/store/recordsStore';
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 
@@ -356,7 +357,9 @@ export default function RouteVisualization() {
     setCurrentWaypoint,
     resetRoute,
     clockOut,
+    activeRecordId,
   } = useClockInStore();
+  const { clockOutRecord } = useRecordsStore();
   const [cameraMode, setCameraMode] = useState<'free' | 'follow'>('follow');
 
   useEffect(() => {
@@ -387,6 +390,14 @@ export default function RouteVisualization() {
 
   const toggleCameraMode = () => {
     setCameraMode((prev) => (prev === 'free' ? 'follow' : 'free'));
+  };
+
+  // Close the DB record (time_out) before clearing local state.
+  const handleClockOut = async () => {
+    if (activeRecordId) {
+      await clockOutRecord(activeRecordId);
+    }
+    clockOut();
   };
 
   return (
@@ -441,10 +452,11 @@ export default function RouteVisualization() {
 
       {/* HUD Controls Overlay */}
       <div className='absolute inset-0 pointer-events-none'>
-        {/* Top HUD */}
-        <div className='absolute top-4 left-4 right-4 flex items-start justify-between pointer-events-auto'>
+        {/* Top HUD - row stays click-through so the canvas remains draggable;
+            the panels themselves re-enable pointer events. */}
+        <div className='absolute top-4 left-4 right-4 flex items-start justify-between pointer-events-none gap-3'>
           {/* Stage Indicator */}
-          <div className='glass-panel border-navy-700 px-4 py-3 rounded-lg'>
+          <div className='glass-panel border-navy-700 px-4 py-3 rounded-lg pointer-events-auto'>
             <div className='flex items-center gap-3'>
               <div className='w-10 h-10 rounded-lg bg-orange-500/20 flex items-center justify-center'>
                 <i className='fa-solid fa-route text-orange-400'></i>
@@ -459,7 +471,7 @@ export default function RouteVisualization() {
           </div>
 
           {/* Progress */}
-          <div className='glass-panel border-navy-700 px-4 py-3 rounded-lg flex items-center gap-3'>
+          <div className='glass-panel border-navy-700 px-4 py-3 rounded-lg flex items-center gap-3 pointer-events-auto'>
             <div className='text-right'>
               <p className='text-navy-300 text-xs mb-0.5'>Progress</p>
               <p className='text-white font-bold text-sm'>
@@ -485,46 +497,53 @@ export default function RouteVisualization() {
 
         {/* Waypoint Steps - REMOVED */}
 
-        {/* Bottom Control Bar */}
-        <div className='absolute bottom-4 left-4 right-4 glass-panel border-navy-700 p-4 rounded-lg pointer-events-auto'>
-          <div className='flex items-center gap-3'>
-            <button
-              onClick={handlePlayPause}
-              className='
+        {/* Bottom Control Bar.
+            The bar itself stays pointer-events-none so drags pass through to
+            the canvas; only the buttons accept clicks. Without this the full
+            width transparent panel swallows OrbitControls input. */}
+        <div className='absolute bottom-4 left-4 right-4 flex justify-end pointer-events-none'>
+          <div className='glass-panel border-navy-700 p-4 rounded-lg pointer-events-auto'>
+            <div className='flex items-center gap-3'>
+              <button
+                onClick={handlePlayPause}
+                className='
                 flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-semibold
                 bg-orange-500 text-paper hover:bg-orange-600 transition-colors
                 '
-            >
-              <i className={`fa-solid ${isRouteAnimating ? 'fa-pause' : 'fa-play'}`}></i>
-              {isRouteAnimating
-                ? 'Pause'
-                : currentWaypoint >= waypoints.length - 1
-                  ? 'Replay'
-                  : 'Play'}{' '}
-              Route
-            </button>
+              >
+                <i
+                  className={`fa-solid ${isRouteAnimating ? 'fa-pause' : 'fa-play'}`}
+                ></i>
+                {isRouteAnimating
+                  ? 'Pause'
+                  : currentWaypoint >= waypoints.length - 1
+                    ? 'Replay'
+                    : 'Play'}{' '}
+                Route
+              </button>
 
-            <button
-              onClick={resetRoute}
-              className='
+              <button
+                onClick={resetRoute}
+                className='
                 px-4 py-3 rounded-lg font-semibold
                 bg-navy-700 text-navy-200 hover:bg-navy-600 transition-colors
                 '
-            >
-              <i className='fa-solid fa-rotate-left'></i>
-            </button>
+              >
+                <i className='fa-solid fa-rotate-left'></i>
+              </button>
 
-            <button
-              onClick={clockOut}
-              className='
+              <button
+                onClick={handleClockOut}
+                className='
                 px-4 py-3 rounded-lg font-semibold
                 bg-red-500/20 text-red-400 border border-red-500/30
                 hover:bg-red-500/30 transition-colors
                 '
-            >
-              <i className='fa-solid fa-right-from-bracket mr-2'></i>
-              Clock Out
-            </button>
+              >
+                <i className='fa-solid fa-right-from-bracket mr-2'></i>
+                Clock Out
+              </button>
+            </div>
           </div>
         </div>
       </div>

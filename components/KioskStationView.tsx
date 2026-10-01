@@ -88,7 +88,7 @@ export default function KioskStationView() {
       setScannerActive(false);
 
       // Toggle: if already clocked in -> clock out; otherwise -> clock in
-      if (status === 'clocked-in' && activeRecordId) {
+      if (activeRecordId && status !== 'not-clocked-in') {
         setScanResult({
           name: user?.name || 'Student',
           id: scannedUserId,
@@ -384,13 +384,6 @@ export default function KioskStationView() {
                         : 'Clocked Out! Goodbye.'}
                     </span>
                   </div>
-                </div>
-              )}
-
-              {scannerActive && (
-                <div className='absolute top-2 right-2 px-2 py-1 rounded-full bg-orange-500/20 border border-orange-500/30 flex items-center gap-1.5'>
-                  <div className='w-2 h-2 rounded-full bg-red-500 animate-pulse'></div>
-                  <span className='text-orange-300 text-xs font-semibold'>LIVE</span>
                 </div>
               )}
             </div>
