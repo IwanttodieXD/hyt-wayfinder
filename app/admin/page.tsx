@@ -10,7 +10,8 @@ import UserProfile from '@/components/UserProfile';
 export default function AdminDashboard() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
-  const { records, getActiveCount, fetchTodayRecords } = useRecordsStore();
+  const { records, getActiveCount, getCompletedTodayCount, fetchTodayRecords } =
+    useRecordsStore();
 
   useEffect(() => {
     if (!isAuthenticated || user?.role !== 'admin') {
@@ -26,6 +27,7 @@ export default function AdminDashboard() {
   }
 
   const activeCount = getActiveCount();
+  const todayCount = getCompletedTodayCount();
   const recentRecords = records.slice(0, 5);
 
   return (
@@ -69,7 +71,7 @@ export default function AdminDashboard() {
           </div>
 
           {/* Live Metrics */}
-          <div className='grid grid-cols-1 md:grid-cols-2 gap-3 mb-8'>
+          <div className='grid grid-cols-1 md:grid-cols-3 gap-3 mb-8'>
             {/* Active Clock-Ins */}
             <div className='glass-panel border-navy-800 p-6 rounded-lg'>
               <div className='flex items-center justify-between mb-4'>
@@ -85,6 +87,23 @@ export default function AdminDashboard() {
               </div>
               <p className='text-navy-300 text-sm mb-1'>Active Clock-Ins</p>
               <p className='text-white text-3xl font-bold'>{activeCount}</p>
+            </div>
+
+            {/* Attendance Today */}
+            <div className='glass-panel border-navy-800 p-6 rounded-lg'>
+              <div className='flex items-center justify-between mb-4'>
+                <div className='w-12 h-12 rounded-lg bg-orange-500/20 flex items-center justify-center'>
+                  <i className='fa-solid fa-user-check text-orange-400 text-xl'></i>
+                </div>
+                <Link
+                  href='/clock-in'
+                  className='text-navy-400 hover:text-orange-300 transition-colors'
+                >
+                  <i className='fa-solid fa-arrow-right'></i>
+                </Link>
+              </div>
+              <p className='text-navy-300 text-sm mb-1'>Attendance Today</p>
+              <p className='text-white text-3xl font-bold'>{todayCount}</p>
             </div>
 
             {/* System Status */}
@@ -130,8 +149,8 @@ export default function AdminDashboard() {
                   <i className='fa-solid fa-qrcode text-orange-400 text-2xl'></i>
                 </div>
                 <div>
-                  <h3 className='text-white font-semibold text-lg mb-1'>Clock-In</h3>
-                  <p className='text-navy-300 text-sm'>Check-in station</p>
+                  <h3 className='text-white font-semibold text-lg mb-1'>Attendance</h3>
+                  <p className='text-navy-300 text-sm'>Check-in / Check-out</p>
                 </div>
               </div>
             </Link>

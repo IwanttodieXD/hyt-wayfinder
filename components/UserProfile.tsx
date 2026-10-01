@@ -131,6 +131,16 @@ export default function UserProfile() {
                 <i className='fa-solid fa-users-gear w-5'></i>
                 <span>Manage Users</span>
               </button>
+              <button
+                onClick={() => {
+                  setIsOpen(false);
+                  router.push('/clock-in');
+                }}
+                className='w-full px-4 py-2.5 rounded-lg text-left text-navy-200 hover:bg-navy-800/50 hover:text-white transition-colors flex items-center gap-3'
+              >
+                <i className='fa-solid fa-user-check w-5'></i>
+                <span>Attendance</span>
+              </button>
             </div>
           )}
 

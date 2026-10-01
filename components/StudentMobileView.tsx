@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useCallback } from 'react';
 import { useClockInStore } from '@/store/clockInStore';
 import { useRecordsStore } from '@/store/recordsStore';
 import { useAuthStore } from '@/store/authStore';
@@ -10,16 +9,8 @@ import RouteVisualization from './RouteVisualization';
 import ThreeErrorBoundary from './ThreeErrorBoundary';
 
 export default function StudentMobileView() {
-  const {
-    status,
-    student,
-    clockInTime,
-    clockIn,
-    clockOut,
-    startRouteView,
-    activeRecordId,
-  } = useClockInStore();
-  const { addRecord, clockOutRecord } = useRecordsStore();
+  const { status, student, clockInTime, clockOut, activeRecordId } = useClockInStore();
+  const { clockOutRecord } = useRecordsStore();
   const { user } = useAuthStore();
   const [clockingOut, setClockingOut] = useState(false);
 
@@ -31,36 +22,6 @@ export default function StudentMobileView() {
     clockOut();
     setClockingOut(false);
   };
-
-  // Admin-only test helper. Performs a real clock-in (including the DB
-  // record) without needing a QR scan or a camera, so the whole flow can
-  // be exercised on a machine with no webcam.
-  const isAdmin = user?.role === 'admin';
-  const [simulating, setSimulating] = useState(false);
-
-  const handleSimulateClockIn = useCallback(async () => {
-    setSimulating(true);
-
-    let recordId: string | undefined;
-    if (user) {
-      const result = await addRecord({
-        userId: user.id,
-        destination: student.destination,
-        building: student.building,
-        room: student.room,
-        timeIn: new Date(),
-      });
-      recordId = result.recordId;
-    }
-
-    clockIn(recordId);
-
-    // Go straight to the 3D route so the test lands on the same screen a
-    // real check-in scan would show.
-    startRouteView();
-
-    setSimulating(false);
-  }, [user, student, addRecord, clockIn, startRouteView]);
 
   return (
     <div className='w-full min-h-full bg-navy-950 flex items-center justify-center p-4'>
@@ -137,32 +98,6 @@ export default function StudentMobileView() {
             </ThreeErrorBoundary>
           )}
         </div>
-
-        {/* Admin-only test control: simulate a clock-in without a QR scan
-            or camera, so the mobile flow can be exercised. */}
-        {isAdmin && status !== 'viewing-route' && (
-          <div className='flex-shrink-0 px-4 pb-1'>
-            <button
-              onClick={handleSimulateClockIn}
-              disabled={simulating}
-              className='
-                w-full py-2.5 rounded-lg font-semibold text-sm
-                bg-navy-700 text-navy-200 hover:bg-navy-600
-                transition-colors duration-150
-                disabled:opacity-50 disabled:cursor-not-allowed
-                '
-            >
-              <i
-                className={`fa-solid ${simulating ? 'fa-spinner fa-spin' : 'fa-flask'} mr-2`}
-              ></i>
-              {simulating
-                ? 'Clocking In...'
-                : status === 'clocked-in'
-                  ? 'Show 3D Route (Test)'
-                  : 'Simulate Clock-In (Test)'}
-            </button>
-          </div>
-        )}
 
         {/* Fallback Clock-Out button (when clocked in, not viewing route) */}
         {status === 'clocked-in' && (

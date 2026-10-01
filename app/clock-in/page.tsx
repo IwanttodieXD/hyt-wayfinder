@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { useClockInStore } from '@/store/clockInStore';
 import { useAuthStore } from '@/store/authStore';
-import StudentMobileView from '@/components/StudentMobileView';
+import KioskStationView from '@/components/KioskStationView';
 import UserProfile from '@/components/UserProfile';
 
 export default function ClockInPage() {
@@ -34,10 +34,10 @@ export default function ClockInPage() {
               </div>
               <div>
                 <h1 className='text-white font-bold text-lg leading-none'>
-                  HYT Wayfinder
+                  Attendance
                 </h1>
                 <p className='text-navy-300 text-xs mt-0.5'>
-                  {isAuthenticated && user ? `${user.name} - ` : ''}QR Clock-In System
+                  {isAuthenticated && user ? `${user.name} - ` : ''}Attendance Station
                 </p>
               </div>
             </div>
@@ -58,7 +58,7 @@ export default function ClockInPage() {
 
         {/* Main Content - scrolls when content is taller than the viewport */}
         <main className='flex-1 min-h-0 overflow-y-auto'>
-          <StudentMobileView />
+          <KioskStationView />
         </main>
       </div>
     </>
