@@ -22,6 +22,25 @@ export default function QRScanner() {
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const handledRef = useRef(false);
 
+  // Stop only if the scanner is actually running. html5-qrcode throws
+  // "Cannot stop, scanner is not running or paused" otherwise, which logs a
+  // console error every time the view unmounts or the camera is already off.
+  const stopScanner = useCallback(async () => {
+    const scanner = scannerRef.current;
+    scannerRef.current = null;
+
+    if (!scanner) return;
+
+    try {
+      if (scanner.isScanning) {
+        await scanner.stop();
+      }
+      scanner.clear();
+    } catch {
+      // Teardown is best-effort; never block the UI on it.
+    }
+  }, []);
+
   const handleScanSuccess = useCallback(
     async (decodedText: string) => {
       if (handledRef.current) return;
@@ -35,14 +54,7 @@ export default function QRScanner() {
       }
 
       // Stop the camera
-      try {
-        if (scannerRef.current) {
-          await scannerRef.current.stop();
-          await scannerRef.current.clear();
-        }
-      } catch {
-        // ignore stop errors
-      }
+      await stopScanner();
 
       setScannerActive(false);
       setScanning(true);
@@ -64,7 +76,7 @@ export default function QRScanner() {
         setScanning(false);
       }, 1200);
     },
-    [user, student, clockIn, addRecord, startRouteView]
+    [user, student, clockIn, addRecord, startRouteView, stopScanner]
   );
 
   const startCamera = useCallback(async () => {
@@ -98,16 +110,9 @@ export default function QRScanner() {
   }, [handleScanSuccess]);
 
   const stopCamera = useCallback(async () => {
-    try {
-      if (scannerRef.current) {
-        await scannerRef.current.stop();
-        await scannerRef.current.clear();
-      }
-    } catch {
-      // ignore
-    }
+    await stopScanner();
     setScannerActive(false);
-  }, []);
+  }, [stopScanner]);
 
   // Toggle the viewfinder between the live camera and the personal QR code
   const handleToggleQR = useCallback(async () => {
@@ -121,12 +126,18 @@ export default function QRScanner() {
   }, [showQR, startCamera, stopCamera]);
 
   useEffect(() => {
+    // Always release the camera on unmount, but only stop it if it's live.
     return () => {
-      if (scannerRef.current) {
-        scannerRef.current
-          .stop()
-          .then(() => scannerRef.current?.clear())
-          .catch(() => {});
+      const scanner = scannerRef.current;
+      scannerRef.current = null;
+      if (!scanner) return;
+      try {
+        if (scanner.isScanning) {
+          scanner.stop().catch(() => {});
+        }
+        scanner.clear();
+      } catch {
+        // best-effort
       }
     };
   }, []);
@@ -135,7 +146,6 @@ export default function QRScanner() {
     startCamera();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
 
   return (
     <div className='w-full h-full flex flex-col items-center p-4 relative'>
@@ -271,7 +281,9 @@ export default function QRScanner() {
         {showQR ? (
           <div className='inline-flex items-center gap-2 px-4 py-2 rounded-full bg-orange-500/10 border border-orange-500/30 mb-4'>
             <i className='fa-solid fa-qrcode text-orange-400 text-sm'></i>
-            <span className='text-orange-300 text-sm font-medium'>Show this QR at the kiosk</span>
+            <span className='text-orange-300 text-sm font-medium'>
+              Show this QR at the kiosk
+            </span>
           </div>
         ) : status === 'not-clocked-in' && !scannerActive ? (
           <button
@@ -285,7 +297,9 @@ export default function QRScanner() {
           <div className='inline-flex items-center gap-2 px-4 py-2 rounded-full bg-orange-500/10 border border-orange-500/30 mb-4'>
             <i className='fa-solid fa-camera text-orange-400 text-sm'></i>
             <span className='text-orange-300 text-sm font-medium'>
-              {status === 'not-clocked-in' ? 'Point at the kiosk QR code' : 'Ready to Navigate'}
+              {status === 'not-clocked-in'
+                ? 'Point at the kiosk QR code'
+                : 'Ready to Navigate'}
             </span>
           </div>
         )}

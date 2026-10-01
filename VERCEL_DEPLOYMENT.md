@@ -9,7 +9,7 @@ Your app is ready for Vercel! Here's what's already configured:
 - ✅ TypeScript configured
 - ✅ Tailwind CSS configured
 - ✅ Client-side state management (Zustand)
-- ✅ No environment variables needed (mock auth)
+- ⚠️ **Environment variables ARE required** (Supabase auth + database)
 
 ---
 
@@ -107,7 +107,7 @@ Your app is ready for Vercel! Here's what's already configured:
 ### Excluded:
 - ❌ node_modules (rebuilt on Vercel)
 - ❌ .next (rebuilt during deployment)
-- ❌ .env.local (not needed for this project)
+- ❌ .env.local (never committed - set the variables in Vercel instead)
 
 ---
 
@@ -148,30 +148,44 @@ Preview: https://hyt-wayfinder-xxx.vercel.app (per commit)
 
 ---
 
-## ⚙️ Environment Variables (Optional)
+## ⚙️ Environment Variables (REQUIRED)
 
-Currently **not needed** because:
-- Mock authentication (no API)
-- Client-side state only
-- No database connection yet
+`.env.local` is gitignored, so it never reaches Vercel. You must add the
+variables by hand or the deployed app has no database and no login.
 
-**For future production:**
+Add them in: **Vercel Dashboard → your project → Settings → Environment Variables**
+
 ```env
-# When you add database
-DATABASE_URL="postgresql://..."
+# Required - the app cannot reach Supabase without these
+NEXT_PUBLIC_SUPABASE_URL="https://xxxxxxxxxxxx.supabase.co"
+NEXT_PUBLIC_SUPABASE_ANON_KEY="eyJhbGciOi..."
 
-# When you add real auth
-NEXTAUTH_URL="https://your-app.vercel.app"
-NEXTAUTH_SECRET="your-secret-key"
-
-# When you add email
-SMTP_HOST="smtp.gmail.com"
-SMTP_PORT="587"
-SMTP_USER="your-email@gmail.com"
-SMTP_PASSWORD="your-app-password"
+# Required for admin user create/delete at /admin/users
+# Server-only. Do NOT rename to NEXT_PUBLIC_*.
+SUPABASE_SERVICE_ROLE_KEY="eyJhbGciOi..."
 ```
 
-Add these in: **Vercel Dashboard → Project → Settings → Environment Variables**
+Set them for **all three** environments (Production, Preview, Development), then
+redeploy - Vercel only injects variables into new builds, so a deploy made
+before you added them will still be broken.
+
+### Why the service role key is safe here
+
+Vercel encrypts project variables at rest and never exposes them to the client.
+The `NEXT_PUBLIC_` prefix is what marks a variable for browser exposure, and this
+one deliberately has no such prefix. It is only read inside
+`app/api/admin/users/route.ts`, which runs on the server.
+
+**If you ever need to rotate it:** Supabase Dashboard → Project Settings → API →
+Reveal → Regenerate, then update it in Vercel and redeploy. The old value stops
+working immediately.
+
+### Verifying the deploy
+
+1. Open the deployed URL - it should load the login page, not error.
+2. Log in. If Supabase is misconfigured you'll see a network/auth failure.
+3. Sign in as the admin, open `/admin/users`, and confirm the user list loads.
+   Create/Delete return a clear 501 until `SUPABASE_SERVICE_ROLE_KEY` is set.
 
 ---
 
@@ -282,19 +296,19 @@ export default function RootLayout({ children }) {
 
 ## 🔒 Security Notes
 
-### Current State (Demo/Development)
-- ⚠️ Mock authentication (client-side only)
-- ⚠️ No password hashing
-- ⚠️ No backend validation
-- ⚠️ Sessions stored in localStorage
+### Current State
+- ✅ Supabase Auth (email + password, hashed by Supabase)
+- ✅ Row Level Security enabled on `public.users` and `public.clock_in_records`
+- ⚠️ Server-side validation only on `/api/admin/users`; the client
+  (`useUsersStore.updateUser`) writes through RLS rather than a route handler
+- ⚠️ Sessions are Supabase-managed (localStorage persistence)
+- ⚠️ The anon key is embedded in the client bundle by design (that is what
+  `NEXT_PUBLIC_` means); RLS is what protects your data, not the key
 
-### For Production
-- ✅ Use NextAuth.js or similar
-- ✅ Hash passwords with bcrypt
-- ✅ Move auth to API routes
-- ✅ Add HTTPS (Vercel provides)
-- ✅ Implement CSRF protection
-- ✅ Add rate limiting
+### Still Worth Doing
+- ✅ Hash passwords with bcrypt (Supabase already does this)
+- ✅ Add rate limiting on `/api/admin/users`
+- ✅ Add HTTPS (Vercel provides it automatically)
 
 ---
 

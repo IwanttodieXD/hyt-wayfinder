@@ -50,6 +50,24 @@ export default function KioskStationView() {
   const activeCount = getActiveCount();
   const onBreakCount = getCompletedTodayCount();
 
+  // Stop only if the scanner is actually running. html5-qrcode throws
+  // "Cannot stop, scanner is not running or paused" otherwise.
+  const stopScanner = useCallback(async () => {
+    const scanner = scannerRef.current;
+    scannerRef.current = null;
+
+    if (!scanner) return;
+
+    try {
+      if (scanner.isScanning) {
+        await scanner.stop();
+      }
+      scanner.clear();
+    } catch {
+      // Teardown is best-effort; never block the UI on it.
+    }
+  }, []);
+
   const handleScanSuccess = useCallback(
     async (decodedText: string) => {
       if (handledRef.current) return;
@@ -65,14 +83,7 @@ export default function KioskStationView() {
       const scannedUserId = decodedText.replace('HYT-USER:', '').trim();
 
       // Stop the camera
-      try {
-        if (scannerRef.current) {
-          await scannerRef.current.stop();
-          await scannerRef.current.clear();
-        }
-      } catch {
-        // ignore stop errors
-      }
+      await stopScanner();
 
       setScannerActive(false);
 
@@ -122,6 +133,7 @@ export default function KioskStationView() {
       addRecord,
       clockOutRecord,
       startRouteView,
+      stopScanner,
     ]
   );
 
@@ -129,6 +141,17 @@ export default function KioskStationView() {
     setScanError('');
     setScanResult(null);
     handledRef.current = false;
+
+    // Html5Qrcode throws if the element id isn't in the DOM yet. On the first
+    // mount (and when switching into kiosk mode) it may not be.
+    if (typeof document === 'undefined' || !document.getElementById('qr-reader')) {
+      setScanError('Camera is still loading. Please try starting the scan again.');
+      setScannerActive(false);
+      return;
+    }
+
+    // Release any previous scanner before making another one.
+    await stopScanner();
 
     try {
       const html5Qrcode = new Html5Qrcode('qr-reader');
@@ -145,6 +168,7 @@ export default function KioskStationView() {
 
       setScannerActive(true);
     } catch (err: any) {
+      scannerRef.current = null;
       setScanError(
         err?.message?.includes('Permission')
           ? 'Camera permission denied. Please allow camera access and try again.'
@@ -154,28 +178,26 @@ export default function KioskStationView() {
       );
       setScannerActive(false);
     }
-  }, [handleScanSuccess]);
+  }, [handleScanSuccess, stopScanner]);
 
   const stopCamera = useCallback(async () => {
-    try {
-      if (scannerRef.current) {
-        await scannerRef.current.stop();
-        await scannerRef.current.clear();
-      }
-    } catch {
-      // ignore
-    }
+    await stopScanner();
     setScannerActive(false);
-  }, []);
+  }, [stopScanner]);
 
   useEffect(() => {
-    // Cleanup on unmount
+    // Release the camera on unmount, but only stop it if it's live.
     return () => {
-      if (scannerRef.current) {
-        scannerRef.current
-          .stop()
-          .then(() => scannerRef.current?.clear())
-          .catch(() => {});
+      const scanner = scannerRef.current;
+      scannerRef.current = null;
+      if (!scanner) return;
+      try {
+        if (scanner.isScanning) {
+          scanner.stop().catch(() => {});
+        }
+        scanner.clear();
+      } catch {
+        // best-effort
       }
     };
   }, []);
@@ -184,7 +206,6 @@ export default function KioskStationView() {
     startCamera();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
 
   const handleGuestScan = () => {
     startCamera();
