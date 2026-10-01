@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import Link from 'next/link';
-import Script from 'next/script';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -41,25 +40,13 @@ export default function LoginPage() {
 
   return (
     <>
-      <Script
-        src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/js/all.min.js"
-        strategy="afterInteractive"
-      />
-
-      <div className="min-h-screen bg-gradient-to-br from-blue-950 via-slate-900 to-blue-900 flex items-center justify-center p-4">
-        {/* Background Effects */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-600 rounded-full opacity-20 blur-[120px]" />
-          <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-orange-600 rounded-full opacity-10 blur-[100px]" />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-blue-800 rounded-full opacity-15 blur-[150px]" />
-        </div>
-
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
         {/* Login Card */}
         <div className="relative w-full max-w-md">
           {/* Logo */}
           <div className="text-center mb-8">
             <div className="inline-block w-24 h-24 mb-4">
-              <img src="/hyt_logo.png" alt="HYT Logo" className="w-full h-full object-contain drop-shadow-2xl" />
+              <img src="/hyt_logo.png" alt="HYT Logo" className="w-full h-full object-contain" />
             </div>
             <h1 className="text-3xl font-bold text-white mb-2">
               HYT Wayfinder
@@ -68,7 +55,7 @@ export default function LoginPage() {
           </div>
 
           {/* Login Form */}
-          <div className="glass-panel border border-blue-400/30 rounded-2xl p-8 shadow-2xl shadow-blue-900/50 bg-slate-900/60">
+          <div className="border border-blue-400/30 rounded-2xl p-8 bg-slate-900/60">
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Error Message */}
               {error && (
@@ -139,8 +126,6 @@ export default function LoginPage() {
                 className="
                   w-full py-3 rounded-lg font-semibold text-white
                   bg-blue-600 hover:bg-blue-700
-                  shadow-lg shadow-blue-500/30
-                  hover:shadow-xl hover:shadow-blue-500/40
                   transition-all duration-200
                   disabled:opacity-50 disabled:cursor-not-allowed
                   flex items-center justify-center gap-2

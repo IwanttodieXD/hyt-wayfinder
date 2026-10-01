@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import { useRecordsStore } from '@/store/recordsStore';
 import Link from 'next/link';
-import Script from 'next/script';
 import UserProfile from '@/components/UserProfile';
 
 export default function RecordsPage() {
@@ -44,11 +43,6 @@ export default function RecordsPage() {
 
   return (
     <>
-      <Script
-        src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/js/all.min.js"
-        strategy="afterInteractive"
-      />
-
       <div className="min-h-screen bg-slate-950">
         {/* Header */}
         <header className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-sm sticky top-0 z-50">

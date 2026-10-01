@@ -7,7 +7,6 @@ import ViewModeSwitcher from '@/components/ViewModeSwitcher';
 import StudentMobileView from '@/components/StudentMobileView';
 import KioskStationView from '@/components/KioskStationView';
 import UserProfile from '@/components/UserProfile';
-import Script from 'next/script';
 
 export default function ClockInPage() {
   const { viewMode, setViewMode, setStudentName } = useClockInStore();
@@ -29,12 +28,6 @@ export default function ClockInPage() {
 
   return (
     <>
-      {/* Font Awesome 6 */}
-      <Script
-        src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/js/all.min.js"
-        strategy="afterInteractive"
-      />
-
       <div className="w-full h-screen bg-slate-950 flex flex-col overflow-hidden">
         {/* Header with View Switcher */}
         <header className="flex-shrink-0 border-b border-slate-800 bg-slate-900/50 backdrop-blur-sm px-6 py-4 relative z-50">

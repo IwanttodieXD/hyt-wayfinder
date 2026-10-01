@@ -6,7 +6,6 @@ import { useAuthStore } from '@/store/authStore';
 import { useClockInStore } from '@/store/clockInStore';
 import StudentMobileView from '@/components/StudentMobileView';
 import UserProfile from '@/components/UserProfile';
-import Script from 'next/script';
 
 export default function VisitorPortal() {
   const router = useRouter();
@@ -29,11 +28,6 @@ export default function VisitorPortal() {
 
   return (
     <>
-      <Script
-        src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/js/all.min.js"
-        strategy="afterInteractive"
-      />
-
       <div className="min-h-screen bg-slate-950 flex flex-col">
         {/* Header */}
         <header className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-sm flex-shrink-0">

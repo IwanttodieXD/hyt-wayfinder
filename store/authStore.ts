@@ -26,6 +26,7 @@ interface AuthState {
     password: string;
     name: string;
     role: UserRole;
+    avatar?: string;
   }) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   updateProfile: (updates: Partial<User>) => void;
@@ -118,8 +119,13 @@ export const useAuthStore = create<AuthState>()(
           // Wait a moment for the auth user to be fully created
           await new Promise(resolve => setTimeout(resolve, 500));
 
-          // Create user profile in users table (linked via foreign key)
-          const avatar = data.role === 'admin' ? '👨‍💼' : data.role === 'trainer' ? '👨‍🏫' : data.role === 'trainee' ? '🎓' : '👩‍🎓';
+          // Use uploaded photo as avatar, or fall back to role-based emoji
+          const avatar = data.avatar || (
+            data.role === 'admin' ? '👨‍💼'
+            : data.role === 'trainer' ? '👨‍🏫'
+            : data.role === 'trainee' ? '🎓'
+            : '👩‍🎓'
+          );
           
           const { data: userData, error: userError } = await supabase
             .from('users')

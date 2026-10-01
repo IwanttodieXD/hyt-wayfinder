@@ -1,15 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore, UserRole } from '@/store/authStore';
 import Link from 'next/link';
-import Script from 'next/script';
 
 export default function RegisterPage() {
   const router = useRouter();
   const { register } = useAuthStore();
-  
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -17,8 +17,60 @@ export default function RegisterPage() {
     confirmPassword: '',
     role: 'visitor' as UserRole,
   });
+  const [profilePhoto, setProfilePhoto] = useState<string>('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setError('Please select an image file');
+      return;
+    }
+
+    setError('');
+
+    // Load image into a canvas to compress + resize
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+
+      const maxSize = 256;
+      let { width, height } = img;
+
+      // Scale down to fit within maxSize x maxSize (square crop)
+      const scale = Math.min(maxSize / width, maxSize / height);
+      const drawW = Math.round(width * scale);
+      const drawH = Math.round(height * scale);
+
+      const canvas = document.createElement('canvas');
+      canvas.width = maxSize;
+      canvas.height = maxSize;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      // Center the image on a square canvas (cover, not stretch)
+      const offsetX = (maxSize - drawW) / 2;
+      const offsetY = (maxSize - drawH) / 2;
+      ctx.drawImage(img, offsetX, offsetY, drawW, drawH);
+
+      // Compress to JPEG — much smaller than PNG for photos
+      const compressed = canvas.toDataURL('image/jpeg', 0.8);
+      setProfilePhoto(compressed);
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      setError('Failed to load image. Please try a different file.');
+    };
+
+    img.src = url;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,6 +94,7 @@ export default function RegisterPage() {
       email: formData.email,
       password: formData.password,
       role: formData.role,
+      avatar: profilePhoto || undefined,
     });
 
     if (result.success) {
@@ -60,25 +113,13 @@ export default function RegisterPage() {
 
   return (
     <>
-      <Script
-        src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/js/all.min.js"
-        strategy="afterInteractive"
-      />
-
-      <div className="min-h-screen bg-gradient-to-br from-blue-950 via-slate-900 to-blue-900 flex items-center justify-center p-4">
-        {/* Background Effects */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-600 rounded-full opacity-20 blur-[120px]" />
-          <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-orange-600 rounded-full opacity-10 blur-[100px]" />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-blue-800 rounded-full opacity-15 blur-[150px]" />
-        </div>
-
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
         {/* Register Card */}
         <div className="relative w-full max-w-md">
           {/* Logo */}
           <div className="text-center mb-8">
             <div className="inline-block w-24 h-24 mb-4">
-              <img src="/hyt_logo.png" alt="HYT Logo" className="w-full h-full object-contain drop-shadow-2xl" />
+              <img src="/hyt_logo.png" alt="HYT Logo" className="w-full h-full object-contain" />
             </div>
             <h1 className="text-3xl font-bold text-white mb-2">
               Create Account
@@ -87,7 +128,7 @@ export default function RegisterPage() {
           </div>
 
           {/* Register Form */}
-          <div className="glass-panel border border-blue-400/30 rounded-2xl p-8 shadow-2xl shadow-blue-900/50 bg-slate-900/60">
+          <div className="border border-blue-400/30 rounded-2xl p-8 bg-slate-900/60">
             <form onSubmit={handleSubmit} className="space-y-5">
               {/* Error Message */}
               {error && (
@@ -96,6 +137,44 @@ export default function RegisterPage() {
                   <span>{error}</span>
                 </div>
               )}
+
+              {/* Profile Photo Upload */}
+              <div className="flex flex-col items-center">
+                <label className="block text-sm font-medium text-blue-200 mb-3">
+                  Profile Photo
+                </label>
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  className="relative w-32 h-32 rounded-lg border-2 border-blue-500/30 bg-slate-900/80 hover:border-orange-500 cursor-pointer transition-all group overflow-hidden flex items-center justify-center"
+                >
+                  {profilePhoto ? (
+                    <img src={profilePhoto} alt="Profile preview" className="w-full h-full object-cover" />
+                  ) : (
+                    <i className="fa-solid fa-camera text-3xl text-blue-400 group-hover:text-orange-400 transition-colors"></i>
+                  )}
+                  {/* Hover overlay */}
+                  <div className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                    <i className="fa-solid fa-camera text-2xl text-white"></i>
+                  </div>
+                </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handlePhotoChange}
+                  className="hidden"
+                />
+                {profilePhoto && (
+                  <button
+                    type="button"
+                    onClick={() => setProfilePhoto('')}
+                    className="mt-2 text-xs text-red-400 hover:text-red-300 transition-colors"
+                  >
+                    Remove photo
+                  </button>
+                )}
+                <p className="mt-1 text-xs text-slate-500">Optional</p>
+              </div>
 
               {/* Name Field */}
               <div>
@@ -169,11 +248,14 @@ export default function RegisterPage() {
                       }
                     `}
                   >
-                    <i className={`fa-solid fa-chalkboard-user text-2xl mb-2 ${
-                      formData.role === 'trainer' ? 'text-orange-400' : 'text-blue-300'
-                    }`}></i>
+                    <span
+                      className="text-2xl mb-2 block"
+                      style={{ color: formData.role === 'trainer' ? '#fb923c' : '#93c5fd' }}
+                    >
+                      <i className="fa-solid fa-chalkboard-user"></i>
+                    </span>
                     <p className={`font-semibold text-sm ${
-                      formData.role === 'trainer' ? 'text-white' : 'text-slate-300'
+                      formData.role === 'trainer' ? 'text-orange-300' : 'text-slate-300'
                     }`}>
                       Trainer
                     </p>
@@ -191,11 +273,14 @@ export default function RegisterPage() {
                       }
                     `}
                   >
-                    <i className={`fa-solid fa-user-graduate text-2xl mb-2 ${
-                      formData.role === 'trainee' ? 'text-orange-400' : 'text-blue-300'
-                    }`}></i>
+                    <span
+                      className="text-2xl mb-2 block"
+                      style={{ color: formData.role === 'trainee' ? '#fb923c' : '#93c5fd' }}
+                    >
+                      <i className="fa-solid fa-user-graduate"></i>
+                    </span>
                     <p className={`font-semibold text-sm ${
-                      formData.role === 'trainee' ? 'text-white' : 'text-slate-300'
+                      formData.role === 'trainee' ? 'text-orange-300' : 'text-slate-300'
                     }`}>
                       Trainee
                     </p>
@@ -213,11 +298,14 @@ export default function RegisterPage() {
                       }
                     `}
                   >
-                    <i className={`fa-solid fa-id-card text-2xl mb-2 ${
-                      formData.role === 'visitor' ? 'text-orange-400' : 'text-blue-300'
-                    }`}></i>
+                    <span
+                      className="text-2xl mb-2 block"
+                      style={{ color: formData.role === 'visitor' ? '#fb923c' : '#93c5fd' }}
+                    >
+                      <i className="fa-solid fa-id-card"></i>
+                    </span>
                     <p className={`font-semibold text-sm ${
-                      formData.role === 'visitor' ? 'text-white' : 'text-slate-300'
+                      formData.role === 'visitor' ? 'text-orange-300' : 'text-slate-300'
                     }`}>
                       Visitor
                     </p>
@@ -286,8 +374,6 @@ export default function RegisterPage() {
                 className="
                   w-full py-3 rounded-lg font-semibold text-white
                   bg-blue-600 hover:bg-blue-700
-                  shadow-lg shadow-blue-500/30
-                  hover:shadow-xl hover:shadow-blue-500/40
                   transition-all duration-200
                   disabled:opacity-50 disabled:cursor-not-allowed
                   flex items-center justify-center gap-2
