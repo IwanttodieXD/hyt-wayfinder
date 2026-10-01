@@ -5,6 +5,7 @@ import { useRecordsStore } from '@/store/recordsStore';
 import { useAuthStore } from '@/store/authStore';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
+import QRCode from 'react-qr-code';
 
 // The QR value displayed by the kiosk station
 const KIOSK_QR_VALUE = 'HYT-KIOSK-01-CHECKIN-STATION';
@@ -17,6 +18,7 @@ export default function QRScanner() {
   const [scannerActive, setScannerActive] = useState(false);
   const [scanError, setScanError] = useState('');
   const [scanning, setScanning] = useState(false);
+  const [showQR, setShowQR] = useState(false);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const handledRef = useRef(false);
 
@@ -87,7 +89,9 @@ export default function QRScanner() {
       setScanError(
         err?.message?.includes('Permission')
           ? 'Camera permission denied. Please allow camera access and try again.'
-          : 'Could not start camera. ' + (err?.message || 'Please ensure a camera is connected and you are on HTTPS/localhost.')
+          : 'Could not start camera. ' +
+              (err?.message ||
+                'Please ensure a camera is connected and you are on HTTPS/localhost.')
       );
       setScannerActive(false);
     }
@@ -105,29 +109,49 @@ export default function QRScanner() {
     setScannerActive(false);
   }, []);
 
+  // Toggle the viewfinder between the live camera and the personal QR code
+  const handleToggleQR = useCallback(async () => {
+    if (showQR) {
+      setShowQR(false);
+      startCamera();
+    } else {
+      await stopCamera();
+      setShowQR(true);
+    }
+  }, [showQR, startCamera, stopCamera]);
+
   useEffect(() => {
     return () => {
       if (scannerRef.current) {
-        scannerRef.current.stop().then(() => scannerRef.current?.clear()).catch(() => {});
+        scannerRef.current
+          .stop()
+          .then(() => scannerRef.current?.clear())
+          .catch(() => {});
       }
     };
   }, []);
+  // Auto-open the camera on load
+  useEffect(() => {
+    startCamera();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
 
   return (
-    <div className="w-full h-full flex flex-col items-center justify-center p-6 relative">
+    <div className='w-full h-full flex flex-col items-center p-4 relative'>
       {/* Camera Viewfinder */}
-      <div className="relative w-full max-w-xs aspect-square">
+      <div className='relative w-full max-w-xs aspect-square'>
         {/* Viewfinder Frame */}
-        <div className="absolute inset-0 rounded-2xl border-2 border-cyan-400/50 overflow-hidden">
+        <div className='absolute inset-0 rounded-lg border-2 border-orange-400/50 overflow-hidden'>
           {/* Real Camera Feed */}
-          <div id="qr-reader-mobile" className="w-full h-full" />
+          <div id='qr-reader-mobile' className='w-full h-full' />
 
           {/* Placeholder when camera is off */}
           {!scannerActive && !scanning && (
-            <div className="absolute inset-0 bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 flex items-center justify-center">
-              <div className="text-center">
-                <i className="fa-solid fa-camera text-slate-600 text-5xl mb-3"></i>
-                <p className="text-slate-500 text-xs">Camera is off</p>
+            <div className='absolute inset-0 bg-navy-900 flex items-center justify-center'>
+              <div className='text-center'>
+                <i className='fa-solid fa-camera text-navy-600 text-5xl mb-3'></i>
+                <p className='text-navy-500 text-xs'>Camera is off</p>
               </div>
             </div>
           )}
@@ -135,25 +159,25 @@ export default function QRScanner() {
           {/* Scanning Laser (overlay) */}
           {scannerActive && !scanning && (
             <div
-              className="absolute left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-cyan-400 to-transparent shadow-lg shadow-cyan-400/50 pointer-events-none"
+              className='absolute left-0 right-0 h-0.5 pointer-events-none'
               style={{ animation: 'scan 2s ease-in-out infinite', top: '50%' }}
             ></div>
           )}
 
           {/* Success Animation */}
           {scanning && (
-            <div className="absolute inset-0 bg-green-500/20 backdrop-blur-sm flex items-center justify-center animate-pulse">
-              <div className="w-20 h-20 rounded-full bg-green-500 flex items-center justify-center animate-scale-in">
-                <i className="fa-solid fa-check text-white text-3xl"></i>
+            <div className='absolute inset-0 bg-green-500/20 flex items-center justify-center animate-pulse'>
+              <div className='w-20 h-20 rounded-full bg-green-500 flex items-center justify-center animate-scale-in'>
+                <i className='fa-solid fa-check text-paper text-3xl'></i>
               </div>
             </div>
           )}
 
           {/* Error overlay */}
           {scanError && !scannerActive && !scanning && (
-            <div className="absolute inset-0 bg-slate-950/90 flex flex-col items-center justify-center p-4">
-              <i className="fa-solid fa-circle-exclamation text-red-500 text-4xl mb-3"></i>
-              <p className="text-red-400 text-xs text-center">{scanError}</p>
+            <div className='absolute inset-0 bg-navy-950/90 flex flex-col items-center justify-center p-4'>
+              <i className='fa-solid fa-circle-exclamation text-red-500 text-4xl mb-3'></i>
+              <p className='text-red-400 text-xs text-center'>{scanError}</p>
             </div>
           )}
 
@@ -166,103 +190,129 @@ export default function QRScanner() {
           ].map((position, idx) => (
             <div
               key={idx}
-              className={`absolute ${position} border-cyan-400 w-8 h-8 pointer-events-none ${scanning ? 'border-green-400' : ''}`}
+              className={`absolute ${position} border-orange-400 w-8 h-8 pointer-events-none ${scanning ? 'border-green-400' : ''}`}
             ></div>
           ))}
         </div>
 
         {/* Targeting Reticle */}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="relative w-48 h-48">
-            <div className="absolute inset-0 border border-cyan-400/30 rounded-lg"></div>
-            <div className="absolute top-1/2 left-0 right-0 h-px bg-cyan-400/30"></div>
-            <div className="absolute left-1/2 top-0 bottom-0 w-px bg-cyan-400/30"></div>
+        <div className='absolute inset-0 flex items-center justify-center pointer-events-none'>
+          <div className='relative w-48 h-48'>
+            <div className='absolute inset-0 border border-orange-400/30 rounded-lg'></div>
+            <div className='absolute top-1/2 left-0 right-0 h-px bg-orange-400/30'></div>
+            <div className='absolute left-1/2 top-0 bottom-0 w-px bg-orange-400/30'></div>
           </div>
         </div>
 
         {/* LIVE indicator */}
-        {scannerActive && (
-          <div className="absolute top-2 right-2 px-2 py-1 rounded-full bg-cyan-500/20 border border-cyan-500/30 flex items-center gap-1.5">
-            <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
-            <span className="text-cyan-300 text-xs font-semibold">LIVE</span>
+        {scannerActive && !showQR && (
+          <div className='absolute top-2 right-2 px-2 py-1 rounded-full bg-orange-500/20 border border-orange-500/30 flex items-center gap-1.5'>
+            <div className='w-2 h-2 rounded-full bg-red-500 animate-pulse'></div>
+            <span className='text-orange-300 text-xs font-semibold'>LIVE</span>
+          </div>
+        )}
+        {/* Personal QR code shown in place of the camera */}
+        {showQR && (
+          <div className='absolute inset-0 z-20 bg-paper flex flex-col items-center justify-center p-4'>
+            {user?.qrCode ? (
+              <QRCode
+                value={user.qrCode}
+                size={180}
+                style={{ height: 'auto', maxWidth: '100%', width: '100%' }}
+                viewBox='0 0 180 180'
+              />
+            ) : (
+              <p className='text-navy-500 text-sm text-center'>
+                No QR code available for your account.
+              </p>
+            )}
           </div>
         )}
       </div>
 
-      {/* Instructions */}
-      <div className="mt-8 text-center">
-        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-cyan-500/10 border border-cyan-500/30 mb-4">
-          <i className="fa-solid fa-camera text-cyan-400 text-sm"></i>
-          <span className="text-cyan-300 text-sm font-medium">
-            {status === 'not-clocked-in'
-              ? scannerActive
-                ? 'Point at the kiosk QR code'
-                : 'Start camera to scan'
-              : 'Ready to Navigate'}
-          </span>
-        </div>
+      {/* Camera / My QR switch */}
+      <div className='mt-4 flex items-center justify-center gap-3'>
+        <span
+          className={`flex items-center gap-1.5 text-xs font-medium transition-colors ${
+            !showQR ? 'text-orange-300' : 'text-navy-500'
+          }`}
+        >
+          <i className='fa-solid fa-camera'></i>
+          Camera
+        </span>
+        <button
+          type='button'
+          role='switch'
+          aria-checked={showQR}
+          aria-label='Toggle between camera and personal QR code'
+          onClick={handleToggleQR}
+          className={`relative w-12 h-6 rounded-full transition-colors duration-150 ${
+            showQR ? 'bg-orange-500' : 'bg-navy-700'
+          }`}
+        >
+          <span
+            className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-paper shadow transition-transform duration-150 ${
+              showQR ? 'translate-x-6' : 'translate-x-0'
+            }`}
+          />
+        </button>
+        <span
+          className={`flex items-center gap-1.5 text-xs font-medium transition-colors ${
+            showQR ? 'text-orange-300' : 'text-navy-500'
+          }`}
+        >
+          <i className='fa-solid fa-qrcode'></i>
+          My QR
+        </span>
+      </div>
 
-        <p className="text-slate-400 text-xs max-w-xs mx-auto mb-6">
-          {status === 'not-clocked-in'
-            ? 'Scan the kiosk QR code to clock in and receive your route to the destination.'
-            : 'You are clocked in. View your 3D route to the destination.'}
+      {/* Instructions */}
+      <div className='mt-5 text-center'>
+        {showQR ? (
+          <div className='inline-flex items-center gap-2 px-4 py-2 rounded-full bg-orange-500/10 border border-orange-500/30 mb-4'>
+            <i className='fa-solid fa-qrcode text-orange-400 text-sm'></i>
+            <span className='text-orange-300 text-sm font-medium'>Show this QR at the kiosk</span>
+          </div>
+        ) : status === 'not-clocked-in' && !scannerActive ? (
+          <button
+            onClick={startCamera}
+            className='inline-flex items-center gap-2 px-4 py-2 rounded-full bg-orange-500 hover:bg-orange-600 text-paper text-sm font-medium transition-colors duration-150 mb-4'
+          >
+            <i className='fa-solid fa-camera text-sm'></i>
+            Start camera to scan
+          </button>
+        ) : (
+          <div className='inline-flex items-center gap-2 px-4 py-2 rounded-full bg-orange-500/10 border border-orange-500/30 mb-4'>
+            <i className='fa-solid fa-camera text-orange-400 text-sm'></i>
+            <span className='text-orange-300 text-sm font-medium'>
+              {status === 'not-clocked-in' ? 'Point at the kiosk QR code' : 'Ready to Navigate'}
+            </span>
+          </div>
+        )}
+
+        <p className='text-navy-300 text-xs max-w-xs mx-auto mb-6'>
+          {showQR
+            ? 'Present your personal QR code to the kiosk camera to clock in.'
+            : status === 'not-clocked-in'
+              ? 'Scan the kiosk QR code to clock in and receive your route to the destination.'
+              : 'You are clocked in. View your 3D route to the destination.'}
         </p>
       </div>
 
-      {/* Action Buttons */}
-      {status === 'not-clocked-in' ? (
-        <div className="flex flex-col items-center gap-3 w-full max-w-xs">
-          <button
-            onClick={scannerActive ? stopCamera : startCamera}
-            disabled={scanning}
-            className="
-              relative w-full px-8 py-4 rounded-xl font-bold text-base text-white
-              bg-gradient-to-r from-cyan-500 to-blue-500
-              shadow-lg shadow-cyan-500/30
-              hover:shadow-xl hover:shadow-cyan-500/40 hover:scale-105
-              active:scale-95
-              transition-all duration-200
-              disabled:opacity-50 disabled:cursor-not-allowed
-              overflow-hidden group
-            "
-          >
-            <span className="relative z-10 flex items-center justify-center gap-2">
-              <i className={`fa-solid ${scannerActive ? 'fa-stop' : 'fa-camera'}`}></i>
-              {scannerActive ? 'Stop Camera' : 'Start Camera Scan'}
-            </span>
-            <span
-              className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
-              style={{
-                background:
-                  'linear-gradient(105deg, transparent 20%, rgba(255,255,255,0.2) 50%, transparent 80%)',
-              }}
-            ></span>
-          </button>
-        </div>
-      ) : (
+      {/* View Route (when clocked in) */}
+      {status !== 'not-clocked-in' && (
         <button
           onClick={startRouteView}
-          className="
-            relative px-8 py-4 rounded-xl font-bold text-base text-white
-            bg-gradient-to-r from-cyan-500 to-blue-500
-            shadow-lg shadow-cyan-500/30
-            hover:shadow-xl hover:shadow-cyan-500/40 hover:scale-105
-            active:scale-95
-            transition-all duration-200
-            overflow-hidden group
-          "
+          className='
+            relative px-4 py-3 rounded-lg font-bold text-base text-white
+            bg-navy-700 hover:bg-navy-600
+            transition-colors duration-150
+            '
         >
-          <span className="relative z-10 flex items-center gap-2">
-            <i className="fa-solid fa-route"></i>
+          <span className='relative z-10 flex items-center gap-2'>
+            <i className='fa-solid fa-route'></i>
             View 3D Route
           </span>
-          <span
-            className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
-            style={{
-              background:
-                'linear-gradient(105deg, transparent 20%, rgba(255,255,255,0.2) 50%, transparent 80%)',
-            }}
-          ></span>
         </button>
       )}
     </div>

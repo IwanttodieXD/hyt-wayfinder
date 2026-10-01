@@ -113,200 +113,221 @@ export default function RegisterPage() {
 
   return (
     <>
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
+      <div className='min-h-screen bg-navy-900 flex items-center justify-center p-4'>
         {/* Register Card */}
-        <div className="relative w-full max-w-md">
+        <div className='relative w-full max-w-md'>
           {/* Logo */}
-          <div className="text-center mb-8">
-            <div className="inline-block w-24 h-24 mb-4">
-              <img src="/hyt_logo.png" alt="HYT Logo" className="w-full h-full object-contain" />
+          <div className='text-center mb-8'>
+            <div className='inline-block w-24 h-24 mb-4'>
+              <img
+                src='/hyt_logo.png'
+                alt='HYT Logo'
+                className='w-full h-full object-contain'
+              />
             </div>
-            <h1 className="text-3xl font-bold text-white mb-2">
-              Create Account
-            </h1>
-            <p className="text-blue-300">Join HYT Wayfinder</p>
+            <h1 className='text-3xl font-bold text-white mb-2'>Create Account</h1>
+            <p className='text-orange-300'>Join HYT Wayfinder</p>
           </div>
 
           {/* Register Form */}
-          <div className="border border-blue-400/30 rounded-2xl p-8 bg-slate-900/60">
-            <form onSubmit={handleSubmit} className="space-y-5">
+          <div className='border border-orange-400/30 rounded-lg p-8 bg-navy-900/60'>
+            <form onSubmit={handleSubmit} className='space-y-5'>
               {/* Error Message */}
               {error && (
-                <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm flex items-start gap-2">
-                  <i className="fa-solid fa-circle-exclamation mt-0.5"></i>
+                <div className='p-4 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm flex items-start gap-2'>
+                  <i className='fa-solid fa-circle-exclamation mt-0.5'></i>
                   <span>{error}</span>
                 </div>
               )}
 
               {/* Profile Photo Upload */}
-              <div className="flex flex-col items-center">
-                <label className="block text-sm font-medium text-blue-200 mb-3">
+              <div className='flex flex-col items-center'>
+                <label className='block text-sm font-medium text-orange-200 mb-3'>
                   Profile Photo
                 </label>
                 <div
                   onClick={() => fileInputRef.current?.click()}
-                  className="relative w-32 h-32 rounded-lg border-2 border-blue-500/30 bg-slate-900/80 hover:border-orange-500 cursor-pointer transition-all group overflow-hidden flex items-center justify-center"
+                  className='relative w-32 h-32 rounded-lg border-2 border-orange-500/30 bg-navy-900/80 hover:border-orange-500 cursor-pointer transition-colors group overflow-hidden flex items-center justify-center'
                 >
                   {profilePhoto ? (
-                    <img src={profilePhoto} alt="Profile preview" className="w-full h-full object-cover" />
+                    <img
+                      src={profilePhoto}
+                      alt='Profile preview'
+                      className='w-full h-full object-cover'
+                    />
                   ) : (
-                    <i className="fa-solid fa-camera text-3xl text-blue-400 group-hover:text-orange-400 transition-colors"></i>
+                    <i className='fa-solid fa-camera text-3xl text-orange-400 group-hover:text-orange-400 transition-colors'></i>
                   )}
                   {/* Hover overlay */}
-                  <div className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                    <i className="fa-solid fa-camera text-2xl text-white"></i>
+                  <div className='absolute inset-0 bg-navy-900/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity'>
+                    <i className='fa-solid fa-camera text-2xl text-white'></i>
                   </div>
                 </div>
                 <input
                   ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
+                  type='file'
+                  accept='image/*'
                   onChange={handlePhotoChange}
-                  className="hidden"
+                  className='hidden'
                 />
                 {profilePhoto && (
                   <button
-                    type="button"
+                    type='button'
                     onClick={() => setProfilePhoto('')}
-                    className="mt-2 text-xs text-red-400 hover:text-red-300 transition-colors"
+                    className='mt-2 text-xs text-red-400 hover:text-red-300 transition-colors'
                   >
                     Remove photo
                   </button>
                 )}
-                <p className="mt-1 text-xs text-slate-500">Optional</p>
+                <p className='mt-1 text-xs text-navy-500'>Optional</p>
               </div>
 
               {/* Name Field */}
               <div>
-                <label htmlFor="name" className="block text-sm font-medium text-blue-200 mb-2">
+                <label
+                  htmlFor='name'
+                  className='block text-sm font-medium text-orange-200 mb-2'
+                >
                   Full Name
                 </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <i className="fa-solid fa-user text-blue-400"></i>
+                <div className='relative'>
+                  <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
+                    <i className='fa-solid fa-user text-orange-400'></i>
                   </div>
                   <input
-                    type="text"
-                    id="name"
+                    type='text'
+                    id='name'
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     required
-                    className="
+                    className='
                       w-full pl-12 pr-4 py-3 rounded-lg
-                      bg-slate-900/80 border-2 border-blue-500/30
-                      text-white placeholder-slate-500
+                      bg-navy-900/80 border-2 border-orange-500/30
+                      text-white placeholder-navy-500
                       focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500
-                      transition-all
-                    "
-                    placeholder="John Doe"
+                      transition-colors
+                      '
+                    placeholder='John Doe'
                   />
                 </div>
               </div>
 
               {/* Email Field */}
               <div>
-                <label htmlFor="email" className="block text-sm font-medium text-blue-200 mb-2">
+                <label
+                  htmlFor='email'
+                  className='block text-sm font-medium text-orange-200 mb-2'
+                >
                   Email Address
                 </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <i className="fa-solid fa-envelope text-blue-400"></i>
+                <div className='relative'>
+                  <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
+                    <i className='fa-solid fa-envelope text-orange-400'></i>
                   </div>
                   <input
-                    type="email"
-                    id="email"
+                    type='email'
+                    id='email'
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     required
-                    className="
+                    className='
                       w-full pl-12 pr-4 py-3 rounded-lg
-                      bg-slate-900/80 border-2 border-blue-500/30
-                      text-white placeholder-slate-500
+                      bg-navy-900/80 border-2 border-orange-500/30
+                      text-white placeholder-navy-500
                       focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500
-                      transition-all
-                    "
-                    placeholder="you@example.com"
+                      transition-colors
+                      '
+                    placeholder='you@example.com'
                   />
                 </div>
               </div>
 
               {/* Role Selection */}
               <div>
-                <label className="block text-sm font-medium text-blue-200 mb-2">
+                <label className='block text-sm font-medium text-orange-200 mb-2'>
                   Account Type
                 </label>
-                <div className="grid grid-cols-3 gap-3">
+                <div className='grid grid-cols-3 gap-3'>
                   <button
-                    type="button"
+                    type='button'
                     onClick={() => setFormData({ ...formData, role: 'trainer' })}
                     className={`
-                      p-4 rounded-lg border-2 transition-all
+  p-4 rounded-lg border-2 transition-colors
                       ${
                         formData.role === 'trainer'
                           ? 'border-orange-500 bg-orange-500/20'
-                          : 'border-blue-500/30 bg-slate-900/50 hover:border-blue-400/50'
+                          : 'border-orange-500/30 bg-navy-900/50 hover:border-orange-400/50'
                       }
                     `}
                   >
                     <span
-                      className="text-2xl mb-2 block"
-                      style={{ color: formData.role === 'trainer' ? '#fb923c' : '#93c5fd' }}
+                      className={`text-2xl mb-2 block ${
+                        formData.role === 'trainer' ? 'text-orange-400' : 'text-navy-300'
+                      }`}
                     >
-                      <i className="fa-solid fa-chalkboard-user"></i>
+                      <i className='fa-solid fa-chalkboard-user'></i>
                     </span>
-                    <p className={`font-semibold text-sm ${
-                      formData.role === 'trainer' ? 'text-orange-300' : 'text-slate-300'
-                    }`}>
+                    <p
+                      className={`font-semibold text-sm ${
+                        formData.role === 'trainer' ? 'text-orange-300' : 'text-navy-200'
+                      }`}
+                    >
                       Trainer
                     </p>
                   </button>
 
                   <button
-                    type="button"
+                    type='button'
                     onClick={() => setFormData({ ...formData, role: 'trainee' })}
                     className={`
-                      p-4 rounded-lg border-2 transition-all
+  p-4 rounded-lg border-2 transition-colors
                       ${
                         formData.role === 'trainee'
                           ? 'border-orange-500 bg-orange-500/20'
-                          : 'border-blue-500/30 bg-slate-900/50 hover:border-blue-400/50'
+                          : 'border-orange-500/30 bg-navy-900/50 hover:border-orange-400/50'
                       }
                     `}
                   >
                     <span
-                      className="text-2xl mb-2 block"
-                      style={{ color: formData.role === 'trainee' ? '#fb923c' : '#93c5fd' }}
+                      className={`text-2xl mb-2 block ${
+                        formData.role === 'trainee' ? 'text-orange-400' : 'text-navy-300'
+                      }`}
                     >
-                      <i className="fa-solid fa-user-graduate"></i>
+                      <i className='fa-solid fa-user-graduate'></i>
                     </span>
-                    <p className={`font-semibold text-sm ${
-                      formData.role === 'trainee' ? 'text-orange-300' : 'text-slate-300'
-                    }`}>
+                    <p
+                      className={`font-semibold text-sm ${
+                        formData.role === 'trainee' ? 'text-orange-300' : 'text-navy-200'
+                      }`}
+                    >
                       Trainee
                     </p>
                   </button>
 
                   <button
-                    type="button"
+                    type='button'
                     onClick={() => setFormData({ ...formData, role: 'visitor' })}
                     className={`
-                      p-4 rounded-lg border-2 transition-all
+  p-4 rounded-lg border-2 transition-colors
                       ${
                         formData.role === 'visitor'
                           ? 'border-orange-500 bg-orange-500/20'
-                          : 'border-blue-500/30 bg-slate-900/50 hover:border-blue-400/50'
+                          : 'border-orange-500/30 bg-navy-900/50 hover:border-orange-400/50'
                       }
                     `}
                   >
                     <span
-                      className="text-2xl mb-2 block"
-                      style={{ color: formData.role === 'visitor' ? '#fb923c' : '#93c5fd' }}
+                      className={`text-2xl mb-2 block ${
+                        formData.role === 'visitor' ? 'text-orange-400' : 'text-navy-300'
+                      }`}
                     >
-                      <i className="fa-solid fa-id-card"></i>
+                      <i className='fa-solid fa-id-card'></i>
                     </span>
-                    <p className={`font-semibold text-sm ${
-                      formData.role === 'visitor' ? 'text-orange-300' : 'text-slate-300'
-                    }`}>
+                    <p
+                      className={`font-semibold text-sm ${
+                        formData.role === 'visitor' ? 'text-orange-300' : 'text-navy-200'
+                      }`}
+                    >
                       Visitor
                     </p>
                   </button>
@@ -315,79 +336,92 @@ export default function RegisterPage() {
 
               {/* Password Field */}
               <div>
-                <label htmlFor="password" className="block text-sm font-medium text-blue-200 mb-2">
+                <label
+                  htmlFor='password'
+                  className='block text-sm font-medium text-orange-200 mb-2'
+                >
                   Password
                 </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <i className="fa-solid fa-lock text-blue-400"></i>
+                <div className='relative'>
+                  <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
+                    <i className='fa-solid fa-lock text-orange-400'></i>
                   </div>
                   <input
-                    type="password"
-                    id="password"
+                    type='password'
+                    id='password'
                     value={formData.password}
-                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, password: e.target.value })
+                    }
                     required
-                    className="
+                    className='
                       w-full pl-12 pr-4 py-3 rounded-lg
-                      bg-slate-900/80 border-2 border-blue-500/30
-                      text-white placeholder-slate-500
+                      bg-navy-900/80 border-2 border-orange-500/30
+                      text-white placeholder-navy-500
                       focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500
-                      transition-all
-                    "
-                    placeholder="••••••••"
+                      transition-colors
+                      '
+                    placeholder='••••••••'
                   />
                 </div>
               </div>
 
               {/* Confirm Password Field */}
               <div>
-                <label htmlFor="confirmPassword" className="block text-sm font-medium text-blue-200 mb-2">
+                <label
+                  htmlFor='confirmPassword'
+                  className='block text-sm font-medium text-orange-200 mb-2'
+                >
                   Confirm Password
                 </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <i className="fa-solid fa-lock text-blue-400"></i>
+                <div className='relative'>
+                  <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
+                    <i className='fa-solid fa-lock text-orange-400'></i>
                   </div>
                   <input
-                    type="password"
-                    id="confirmPassword"
+                    type='password'
+                    id='confirmPassword'
                     value={formData.confirmPassword}
-                    onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        confirmPassword: e.target.value,
+                      })
+                    }
                     required
-                    className="
+                    className='
                       w-full pl-12 pr-4 py-3 rounded-lg
-                      bg-slate-900/80 border-2 border-blue-500/30
-                      text-white placeholder-slate-500
+                      bg-navy-900/80 border-2 border-orange-500/30
+                      text-white placeholder-navy-500
                       focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500
-                      transition-all
-                    "
-                    placeholder="••••••••"
+                      transition-colors
+                      '
+                    placeholder='••••••••'
                   />
                 </div>
               </div>
 
               {/* Submit Button */}
               <button
-                type="submit"
+                type='submit'
                 disabled={loading}
-                className="
-                  w-full py-3 rounded-lg font-semibold text-white
-                  bg-blue-600 hover:bg-blue-700
-                  transition-all duration-200
+                className='
+                  w-full py-3 rounded-lg font-semibold text-paper
+                  bg-orange-600 hover:bg-orange-700
+                  transition-colors duration-150
                   disabled:opacity-50 disabled:cursor-not-allowed
                   flex items-center justify-center gap-2
-                  border border-blue-500/50
-                "
+                  border border-orange-500/50
+                  '
               >
                 {loading ? (
                   <>
-                    <i className="fa-solid fa-spinner fa-spin"></i>
+                    <i className='fa-solid fa-spinner fa-spin'></i>
                     <span>Creating Account...</span>
                   </>
                 ) : (
                   <>
-                    <i className="fa-solid fa-user-plus"></i>
+                    <i className='fa-solid fa-user-plus'></i>
                     <span>Create Account</span>
                   </>
                 )}
@@ -395,11 +429,11 @@ export default function RegisterPage() {
             </form>
 
             {/* Login Link */}
-            <div className="mt-6 text-center text-sm text-slate-400">
+            <div className='mt-6 text-center text-sm text-navy-300'>
               Already have an account?{' '}
               <Link
-                href="/login"
-                className="text-orange-400 hover:text-orange-300 font-semibold transition-colors"
+                href='/login'
+                className='text-orange-400 hover:text-orange-300 font-semibold transition-colors'
               >
                 Sign in
               </Link>
@@ -407,12 +441,12 @@ export default function RegisterPage() {
           </div>
 
           {/* Back to Home */}
-          <div className="mt-6 text-center">
+          <div className='mt-6 text-center'>
             <Link
-              href="/"
-              className="text-blue-300 hover:text-blue-200 text-sm flex items-center justify-center gap-2 transition-colors"
+              href='/'
+              className='text-orange-300 hover:text-orange-200 text-sm flex items-center justify-center gap-2 transition-colors'
             >
-              <i className="fa-solid fa-arrow-left"></i>
+              <i className='fa-solid fa-arrow-left'></i>
               <span>Back to Home</span>
             </Link>
           </div>

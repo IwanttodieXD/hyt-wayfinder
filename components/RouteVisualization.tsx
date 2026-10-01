@@ -8,12 +8,42 @@ import * as THREE from 'three';
 
 // Waypoint data for route
 const waypoints = [
-  { position: [0, 0, 0], label: 'Main Lobby', stage: 1, cameraOffset: [-3, 3, -3] },
-  { position: [5, 0, 3], label: 'Hallway A', stage: 1, cameraOffset: [-2, 2, -2] },
-  { position: [10, 0, 5], label: 'Elevator 3F', stage: 2, cameraOffset: [-1, 2, -2] },
-  { position: [10, 10, 5], label: '3rd Floor Landing', stage: 2, cameraOffset: [-1, 2, -2] },
-  { position: [15, 10, 8], label: 'Corridor B', stage: 3, cameraOffset: [-2, 2, -1] },
-  { position: [20, 10, 10], label: 'Room 304', stage: 3, cameraOffset: [-3, 3, -2] },
+  {
+    position: [0, 0, 0],
+    label: 'Main Lobby',
+    stage: 1,
+    cameraOffset: [-3, 3, -3],
+  },
+  {
+    position: [5, 0, 3],
+    label: 'Hallway A',
+    stage: 1,
+    cameraOffset: [-2, 2, -2],
+  },
+  {
+    position: [10, 0, 5],
+    label: 'Elevator 3F',
+    stage: 2,
+    cameraOffset: [-1, 2, -2],
+  },
+  {
+    position: [10, 10, 5],
+    label: '3rd Floor Landing',
+    stage: 2,
+    cameraOffset: [-1, 2, -2],
+  },
+  {
+    position: [15, 10, 8],
+    label: 'Corridor B',
+    stage: 3,
+    cameraOffset: [-2, 2, -1],
+  },
+  {
+    position: [20, 10, 10],
+    label: 'Room 304',
+    stage: 3,
+    cameraOffset: [-3, 3, -2],
+  },
 ] as const;
 
 function AnimatedCamera({ enabled }: { enabled: boolean }) {
@@ -25,11 +55,11 @@ function AnimatedCamera({ enabled }: { enabled: boolean }) {
       const targetWaypoint = waypoints[currentWaypoint];
       const targetPos = new THREE.Vector3(...targetWaypoint.position);
       const cameraOffset = new THREE.Vector3(...targetWaypoint.cameraOffset);
-      
+
       // Smooth camera movement
       const desiredPosition = targetPos.clone().add(cameraOffset);
       camera.position.lerp(desiredPosition, 0.05);
-      
+
       // Look at the waypoint
       const lookAtTarget = targetPos.clone();
       const currentLookAt = new THREE.Vector3();
@@ -58,14 +88,14 @@ function WalkingAvatar() {
     if (currentWaypoint < waypoints.length - 1) {
       // Animate between current and next waypoint
       setProgress((prev) => Math.min(prev + 0.01, 1));
-      
+
       const current = new THREE.Vector3(...waypoints[currentWaypoint].position);
       const next = new THREE.Vector3(...waypoints[currentWaypoint + 1].position);
       const interpolated = new THREE.Vector3().lerpVectors(current, next, progress);
-      
+
       groupRef.current.position.copy(interpolated);
       groupRef.current.position.y += 0.5; // Lift above ground
-      
+
       // Face direction of movement
       const direction = new THREE.Vector3().subVectors(next, current);
       if (direction.length() > 0) {
@@ -90,19 +120,27 @@ function WalkingAvatar() {
       {/* Body */}
       <mesh position={[0, 0, 0]}>
         <capsuleGeometry args={[0.2, 0.6, 8, 16]} />
-        <meshStandardMaterial color="#3b82f6" emissive="#3b82f6" emissiveIntensity={0.3} />
+        <meshStandardMaterial
+          color='#2563eb'
+          emissive='#2563eb'
+          emissiveIntensity={0.3}
+        />
       </mesh>
-      
+
       {/* Head */}
       <mesh position={[0, 0.6, 0]}>
         <sphereGeometry args={[0.15, 16, 16]} />
-        <meshStandardMaterial color="#60a5fa" emissive="#60a5fa" emissiveIntensity={0.3} />
+        <meshStandardMaterial
+          color='#3b82f6'
+          emissive='#3b82f6'
+          emissiveIntensity={0.3}
+        />
       </mesh>
 
       {/* Direction indicator */}
       <mesh position={[0, 0.6, 0.2]} rotation={[-Math.PI / 2, 0, 0]}>
         <coneGeometry args={[0.08, 0.15, 8]} />
-        <meshBasicMaterial color="#22d3ee" />
+        <meshBasicMaterial color='#0891b2' />
       </mesh>
     </group>
   );
@@ -114,9 +152,9 @@ function AnimatedPath() {
 
   useEffect(() => {
     if (isRouteAnimating && currentWaypoint < waypoints.length) {
-      const points = waypoints.slice(0, currentWaypoint + 1).map(
-        (wp) => new THREE.Vector3(wp.position[0], wp.position[1], wp.position[2])
-      );
+      const points = waypoints
+        .slice(0, currentWaypoint + 1)
+        .map((wp) => new THREE.Vector3(wp.position[0], wp.position[1], wp.position[2]));
       setAnimatedPoints(points);
     } else if (!isRouteAnimating) {
       const allPoints = waypoints.map(
@@ -128,14 +166,7 @@ function AnimatedPath() {
 
   if (animatedPoints.length < 2) return null;
 
-  return (
-    <Line
-      points={animatedPoints}
-      color="#06b6d4"
-      lineWidth={3}
-      dashed={false}
-    />
-  );
+  return <Line points={animatedPoints} color='#0891b2' lineWidth={3} dashed={false} />;
 }
 
 function RouteMarkers() {
@@ -153,8 +184,8 @@ function RouteMarkers() {
             <mesh>
               <sphereGeometry args={[0.4, 32, 32]} />
               <meshStandardMaterial
-                color={isActive ? '#22d3ee' : isPassed ? '#10b981' : '#475569'}
-                emissive={isActive ? '#06b6d4' : isPassed ? '#059669' : '#000000'}
+                color={isActive ? '#0891b2' : isPassed ? '#10b981' : '#475569'}
+                emissive={isActive ? '#0891b2' : isPassed ? '#059669' : '#000000'}
                 emissiveIntensity={isActive ? 1.2 : isPassed ? 0.5 : 0}
               />
             </mesh>
@@ -164,11 +195,21 @@ function RouteMarkers() {
               <>
                 <mesh rotation={[Math.PI / 2, 0, 0]}>
                   <ringGeometry args={[0.5, 0.8, 32]} />
-                  <meshBasicMaterial color="#22d3ee" transparent opacity={0.4} side={THREE.DoubleSide} />
+                  <meshBasicMaterial
+                    color='#0891b2'
+                    transparent
+                    opacity={0.4}
+                    side={THREE.DoubleSide}
+                  />
                 </mesh>
                 <mesh rotation={[Math.PI / 2, 0, 0]}>
                   <ringGeometry args={[0.8, 1.2, 32]} />
-                  <meshBasicMaterial color="#22d3ee" transparent opacity={0.2} side={THREE.DoubleSide} />
+                  <meshBasicMaterial
+                    color='#0891b2'
+                    transparent
+                    opacity={0.2}
+                    side={THREE.DoubleSide}
+                  />
                 </mesh>
               </>
             )}
@@ -177,7 +218,7 @@ function RouteMarkers() {
             {isActive && (
               <mesh position={[0, 5, 0]}>
                 <cylinderGeometry args={[0.1, 0.3, 10, 16]} />
-                <meshBasicMaterial color="#22d3ee" transparent opacity={0.3} />
+                <meshBasicMaterial color='#0891b2' transparent opacity={0.3} />
               </mesh>
             )}
 
@@ -186,9 +227,9 @@ function RouteMarkers() {
               <group position={[0, 2, 0]}>
                 <mesh rotation={[0, 0, Math.PI / 4]}>
                   <boxGeometry args={[0.8, 0.8, 0.8]} />
-                  <meshStandardMaterial 
-                    color="#f59e0b" 
-                    emissive="#f59e0b" 
+                  <meshStandardMaterial
+                    color='#f59e0b'
+                    emissive='#f59e0b'
                     emissiveIntensity={isActive ? 1 : 0.5}
                   />
                 </mesh>
@@ -204,8 +245,8 @@ function RouteMarkers() {
 function FloorGrid() {
   return (
     <>
-      <gridHelper args={[30, 30, '#1e293b', '#0f172a']} position={[10, 0, 5]} />
-      <gridHelper args={[30, 30, '#1e293b', '#0f172a']} position={[10, 10, 5]} />
+      <gridHelper args={[30, 30, '#cbd5e1', '#e2e8f0']} position={[10, 0, 5]} />
+      <gridHelper args={[30, 30, '#cbd5e1', '#e2e8f0']} position={[10, 10, 5]} />
     </>
   );
 }
@@ -216,40 +257,40 @@ function BuildingStructure() {
       {/* Floor platforms */}
       <mesh position={[10, -0.5, 5]} receiveShadow>
         <boxGeometry args={[30, 1, 20]} />
-        <meshStandardMaterial color="#1e293b" roughness={0.8} />
+        <meshStandardMaterial color='#cbd5e1' roughness={0.8} />
       </mesh>
       <mesh position={[10, 9.5, 5]} receiveShadow>
         <boxGeometry args={[30, 1, 20]} />
-        <meshStandardMaterial color="#1e293b" roughness={0.8} />
+        <meshStandardMaterial color='#cbd5e1' roughness={0.8} />
       </mesh>
 
       {/* Walls - Ground Floor */}
       <mesh position={[-2.5, 2.5, 5]}>
         <boxGeometry args={[0.5, 5, 20]} />
-        <meshStandardMaterial color="#334155" transparent opacity={0.6} />
+        <meshStandardMaterial color='#94a3b8' transparent opacity={0.6} />
       </mesh>
       <mesh position={[22.5, 2.5, 5]}>
         <boxGeometry args={[0.5, 5, 20]} />
-        <meshStandardMaterial color="#334155" transparent opacity={0.6} />
+        <meshStandardMaterial color='#94a3b8' transparent opacity={0.6} />
       </mesh>
 
       {/* Walls - 3rd Floor */}
       <mesh position={[-2.5, 12.5, 5]}>
         <boxGeometry args={[0.5, 5, 20]} />
-        <meshStandardMaterial color="#334155" transparent opacity={0.6} />
+        <meshStandardMaterial color='#94a3b8' transparent opacity={0.6} />
       </mesh>
       <mesh position={[22.5, 12.5, 5]}>
         <boxGeometry args={[0.5, 5, 20]} />
-        <meshStandardMaterial color="#334155" transparent opacity={0.6} />
+        <meshStandardMaterial color='#94a3b8' transparent opacity={0.6} />
       </mesh>
 
       {/* Elevator shaft - with glass effect */}
       <mesh position={[10, 5, 5]}>
         <boxGeometry args={[2.5, 11, 2.5]} />
-        <meshStandardMaterial 
-          color="#1e40af" 
-          transparent 
-          opacity={0.3} 
+        <meshStandardMaterial
+          color='#2563eb'
+          transparent
+          opacity={0.3}
           roughness={0.1}
           metalness={0.8}
         />
@@ -258,19 +299,27 @@ function BuildingStructure() {
       {/* Elevator car (moving) */}
       <mesh position={[10, 2, 5]}>
         <boxGeometry args={[2, 2.5, 2]} />
-        <meshStandardMaterial color="#3b82f6" emissive="#3b82f6" emissiveIntensity={0.2} />
+        <meshStandardMaterial
+          color='#2563eb'
+          emissive='#2563eb'
+          emissiveIntensity={0.2}
+        />
       </mesh>
 
       {/* Destination room - Room 304 */}
       <mesh position={[20, 11.5, 10]}>
         <boxGeometry args={[5, 3, 4]} />
-        <meshStandardMaterial color="#0f172a" transparent opacity={0.8} />
+        <meshStandardMaterial color='#e2e8f0' transparent opacity={0.8} />
       </mesh>
 
       {/* Room 304 Door */}
       <mesh position={[17.5, 11, 8]}>
         <boxGeometry args={[0.2, 2, 1]} />
-        <meshStandardMaterial color="#f59e0b" emissive="#f59e0b" emissiveIntensity={0.3} />
+        <meshStandardMaterial
+          color='#f59e0b'
+          emissive='#f59e0b'
+          emissiveIntensity={0.3}
+        />
       </mesh>
 
       {/* Direction arrows on floor */}
@@ -280,14 +329,18 @@ function BuildingStructure() {
         { pos: [12.5, 10.05, 6.5], rot: [0, Math.PI / 4, 0] },
         { pos: [17.5, 10.05, 9], rot: [0, Math.PI / 6, 0] },
       ].map((arrow, i) => (
-        <group key={i} position={arrow.pos as [number, number, number]} rotation={arrow.rot as [number, number, number]}>
+        <group
+          key={i}
+          position={arrow.pos as [number, number, number]}
+          rotation={arrow.rot as [number, number, number]}
+        >
           <mesh>
             <boxGeometry args={[1, 0.05, 0.3]} />
-            <meshBasicMaterial color="#22d3ee" transparent opacity={0.5} />
+            <meshBasicMaterial color='#0891b2' transparent opacity={0.5} />
           </mesh>
           <mesh position={[0.6, 0, 0]}>
             <coneGeometry args={[0.3, 0.5, 3]} />
-            <meshBasicMaterial color="#22d3ee" transparent opacity={0.5} />
+            <meshBasicMaterial color='#0891b2' transparent opacity={0.5} />
           </mesh>
         </group>
       ))}
@@ -296,8 +349,14 @@ function BuildingStructure() {
 }
 
 export default function RouteVisualization() {
-  const { isRouteAnimating, currentWaypoint, setRouteAnimating, setCurrentWaypoint, resetRoute, clockOut } =
-    useClockInStore();
+  const {
+    isRouteAnimating,
+    currentWaypoint,
+    setRouteAnimating,
+    setCurrentWaypoint,
+    resetRoute,
+    clockOut,
+  } = useClockInStore();
   const [cameraMode, setCameraMode] = useState<'free' | 'follow'>('follow');
 
   useEffect(() => {
@@ -331,27 +390,37 @@ export default function RouteVisualization() {
   };
 
   return (
-    <div className="w-full h-full relative">
+    <div className='theme-fixed-light w-full h-full relative'>
       {/* 3D Canvas */}
       <Canvas
         camera={{ position: [-10, 15, 20], fov: 60 }}
-        className="bg-slate-950"
+        className='bg-[#eef2f7]'
         shadows
       >
-        <color attach="background" args={['#020617']} />
-        <fog attach="fog" args={['#020617', 15, 60]} />
+        <color attach='background' args={['#eef2f7']} />
+        <fog attach='fog' args={['#eef2f7', 15, 60]} />
 
         {/* Lighting */}
-        <ambientLight intensity={0.4} />
-        <directionalLight 
-          position={[10, 20, 10]} 
-          intensity={0.8} 
-          color="#ffffff"
+        <ambientLight intensity={0.8} />
+        <directionalLight
+          position={[10, 20, 10]}
+          intensity={1}
+          color='#ffffff'
           castShadow
         />
-        <pointLight position={[10, 15, 10]} intensity={1.5} color="#06b6d4" distance={20} />
-        <pointLight position={[20, 12, 10]} intensity={1.2} color="#f59e0b" distance={15} />
-        <pointLight position={[0, 2, 0]} intensity={0.8} color="#22d3ee" distance={10} />
+        <pointLight
+          position={[10, 15, 10]}
+          intensity={0.8}
+          color='#0891b2'
+          distance={20}
+        />
+        <pointLight
+          position={[20, 12, 10]}
+          intensity={0.6}
+          color='#f59e0b'
+          distance={15}
+        />
+        <pointLight position={[0, 2, 0]} intensity={0.4} color='#0891b2' distance={10} />
 
         {/* Scene elements */}
         <FloorGrid />
@@ -371,18 +440,18 @@ export default function RouteVisualization() {
       </Canvas>
 
       {/* HUD Controls Overlay */}
-      <div className="absolute inset-0 pointer-events-none">
+      <div className='absolute inset-0 pointer-events-none'>
         {/* Top HUD */}
-        <div className="absolute top-4 left-4 right-4 flex items-start justify-between pointer-events-auto">
+        <div className='absolute top-4 left-4 right-4 flex items-start justify-between pointer-events-auto'>
           {/* Stage Indicator */}
-          <div className="glass-panel border-slate-700 px-4 py-3 rounded-xl">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-cyan-500/20 flex items-center justify-center">
-                <i className="fa-solid fa-route text-cyan-400"></i>
+          <div className='glass-panel border-navy-700 px-4 py-3 rounded-lg'>
+            <div className='flex items-center gap-3'>
+              <div className='w-10 h-10 rounded-lg bg-orange-500/20 flex items-center justify-center'>
+                <i className='fa-solid fa-route text-orange-400'></i>
               </div>
               <div>
-                <p className="text-slate-400 text-xs mb-0.5">Current Stage</p>
-                <p className="text-white font-bold text-sm">
+                <p className='text-navy-300 text-xs mb-0.5'>Current Stage</p>
+                <p className='text-white font-bold text-sm'>
                   {waypoints[Math.min(currentWaypoint, waypoints.length - 1)].label}
                 </p>
               </div>
@@ -390,20 +459,26 @@ export default function RouteVisualization() {
           </div>
 
           {/* Progress */}
-          <div className="glass-panel border-slate-700 px-4 py-3 rounded-xl flex items-center gap-3">
-            <div className="text-right">
-              <p className="text-slate-400 text-xs mb-0.5">Progress</p>
-              <p className="text-white font-bold text-sm">
+          <div className='glass-panel border-navy-700 px-4 py-3 rounded-lg flex items-center gap-3'>
+            <div className='text-right'>
+              <p className='text-navy-300 text-xs mb-0.5'>Progress</p>
+              <p className='text-white font-bold text-sm'>
                 {currentWaypoint + 1} / {waypoints.length}
               </p>
             </div>
-            <div className="h-8 w-px bg-slate-700"></div>
+            <div className='h-8 w-px bg-navy-700'></div>
             <button
               onClick={toggleCameraMode}
-              className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 transition-all text-xs font-semibold text-slate-300"
-              title={cameraMode === 'follow' ? 'Switch to Free Camera' : 'Switch to Follow Camera'}
+              className='px-3 py-1.5 rounded-lg bg-navy-700 hover:bg-navy-600 transition-colors text-xs font-semibold text-navy-200'
+              title={
+                cameraMode === 'follow'
+                  ? 'Switch to Free Camera'
+                  : 'Switch to Follow Camera'
+              }
             >
-              <i className={`fa-solid ${cameraMode === 'follow' ? 'fa-video' : 'fa-hand'}`}></i>
+              <i
+                className={`fa-solid ${cameraMode === 'follow' ? 'fa-video' : 'fa-hand'}`}
+              ></i>
             </button>
           </div>
         </div>
@@ -411,38 +486,43 @@ export default function RouteVisualization() {
         {/* Waypoint Steps - REMOVED */}
 
         {/* Bottom Control Bar */}
-        <div className="absolute bottom-4 left-4 right-4 glass-panel border-slate-700 p-4 rounded-xl pointer-events-auto">
-          <div className="flex items-center gap-3">
+        <div className='absolute bottom-4 left-4 right-4 glass-panel border-navy-700 p-4 rounded-lg pointer-events-auto'>
+          <div className='flex items-center gap-3'>
             <button
               onClick={handlePlayPause}
-              className="
+              className='
                 flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-semibold
-                bg-cyan-500 text-white hover:bg-cyan-600 active:scale-95 transition-all
-              "
+                bg-orange-500 text-paper hover:bg-orange-600 transition-colors
+                '
             >
               <i className={`fa-solid ${isRouteAnimating ? 'fa-pause' : 'fa-play'}`}></i>
-              {isRouteAnimating ? 'Pause' : currentWaypoint >= waypoints.length - 1 ? 'Replay' : 'Play'} Route
+              {isRouteAnimating
+                ? 'Pause'
+                : currentWaypoint >= waypoints.length - 1
+                  ? 'Replay'
+                  : 'Play'}{' '}
+              Route
             </button>
 
             <button
               onClick={resetRoute}
-              className="
+              className='
                 px-4 py-3 rounded-lg font-semibold
-                bg-slate-700 text-slate-300 hover:bg-slate-600 active:scale-95 transition-all
-              "
+                bg-navy-700 text-navy-200 hover:bg-navy-600 transition-colors
+                '
             >
-              <i className="fa-solid fa-rotate-left"></i>
+              <i className='fa-solid fa-rotate-left'></i>
             </button>
 
             <button
               onClick={clockOut}
-              className="
+              className='
                 px-4 py-3 rounded-lg font-semibold
                 bg-red-500/20 text-red-400 border border-red-500/30
-                hover:bg-red-500/30 active:scale-95 transition-all
-              "
+                hover:bg-red-500/30 transition-colors
+                '
             >
-              <i className="fa-solid fa-right-from-bracket mr-2"></i>
+              <i className='fa-solid fa-right-from-bracket mr-2'></i>
               Clock Out
             </button>
           </div>

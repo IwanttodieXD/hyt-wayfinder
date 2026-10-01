@@ -1,13 +1,12 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { useAuthStore } from '@/store/authStore';
 
 export default function HomePage() {
   const router = useRouter();
   const { isAuthenticated, user, checkAuth, isLoading } = useAuthStore();
-  const [entering, setEntering] = useState(false);
 
   // Check authentication on mount
   useEffect(() => {
@@ -32,17 +31,12 @@ export default function HomePage() {
     }
   }, [isAuthenticated, user, router, isLoading]);
 
-  const handleEnter = () => {
-    setEntering(true);
-    setTimeout(() => router.push('/tour'), 600);
-  };
-
   // Show loading while checking auth and redirecting
   return (
-    <div className="w-full h-screen bg-slate-950 flex items-center justify-center">
-      <div className="text-center">
-        <div className="w-16 h-16 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-        <p className="text-slate-400">Loading...</p>
+    <div className='w-full h-screen bg-navy-950 flex items-center justify-center'>
+      <div className='text-center'>
+        <div className='w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4'></div>
+        <p className='text-navy-300'>Loading...</p>
       </div>
     </div>
   );

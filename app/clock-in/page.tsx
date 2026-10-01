@@ -14,7 +14,11 @@ export default function ClockInPage() {
 
   // Auto-set mobile view for trainers/visitors
   useEffect(() => {
-    if (isAuthenticated && user && (user.role === 'trainer' || user.role === 'trainee' || user.role === 'visitor')) {
+    if (
+      isAuthenticated &&
+      user &&
+      (user.role === 'trainer' || user.role === 'trainee' || user.role === 'visitor')
+    ) {
       setViewMode('mobile');
     }
   }, [isAuthenticated, user, setViewMode]);
@@ -28,19 +32,25 @@ export default function ClockInPage() {
 
   return (
     <>
-      <div className="w-full h-screen bg-slate-950 flex flex-col overflow-hidden">
+      <div className='w-full min-h-screen bg-navy-950 flex flex-col'>
         {/* Header with View Switcher */}
-        <header className="flex-shrink-0 border-b border-slate-800 bg-slate-900/50 backdrop-blur-sm px-6 py-4 relative z-50">
-          <div className="max-w-7xl mx-auto flex items-center justify-between">
+        <header className='flex-shrink-0 border-b border-navy-800 bg-navy-900/50 px-4 py-3 relative z-50'>
+          <div className='max-w-7xl mx-auto flex items-center justify-between'>
             {/* Logo */}
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 flex items-center justify-center overflow-hidden">
-                <img src="/hyt_logo.png" alt="HYT Global Logo" className="w-full h-full object-contain" />
+            <div className='flex items-center gap-3'>
+              <div className='w-12 h-12 flex items-center justify-center overflow-hidden'>
+                <img
+                  src='/hyt_logo.png'
+                  alt='HYT Global Logo'
+                  className='w-full h-full object-contain'
+                />
               </div>
               <div>
-                <h1 className="text-white font-bold text-lg leading-none">HYT Wayfinder</h1>
-                <p className="text-slate-400 text-xs mt-0.5">
-                  {isAuthenticated && user ? `${user.name} - ` : ''}Student QR Clock-In System
+                <h1 className='text-white font-bold text-lg leading-none'>
+                  HYT Wayfinder
+                </h1>
+                <p className='text-navy-300 text-xs mt-0.5'>
+                  {isAuthenticated && user ? `${user.name} - ` : ''}QR Clock-In System
                 </p>
               </div>
             </div>
@@ -52,16 +62,18 @@ export default function ClockInPage() {
             {isAuthenticated && user ? (
               <UserProfile />
             ) : (
-              <div className="hidden md:flex items-center gap-2 px-4 py-2 rounded-lg bg-green-500/10 border border-green-500/30">
-                <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
-                <span className="text-green-300 text-sm font-semibold">System Online</span>
+              <div className='hidden md:flex items-center gap-2 px-4 py-2 rounded-lg bg-green-500/10 border border-green-500/30'>
+                <div className='w-2 h-2 rounded-full bg-green-400 animate-pulse'></div>
+                <span className='text-green-300 text-sm font-semibold'>
+                  System Online
+                </span>
               </div>
             )}
           </div>
         </header>
 
-        {/* Main Content */}
-        <main className="flex-1 overflow-hidden">
+        {/* Main Content - scrolls when content is taller than the viewport */}
+        <main className='flex-1 min-h-0 overflow-y-auto'>
           {viewMode === 'mobile' ? <StudentMobileView /> : <KioskStationView />}
         </main>
       </div>

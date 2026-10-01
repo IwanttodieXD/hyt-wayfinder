@@ -8,7 +8,7 @@ import Link from 'next/link';
 export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuthStore();
-  
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -24,7 +24,7 @@ export default function LoginPage() {
     if (result.success) {
       // Get user info to determine redirect
       const user = useAuthStore.getState().user;
-      
+
       // Role-based redirect
       if (user?.role === 'admin') {
         router.push('/admin');
@@ -40,106 +40,114 @@ export default function LoginPage() {
 
   return (
     <>
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
+      <div className='min-h-screen bg-navy-900 flex items-center justify-center p-4'>
         {/* Login Card */}
-        <div className="relative w-full max-w-md">
+        <div className='relative w-full max-w-md'>
           {/* Logo */}
-          <div className="text-center mb-8">
-            <div className="inline-block w-24 h-24 mb-4">
-              <img src="/hyt_logo.png" alt="HYT Logo" className="w-full h-full object-contain" />
+          <div className='text-center mb-8'>
+            <div className='inline-block w-24 h-24 mb-4'>
+              <img
+                src='/hyt_logo.png'
+                alt='HYT Logo'
+                className='w-full h-full object-contain'
+              />
             </div>
-            <h1 className="text-3xl font-bold text-white mb-2">
-              HYT Wayfinder
-            </h1>
-            <p className="text-blue-300">Sign in to your account</p>
+            <h1 className='text-3xl font-bold text-white mb-2'>HYT Wayfinder</h1>
+            <p className='text-orange-300'>Sign in to your account</p>
           </div>
 
           {/* Login Form */}
-          <div className="border border-blue-400/30 rounded-2xl p-8 bg-slate-900/60">
-            <form onSubmit={handleSubmit} className="space-y-6">
+          <div className='border border-orange-400/30 rounded-lg p-8 bg-navy-900/60'>
+            <form onSubmit={handleSubmit} className='space-y-6'>
               {/* Error Message */}
               {error && (
-                <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm flex items-start gap-2">
-                  <i className="fa-solid fa-circle-exclamation mt-0.5"></i>
+                <div className='p-4 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm flex items-start gap-2'>
+                  <i className='fa-solid fa-circle-exclamation mt-0.5'></i>
                   <span>{error}</span>
                 </div>
               )}
 
               {/* Email Field */}
               <div>
-                <label htmlFor="email" className="block text-sm font-medium text-blue-200 mb-2">
+                <label
+                  htmlFor='email'
+                  className='block text-sm font-medium text-orange-200 mb-2'
+                >
                   Email Address
                 </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <i className="fa-solid fa-envelope text-blue-400"></i>
+                <div className='relative'>
+                  <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
+                    <i className='fa-solid fa-envelope text-orange-400'></i>
                   </div>
                   <input
-                    type="email"
-                    id="email"
+                    type='email'
+                    id='email'
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
-                    className="
+                    className='
                       w-full pl-12 pr-4 py-3 rounded-lg
-                      bg-slate-900/80 border-2 border-blue-500/30
-                      text-white placeholder-slate-500
+                      bg-navy-900/80 border-2 border-orange-500/30
+                      text-white placeholder-navy-500
                       focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500
-                      transition-all
-                    "
-                    placeholder="you@example.com"
+                      transition-colors
+                      '
+                    placeholder='you@example.com'
                   />
                 </div>
               </div>
 
               {/* Password Field */}
               <div>
-                <label htmlFor="password" className="block text-sm font-medium text-blue-200 mb-2">
+                <label
+                  htmlFor='password'
+                  className='block text-sm font-medium text-orange-200 mb-2'
+                >
                   Password
                 </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <i className="fa-solid fa-lock text-blue-400"></i>
+                <div className='relative'>
+                  <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
+                    <i className='fa-solid fa-lock text-orange-400'></i>
                   </div>
                   <input
-                    type="password"
-                    id="password"
+                    type='password'
+                    id='password'
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                    className="
+                    className='
                       w-full pl-12 pr-4 py-3 rounded-lg
-                      bg-slate-900/80 border-2 border-blue-500/30
-                      text-white placeholder-slate-500
+                      bg-navy-900/80 border-2 border-orange-500/30
+                      text-white placeholder-navy-500
                       focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500
-                      transition-all
-                    "
-                    placeholder="••••••••"
+                      transition-colors
+                      '
+                    placeholder='••••••••'
                   />
                 </div>
               </div>
 
               {/* Submit Button */}
               <button
-                type="submit"
+                type='submit'
                 disabled={loading}
-                className="
-                  w-full py-3 rounded-lg font-semibold text-white
-                  bg-blue-600 hover:bg-blue-700
-                  transition-all duration-200
+                className='
+                  w-full py-3 rounded-lg font-semibold text-paper
+                  bg-orange-600 hover:bg-orange-700
+                  transition-colors duration-150
                   disabled:opacity-50 disabled:cursor-not-allowed
                   flex items-center justify-center gap-2
-                  border border-blue-500/50
-                "
+                  border border-orange-500/50
+                  '
               >
                 {loading ? (
                   <>
-                    <i className="fa-solid fa-spinner fa-spin"></i>
+                    <i className='fa-solid fa-spinner fa-spin'></i>
                     <span>Signing in...</span>
                   </>
                 ) : (
                   <>
-                    <i className="fa-solid fa-right-to-bracket"></i>
+                    <i className='fa-solid fa-right-to-bracket'></i>
                     <span>Sign In</span>
                   </>
                 )}
@@ -147,24 +155,33 @@ export default function LoginPage() {
             </form>
 
             {/* Demo Credentials */}
-            <div className="mt-6 p-4 rounded-lg bg-blue-500/10 border border-blue-500/30">
-              <p className="text-blue-300 text-sm font-semibold mb-2">
-                <i className="fa-solid fa-info-circle mr-2"></i>
+            <div className='mt-6 p-4 rounded-lg bg-orange-500/10 border border-orange-500/30'>
+              <p className='text-orange-300 text-sm font-semibold mb-2'>
+                <i className='fa-solid fa-info-circle mr-2'></i>
                 Demo Credentials
               </p>
-              <div className="space-y-1 text-xs text-blue-200">
-                <p><strong className="text-orange-400">Admin:</strong> admin@hyt.com / admin123</p>
-                <p><strong className="text-orange-400">Trainer:</strong> trainer@hyt.com / trainer123</p>
-                <p><strong className="text-orange-400">Visitor:</strong> visitor@hyt.com / visitor123</p>
+              <div className='space-y-1 text-xs text-orange-200'>
+                <p>
+                  <strong className='text-orange-400'>Admin:</strong> admin@hyt.com /
+                  admin123
+                </p>
+                <p>
+                  <strong className='text-orange-400'>Trainer:</strong> trainer@hyt.com /
+                  trainer123
+                </p>
+                <p>
+                  <strong className='text-orange-400'>Visitor:</strong> visitor@hyt.com /
+                  visitor123
+                </p>
               </div>
             </div>
 
             {/* Register Link */}
-            <div className="mt-6 text-center text-sm text-slate-400">
+            <div className='mt-6 text-center text-sm text-navy-300'>
               Don&apos;t have an account?{' '}
               <Link
-                href="/register"
-                className="text-orange-400 hover:text-orange-300 font-semibold transition-colors"
+                href='/register'
+                className='text-orange-400 hover:text-orange-300 font-semibold transition-colors'
               >
                 Create one
               </Link>

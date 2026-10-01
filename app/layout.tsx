@@ -1,11 +1,11 @@
-import type { Metadata } from "next";
-import "./globals.css";
+import type { Metadata } from 'next';
+import './globals.css';
 
 export const metadata: Metadata = {
-  title: "HYT WAYFINDER",
-  description: "Virtual 3D tour of HYT Global Institute building",
+  title: 'HYT WAYFINDER',
+  description: 'Virtual 3D tour of HYT Global Institute building',
   icons: {
-    icon: "/hyt_logo.png",
+    icon: '/hyt_logo.png',
   },
 };
 
@@ -15,13 +15,31 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang='en' suppressHydrationWarning>
       <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function () {
+                try {
+                  var raw = localStorage.getItem('hyt-theme');
+                  var theme = raw ? (JSON.parse(raw).state || {}).theme : 'dark';
+                  if (theme !== 'light') theme = 'dark';
+                  var root = document.documentElement;
+                  root.classList.add(theme);
+                  root.style.colorScheme = theme;
+                } catch (e) {
+                  document.documentElement.classList.add('dark');
+                }
+              })();
+            `,
+          }}
+        />
         <link
-          rel="stylesheet"
-          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
-          crossOrigin="anonymous"
-          referrerPolicy="no-referrer"
+          rel='stylesheet'
+          href='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css'
+          crossOrigin='anonymous'
+          referrerPolicy='no-referrer'
         />
       </head>
       <body>{children}</body>

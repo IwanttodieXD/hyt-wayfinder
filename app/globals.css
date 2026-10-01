@@ -3,20 +3,85 @@
 @tailwind utilities;
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Dark theme (default). RGB triplets so Tailwind opacity modifiers work. */
+  --navy-950: 5 9 26;
+  --navy-900: 10 16 39;
+  --navy-800: 17 26 58;
+  --navy-700: 26 37 73;
+  --navy-600: 36 50 92;
+  --navy-500: 51 66 111;
+  --navy-400: 100 119 168;
+  --navy-300: 139 156 199;
+  --navy-200: 182 195 224;
+  --white: 255 255 255;
+  --paper: 255 255 255;
+  --orange-200: 254 215 170;
+  --orange-300: 253 186 116;
+  --orange-400: 251 146 60;
+  --orange-500: 249 115 22;
+  --orange-600: 234 88 12;
+  --orange-700: 194 65 12;
+  --red-300: 252 165 165;
+  --red-400: 248 113 113;
+  --red-500: 239 68 68;
+  --red-600: 220 38 38;
+  --green-300: 134 239 172;
+  --green-400: 74 222 128;
+  --green-500: 34 197 94;
+  --green-600: 22 163 74;
+  --blue-300: 147 197 253;
+  --blue-500: 59 130 246;
+  --teal-300: 94 234 212;
+  --teal-500: 20 184 166;
+  --purple-300: 216 180 254;
+  --purple-500: 168 85 247;
+  --background: 5 9 26;
+  --foreground: 182 195 224;
+  color-scheme: dark;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Light theme. Also used to pin the 3D route view to light. */
+html.light,
+.theme-fixed-light {
+  --navy-950: 248 250 252;
+  --navy-900: 255 255 255;
+  --navy-800: 241 245 249;
+  --navy-700: 226 232 240;
+  --navy-600: 203 213 225;
+  --navy-500: 148 163 184;
+  --navy-400: 100 116 139;
+  --navy-300: 71 85 105;
+  --navy-200: 30 41 59;
+  --white: 15 23 42;
+  --paper: 255 255 255;
+  --orange-200: 154 52 18;
+  --orange-300: 194 65 12;
+  --orange-400: 234 88 12;
+  --orange-500: 249 115 22;
+  --orange-600: 234 88 12;
+  --orange-700: 194 65 12;
+  --red-300: 185 28 28;
+  --red-400: 220 38 38;
+  --red-500: 239 68 68;
+  --red-600: 220 38 38;
+  --green-300: 21 128 61;
+  --green-400: 22 163 74;
+  --green-500: 34 197 94;
+  --green-600: 22 163 74;
+  --blue-300: 29 78 216;
+  --blue-500: 59 130 246;
+  --teal-300: 15 118 110;
+  --teal-500: 20 184 166;
+  --purple-300: 126 34 206;
+  --purple-500: 168 85 247;
+  --background: 248 250 252;
+  --foreground: 30 41 59;
+  color-scheme: light;
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
+  color: rgb(var(--foreground));
+  background: rgb(var(--background));
   font-family: Arial, Helvetica, sans-serif;
 }
 
@@ -25,10 +90,9 @@ body {
     text-wrap: balance;
   }
 
+  /* Flat panel - no blur, no gradient (theme-driven) */
   .glass-panel {
-    background: rgba(15, 23, 42, 0.6);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: rgb(var(--navy-900));
   }
 }
 

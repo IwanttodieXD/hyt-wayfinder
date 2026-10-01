@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import { useRecordsStore } from '@/store/recordsStore';
@@ -11,9 +11,17 @@ export default function RecordsPage() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
   const { records, fetchRecords } = useRecordsStore();
-  
+
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'completed'>('all');
+  // Date selection. Year + month are always applied; the day is optional —
+  // leaving it on 'All days' shows the whole selected month.
+  const now = new Date();
+  const [selectedYear, setSelectedYear] = useState(String(now.getFullYear()));
+  const [selectedMonth, setSelectedMonth] = useState(String(now.getMonth() + 1));
+  const [selectedDay, setSelectedDay] = useState(String(now.getDate()));
+  const [exportOpen, setExportOpen] = useState(false);
+  const exportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!isAuthenticated || user?.role !== 'admin') {
@@ -24,11 +32,56 @@ export default function RecordsPage() {
     }
   }, [isAuthenticated, user, router, fetchRecords]);
 
+  // Close the export menu when clicking outside of it
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (exportRef.current && !exportRef.current.contains(event.target as Node)) {
+        setExportOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   if (!isAuthenticated || user?.role !== 'admin') {
     return null;
   }
 
   // Filter records
+  // Dates are compared field-by-field using LOCAL time, so a record matches the
+  // calendar day the admin sees regardless of timezone offset in the stored value.
+  const MONTH_NAMES = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ];
+
+  // Number of days in the selected month/year (0 = all days of the month)
+  const daysInSelectedMonth = new Date(
+    Number(selectedYear),
+    Number(selectedMonth),
+    0
+  ).getDate();
+
+  // Years available to pick from: any year present in the records, plus the current year
+  const availableYears = Array.from(
+    new Set([
+      String(now.getFullYear()),
+      ...records.map((r) => String(new Date(r.timeIn).getFullYear())),
+    ])
+  )
+    .map(Number)
+    .sort((a, b) => b - a);
+
   const filteredRecords = records.filter((record) => {
     const matchesSearch =
       record.userName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -38,23 +91,172 @@ export default function RecordsPage() {
 
     const matchesStatus = statusFilter === 'all' || record.status === statusFilter;
 
-    return matchesSearch && matchesStatus;
+    const timeIn = new Date(record.timeIn);
+    const matchesDate =
+      timeIn.getFullYear() === Number(selectedYear) &&
+      timeIn.getMonth() + 1 === Number(selectedMonth) &&
+      (selectedDay === 'all' || timeIn.getDate() === Number(selectedDay));
+
+    return matchesSearch && matchesStatus && matchesDate;
   });
+
+  // --- Export helpers -------------------------------------------------------
+  // Shared tabular view of the currently filtered records.
+  const buildExportData = () => {
+    const headers = [
+      'User',
+      'User ID',
+      'Destination',
+      'Building',
+      'Room',
+      'Time In',
+      'Time Out',
+      'Duration',
+      'Status',
+    ];
+
+    const rows = filteredRecords.map((record) => [
+      record.userName || 'User ' + record.userId.slice(0, 8),
+      record.userId,
+      record.destination,
+      record.building,
+      record.room,
+      record.timeIn.toLocaleString('en-US'),
+      record.timeOut ? record.timeOut.toLocaleString('en-US') : '',
+      record.duration || '',
+      record.status,
+    ]);
+
+    return { headers, rows };
+  };
+
+  const periodLabel =
+    selectedDay === 'all'
+      ? `${MONTH_NAMES[Number(selectedMonth) - 1]} ${selectedYear}`
+      : `${MONTH_NAMES[Number(selectedMonth) - 1]} ${selectedDay}, ${selectedYear}`;
+
+  const exportFileName = (ext: string) =>
+    'clock-in-records-' + selectedYear + '-' + selectedMonth + '-' + selectedDay + '.' + ext;
+
+  const downloadBlob = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const escapeHtml = (value: string) =>
+    value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  // CSV (.csv)
+  const handleExportCSV = () => {
+    const { headers, rows } = buildExportData();
+    const csvEscape = (value: string) => '"' + value.replace(/"/g, '""') + '"';
+    const csv = [headers, ...rows]
+      .map((row) => row.map((cell) => csvEscape(String(cell))).join(','))
+      .join('\n');
+    // Prepend a UTF-8 BOM so Excel reads the encoding correctly
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    downloadBlob(blob, exportFileName('csv'));
+  };
+
+  // Excel (.xls) - an HTML table Excel opens natively (no extra dependency)
+  const handleExportExcel = () => {
+    const { headers, rows } = buildExportData();
+    const head = headers.map((h) => `<th>${escapeHtml(h)}</th>`).join('');
+    const body = rows
+      .map(
+        (row) =>
+          `<tr>${row.map((cell) => `<td>${escapeHtml(String(cell))}</td>`).join('')}</tr>`
+      )
+      .join('');
+    const html =
+      '<html xmlns:o="urn:schemas-microsoft-com:office:office" ' +
+      'xmlns:x="urn:schemas-microsoft-com:office:excel" ' +
+      'xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8" /></head>' +
+      `<body><table border="1"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></body></html>`;
+    const blob = new Blob(['\uFEFF' + html], {
+      type: 'application/vnd.ms-excel;charset=utf-8;',
+    });
+    downloadBlob(blob, exportFileName('xls'));
+  };
+
+  // JSON (.json)
+  const handleExportJSON = () => {
+    const { headers, rows } = buildExportData();
+    const data = rows.map((row) =>
+      headers.reduce<Record<string, string>>((acc, header, i) => {
+        acc[header] = String(row[i]);
+        return acc;
+      }, {})
+    );
+    const blob = new Blob([JSON.stringify(data, null, 2)], {
+      type: 'application/json;charset=utf-8;',
+    });
+    downloadBlob(blob, exportFileName('json'));
+  };
+
+  // PDF - opens a print-ready report; choose "Save as PDF" in the print dialog
+  const handleExportPDF = () => {
+    const { headers, rows } = buildExportData();
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    const head = headers.map((h) => `<th>${escapeHtml(h)}</th>`).join('');
+    const body = rows
+      .map(
+        (row) =>
+          `<tr>${row.map((cell) => `<td>${escapeHtml(String(cell))}</td>`).join('')}</tr>`
+      )
+      .join('');
+
+    printWindow.document.write(
+      '<!doctype html><html><head><title>Clock-In Records</title>' +
+        '<meta charset="utf-8" />' +
+        '<style>' +
+        'body { font-family: Arial, Helvetica, sans-serif; padding: 24px; color: #111; }' +
+        'h1 { font-size: 18px; margin: 0 0 4px; }' +
+        'p { font-size: 12px; color: #555; margin: 0 0 16px; }' +
+        'table { width: 100%; border-collapse: collapse; font-size: 11px; }' +
+        'th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }' +
+        'th { background: #f3f4f6; text-transform: uppercase; letter-spacing: 0.03em; }' +
+        '</style></head><body>' +
+        '<h1>Clock-In Records</h1>' +
+        `<p>${filteredRecords.length} record(s) &middot; ${escapeHtml(periodLabel)}</p>` +
+        `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>` +
+        '</body></html>'
+    );
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+  };
 
   return (
     <>
-      <div className="min-h-screen bg-slate-950">
+      <div className='min-h-screen bg-navy-950'>
         {/* Header */}
-        <header className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-sm sticky top-0 z-50">
-          <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Link href="/admin" className="flex items-center gap-3">
-                <div className="w-12 h-12 flex items-center justify-center overflow-hidden">
-                  <img src="/hyt_logo.png" alt="HYT Logo" className="w-full h-full object-contain" />
+        <header className='border-b border-navy-800 bg-navy-900/50 sticky top-0 z-50'>
+          <div className='max-w-7xl mx-auto px-4 py-3 flex items-center justify-between'>
+            <div className='flex items-center gap-3'>
+              <Link href='/admin' className='flex items-center gap-3'>
+                <div className='w-12 h-12 flex items-center justify-center overflow-hidden'>
+                  <img
+                    src='/hyt_logo.png'
+                    alt='HYT Logo'
+                    className='w-full h-full object-contain'
+                  />
                 </div>
                 <div>
-                  <h1 className="text-white font-bold text-lg leading-none">Clock-In Records</h1>
-                  <p className="text-slate-400 text-xs mt-0.5">All check-in/check-out logs</p>
+                  <h1 className='text-white font-bold text-lg leading-none'>
+                    Clock-In Records
+                  </h1>
+                  <p className='text-navy-300 text-xs mt-0.5'>
+                    All check-in/check-out logs
+                  </p>
                 </div>
               </Link>
             </div>
@@ -64,66 +266,103 @@ export default function RecordsPage() {
         </header>
 
         {/* Main Content */}
-        <main className="max-w-7xl mx-auto px-6 py-8">
+        <main className='max-w-7xl mx-auto px-4 py-5'>
           {/* Page Header */}
-          <div className="flex items-center justify-between mb-6">
+          <div className='flex items-center justify-between mb-6'>
             <Link
-              href="/admin"
-              className="text-slate-400 hover:text-slate-300 flex items-center gap-2 transition-colors"
+              href='/admin'
+              className='text-navy-300 hover:text-navy-200 flex items-center gap-2 transition-colors'
             >
-              <i className="fa-solid fa-arrow-left"></i>
+              <i className='fa-solid fa-arrow-left'></i>
               <span>Back to Dashboard</span>
             </Link>
 
-            <button
-              className="px-4 py-2 rounded-lg bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 hover:bg-cyan-500/30 transition-all flex items-center gap-2"
-            >
-              <i className="fa-solid fa-download"></i>
-              Export CSV
-            </button>
+            <div className='relative' ref={exportRef}>
+              <button
+                onClick={() => setExportOpen((v) => !v)}
+                className='px-4 py-2 rounded-lg bg-orange-500/20 text-orange-300 border border-orange-500/30 hover:bg-orange-500/30 transition-colors flex items-center gap-2'
+              >
+                <i className='fa-solid fa-download'></i>
+                Export
+                <i
+                  className={`fa-solid fa-chevron-down text-xs transition-transform ${exportOpen ? 'rotate-180' : ''}`}
+                ></i>
+              </button>
+
+              {exportOpen && (
+                <div className='absolute right-0 mt-2 w-52 bg-navy-900 border border-navy-700 rounded-lg shadow-black/50 overflow-hidden z-50'>
+                  {[
+                    { label: 'CSV (.csv)', icon: 'fa-file-csv', handler: handleExportCSV },
+                    {
+                      label: 'Excel (.xls)',
+                      icon: 'fa-file-excel',
+                      handler: handleExportExcel,
+                    },
+                    { label: 'PDF', icon: 'fa-file-pdf', handler: handleExportPDF },
+                    { label: 'JSON (.json)', icon: 'fa-file-code', handler: handleExportJSON },
+                  ].map((option) => (
+                    <button
+                      key={option.label}
+                      onClick={() => {
+                        setExportOpen(false);
+                        option.handler();
+                      }}
+                      className='w-full px-4 py-2.5 text-left text-navy-200 hover:bg-navy-800/50 hover:text-white transition-colors flex items-center gap-3'
+                    >
+                      <i className={`fa-solid ${option.icon} w-5`}></i>
+                      <span>{option.label}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Filters */}
-          <div className="glass-panel border-slate-800 rounded-2xl p-6 mb-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className='glass-panel border-navy-800 rounded-lg p-6 mb-6'>
+            <div className='grid grid-cols-1 md:grid-cols-3 gap-3'>
               {/* Search */}
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Search</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <i className="fa-solid fa-magnifying-glass text-slate-500"></i>
+                <label className='block text-sm font-medium text-navy-200 mb-2'>
+                  Search
+                </label>
+                <div className='relative'>
+                  <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
+                    <i className='fa-solid fa-magnifying-glass text-navy-500'></i>
                   </div>
                   <input
-                    type="text"
+                    type='text'
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder="Search by name, destination, or room..."
-                    className="
+                    placeholder='Search by name, destination, or room...'
+                    className='
                       w-full pl-12 pr-4 py-3 rounded-lg
-                      bg-slate-900/50 border border-slate-700
-                      text-white placeholder-slate-500
-                      focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500
-                      transition-all
-                    "
+                      bg-navy-900/50 border border-navy-700
+                      text-white placeholder-navy-500
+                      focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500
+                      transition-colors
+                      '
                   />
                 </div>
               </div>
 
               {/* Status Filter */}
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Status</label>
-                <div className="flex gap-2">
+                <label className='block text-sm font-medium text-navy-200 mb-2'>
+                  Status
+                </label>
+                <div className='flex gap-2'>
                   {(['all', 'active', 'completed'] as const).map((status) => (
                     <button
                       key={status}
                       onClick={() => setStatusFilter(status)}
                       className={`
-                        flex-1 px-4 py-3 rounded-lg font-semibold text-sm transition-all
-                        ${
-                          statusFilter === status
-                            ? 'bg-cyan-500/20 text-cyan-300 border-2 border-cyan-500'
-                            : 'bg-slate-900/50 text-slate-400 border-2 border-slate-700 hover:border-slate-600'
-                        }
+                  flex-1 px-4 py-3 rounded-lg font-semibold text-sm transition-colors
+                  ${
+                    statusFilter === status
+                      ? 'bg-orange-500/20 text-orange-300 border-2 border-orange-500'
+                      : 'bg-navy-900/50 text-navy-300 border-2 border-navy-700 hover:border-navy-600'
+                  }
                       `}
                     >
                       {status.charAt(0).toUpperCase() + status.slice(1)}
@@ -131,69 +370,179 @@ export default function RecordsPage() {
                   ))}
                 </div>
               </div>
+
+              {/* Date Filter - month/year required, day optional */}
+              <div>
+                <label className='block text-sm font-medium text-navy-200 mb-2'>
+                  Date
+                </label>
+                <div className='flex gap-2'>
+                  {/* Month */}
+                  <div className='relative flex-1'>
+                    <select
+                      value={selectedMonth}
+                      onChange={(e) => {
+                        const month = e.target.value;
+                        setSelectedMonth(month);
+                        // Reset the day if the new month has fewer days
+                        const maxDay = new Date(
+                          Number(selectedYear),
+                          Number(month),
+                          0
+                        ).getDate();
+                        if (selectedDay !== 'all' && Number(selectedDay) > maxDay) {
+                          setSelectedDay(String(maxDay));
+                        }
+                      }}
+                      className='
+                        w-full px-4 py-3 rounded-lg appearance-none
+                        bg-navy-900/50 border border-navy-700
+                        text-white font-semibold text-sm
+                        focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500
+                        transition-colors cursor-pointer
+                        '
+                    >
+                      {MONTH_NAMES.map((name, i) => (
+                        <option key={name} value={String(i + 1)} className='bg-navy-900'>
+                          {name}
+                        </option>
+                      ))}
+                    </select>
+                    <i className='fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-navy-300 text-xs pointer-events-none'></i>
+                  </div>
+
+                  {/* Year */}
+                  <div className='relative w-28'>
+                    <select
+                      value={selectedYear}
+                      onChange={(e) => {
+                        const year = e.target.value;
+                        setSelectedYear(year);
+                        const maxDay = new Date(
+                          Number(year),
+                          Number(selectedMonth),
+                          0
+                        ).getDate();
+                        if (selectedDay !== 'all' && Number(selectedDay) > maxDay) {
+                          setSelectedDay(String(maxDay));
+                        }
+                      }}
+                      className='
+                        w-full px-4 py-3 rounded-lg appearance-none
+                        bg-navy-900/50 border border-navy-700
+                        text-white font-semibold text-sm
+                        focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500
+                        transition-colors cursor-pointer
+                        '
+                    >
+                      {availableYears.map((year) => (
+                        <option key={year} value={String(year)} className='bg-navy-900'>
+                          {year}
+                        </option>
+                      ))}
+                    </select>
+                    <i className='fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-navy-300 text-xs pointer-events-none'></i>
+                  </div>
+
+                  {/* Day (optional) */}
+                  <div className='relative flex-1'>
+                    <select
+                      value={selectedDay}
+                      onChange={(e) => setSelectedDay(e.target.value)}
+                      className='
+                        w-full px-4 py-3 rounded-lg appearance-none
+                        bg-navy-900/50 border border-navy-700
+                        text-white font-semibold text-sm
+                        focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500
+                        transition-colors cursor-pointer
+                        '
+                    >
+                      <option value='all' className='bg-navy-900'>
+                        All days
+                      </option>
+                      {Array.from({ length: daysInSelectedMonth }, (_, i) => i + 1).map(
+                        (day) => (
+                          <option key={day} value={String(day)} className='bg-navy-900'>
+                            Day {day}
+                          </option>
+                        )
+                      )}
+                    </select>
+                    <i className='fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-navy-300 text-xs pointer-events-none'></i>
+                  </div>
+                </div>
+
+                {/* Active date description */}
+                <p className='text-navy-500 text-xs mt-2'>
+                  Showing{' '}
+                  {selectedDay === 'all'
+                    ? `all records in ${MONTH_NAMES[Number(selectedMonth) - 1]} ${selectedYear}`
+                    : `${MONTH_NAMES[Number(selectedMonth) - 1]} ${selectedDay}, ${selectedYear}`}
+                </p>
+              </div>
             </div>
           </div>
 
           {/* Records Table */}
-          <div className="glass-panel border-slate-800 rounded-2xl overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-slate-900/50 border-b border-slate-800">
+          <div className='glass-panel border-navy-800 rounded-lg overflow-hidden'>
+            <div className='overflow-x-auto'>
+              <table className='w-full'>
+                <thead className='bg-navy-900/50 border-b border-navy-800'>
                   <tr>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                    <th className='px-4 py-3 text-left text-xs font-semibold text-navy-300 uppercase tracking-wider'>
                       User
                     </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                    <th className='px-4 py-3 text-left text-xs font-semibold text-navy-300 uppercase tracking-wider'>
                       Role
                     </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                    <th className='px-4 py-3 text-left text-xs font-semibold text-navy-300 uppercase tracking-wider'>
                       Destination
                     </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                    <th className='px-4 py-3 text-left text-xs font-semibold text-navy-300 uppercase tracking-wider'>
                       Time In
                     </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                    <th className='px-4 py-3 text-left text-xs font-semibold text-navy-300 uppercase tracking-wider'>
                       Time Out
                     </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                    <th className='px-4 py-3 text-left text-xs font-semibold text-navy-300 uppercase tracking-wider'>
                       Duration
                     </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                    <th className='px-4 py-3 text-left text-xs font-semibold text-navy-300 uppercase tracking-wider'>
                       Status
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800">
+                <tbody className='divide-y divide-navy-800'>
                   {filteredRecords.map((record) => (
                     <tr
                       key={record.id}
-                      className="hover:bg-slate-900/30 transition-colors"
+                      className='hover:bg-navy-900/30 transition-colors'
                     >
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-lg bg-cyan-500/20 flex items-center justify-center">
-                            <i className="fa-solid fa-user text-cyan-400"></i>
+                      <td className='px-4 py-3 whitespace-nowrap'>
+                        <div className='flex items-center gap-3'>
+                          <div className='w-10 h-10 rounded-lg bg-orange-500/20 flex items-center justify-center'>
+                            <i className='fa-solid fa-user text-orange-400'></i>
                           </div>
                           <div>
-                            <p className="text-white font-semibold">{record.userName || 'User ' + record.userId.slice(0, 8)}</p>
-                            <p className="text-slate-500 text-xs">{record.userId}</p>
+                            <p className='text-white font-semibold'>
+                              {record.userName || 'User ' + record.userId.slice(0, 8)}
+                            </p>
+                            <p className='text-navy-500 text-xs'>{record.userId}</p>
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span
-                          className="px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/30"
-                        >
+                      <td className='px-4 py-3 whitespace-nowrap'>
+                        <span className='px-3 py-1 rounded-full text-xs font-semibold bg-orange-500/20 text-orange-300 border border-orange-500/30'>
                           User
                         </span>
                       </td>
-                      <td className="px-6 py-4">
-                        <p className="text-white font-medium">{record.destination}</p>
-                        <p className="text-slate-400 text-sm">
+                      <td className='px-4 py-3'>
+                        <p className='text-white font-medium'>{record.destination}</p>
+                        <p className='text-navy-300 text-sm'>
                           {record.building} • {record.room}
                         </p>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-slate-300">
+                      <td className='px-4 py-3 whitespace-nowrap text-navy-200'>
                         {record.timeIn.toLocaleString('en-US', {
                           month: 'short',
                           day: 'numeric',
@@ -201,7 +550,7 @@ export default function RecordsPage() {
                           minute: '2-digit',
                         })}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-slate-300">
+                      <td className='px-4 py-3 whitespace-nowrap text-navy-200'>
                         {record.timeOut
                           ? record.timeOut.toLocaleString('en-US', {
                               month: 'short',
@@ -211,15 +560,15 @@ export default function RecordsPage() {
                             })
                           : '—'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-slate-300">
+                      <td className='px-4 py-3 whitespace-nowrap text-navy-200'>
                         {record.duration || '—'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className='px-4 py-3 whitespace-nowrap'>
                         <span
                           className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${
                             record.status === 'active'
                               ? 'bg-green-500/20 text-green-300 border border-green-500/30'
-                              : 'bg-slate-700 text-slate-300'
+                              : 'bg-navy-700 text-navy-200'
                           }`}
                         >
                           {record.status}
@@ -231,18 +580,24 @@ export default function RecordsPage() {
               </table>
 
               {filteredRecords.length === 0 && (
-                <div className="text-center py-16">
-                  <i className="fa-solid fa-inbox text-slate-600 text-5xl mb-4"></i>
-                  <p className="text-slate-400 text-lg">No records found</p>
-                  <p className="text-slate-500 text-sm mt-1">Try adjusting your filters</p>
+                <div className='text-center py-8'>
+                  <i className='fa-solid fa-inbox text-navy-600 text-5xl mb-4'></i>
+                  <p className='text-navy-300 text-lg'>No records found</p>
+                  <p className='text-navy-500 text-sm mt-1'>
+                    No clock-in records for the selected date. Try another month or day,
+                    or adjust your filters.
+                  </p>
                 </div>
               )}
             </div>
           </div>
 
           {/* Results Summary */}
-          <div className="mt-4 text-center text-slate-400 text-sm">
+          <div className='mt-4 text-center text-navy-300 text-sm'>
             Showing {filteredRecords.length} of {records.length} records
+            {selectedDay === 'all'
+              ? ` (${MONTH_NAMES[Number(selectedMonth) - 1]} ${selectedYear})`
+              : ` (${MONTH_NAMES[Number(selectedMonth) - 1]} ${selectedDay}, ${selectedYear})`}
           </div>
         </main>
       </div>

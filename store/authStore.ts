@@ -18,9 +18,12 @@ interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  
+
   // Actions
-  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  login: (
+    email: string,
+    password: string
+  ) => Promise<{ success: boolean; error?: string }>;
   register: (data: {
     email: string;
     password: string;
@@ -45,10 +48,11 @@ export const useAuthStore = create<AuthState>()(
 
         try {
           // Sign in with Supabase Auth
-          const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-            email,
-            password,
-          });
+          const { data: authData, error: authError } =
+            await supabase.auth.signInWithPassword({
+              email,
+              password,
+            });
 
           if (authError) {
             set({ isLoading: false });
@@ -102,8 +106,8 @@ export const useAuthStore = create<AuthState>()(
               data: {
                 name: data.name,
                 role: data.role,
-              }
-            }
+              },
+            },
           });
 
           if (authError) {
@@ -117,19 +121,27 @@ export const useAuthStore = create<AuthState>()(
           }
 
           // Wait a moment for the auth user to be fully created
-          await new Promise(resolve => setTimeout(resolve, 500));
+          await new Promise((resolve) => setTimeout(resolve, 500));
 
           // Use uploaded photo as avatar, or fall back to role-based emoji
-          const avatar = data.avatar || (
-            data.role === 'admin' ? '👨‍💼'
-            : data.role === 'trainer' ? '👨‍🏫'
-            : data.role === 'trainee' ? '🎓'
-            : '👩‍🎓'
-          );
-          
+          const avatar =
+            data.avatar ||
+            (data.role === 'admin'
+              ? '👨‍💼'
+              : data.role === 'trainer'
+                ? '👨‍🏫'
+                : data.role === 'trainee'
+                  ? '🎓'
+                  : '👩‍🎓');
+
+          // A database trigger already creates a public.users row as soon as the auth
+          // user exists, so a plain INSERT here collides on the primary key
+          // ("duplicate key value violates unique constraint users_pkey").
+          // Upserting on id works whether or not the trigger is present, and
+          // makes sure the chosen name, role and avatar win over the defaults.
           const { data: userData, error: userError } = await supabase
             .from('users')
-            .insert([
+            .upsert(
               {
                 id: authData.user.id, // This links to auth.users(id)
                 email: data.email,
@@ -137,23 +149,43 @@ export const useAuthStore = create<AuthState>()(
                 role: data.role,
                 avatar,
               },
-            ])
+              { onConflict: 'id' }
+            )
             .select()
             .single();
 
           if (userError) {
             console.error('Profile creation error:', userError);
-            
-            // If profile creation fails, try to delete the auth user
-            await supabase.auth.admin.deleteUser(authData.user.id).catch(() => {
-              // Fallback: just sign out
-              supabase.auth.signOut();
-            });
-            
+
+            // Roll back the auth user so registration doesn't leave an
+            // account that can sign in but has no profile.
+            //
+            // The anon key cannot call auth.admin.*, so this best-effort
+            // call usually fails during self-registration. That is why the
+            // upsert above matters: with the trigger in place the profile
+            // write succeeds, so we rarely reach this path at all.
+            await supabase.auth.admin
+              .deleteUser(authData.user.id)
+              .catch(() => supabase.auth.signOut());
+
+            // Clear any orphan profile the trigger may have created, so a
+            // later re-registration of the same email isn't blocked by the
+            // primary key. RLS allows this only for your own row.
+            try {
+              const { error: cleanupError } = await supabase
+                .from('users')
+                .delete()
+                .eq('id', authData.user.id);
+              if (cleanupError)
+                console.warn('Profile cleanup failed:', cleanupError.message);
+            } catch {
+              // Nothing more we can do client-side.
+            }
+
             set({ isLoading: false });
-            return { 
-              success: false, 
-              error: `Failed to create user profile: ${userError.message}` 
+            return {
+              success: false,
+              error: `Failed to create user profile: ${userError.message}`,
             };
           }
 
@@ -177,9 +209,9 @@ export const useAuthStore = create<AuthState>()(
         } catch (error: any) {
           console.error('Registration error:', error);
           set({ isLoading: false });
-          return { 
-            success: false, 
-            error: error?.message || 'An unexpected error occurred during registration' 
+          return {
+            success: false,
+            error: error?.message || 'An unexpected error occurred during registration',
           };
         }
       },
@@ -198,10 +230,12 @@ export const useAuthStore = create<AuthState>()(
 
       checkAuth: async () => {
         set({ isLoading: true });
-        
+
         try {
-          const { data: { session } } = await supabase.auth.getSession();
-          
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+
           if (!session) {
             set({ user: null, isAuthenticated: false, isLoading: false });
             return;

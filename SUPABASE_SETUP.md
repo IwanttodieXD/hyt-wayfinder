@@ -113,9 +113,107 @@ CREATE POLICY "Admins can view all users"
     )
   );
 
--- Create index for faster lookups
-CREATE INDEX users_email_idx ON public.users(email);
-CREATE INDEX users_role_idx ON public.users(role);
+-- 4. Indexes for faster lookups
+CREATE INDEX IF NOT EXISTS users_email_idx ON public.users(email);
+CREATE INDEX IF NOT EXISTS users_role_idx ON public.users(role);
+```
+
+## User Management (/admin/users)
+
+Basic CRUD for accounts and roles. Read and Update work today over RLS;
+Create and Delete need the service role key.
+
+### To enable Create/Delete
+
+1. Add the service role key to `.env.local`:
+
+   ```
+   SUPABASE_SERVICE_ROLE_KEY="eyJhbGciOi..."
+   ```
+
+   Get it from Supabase dashboard -> Project Settings -> API -> `service_role`.
+   This key bypasses RLS, so it must stay server-side. Never name it
+   `NEXT_PUBLIC_*`, or it gets bundled into the browser.
+
+2. Restart the dev server.
+
+Until then, Create and Delete return a clear `501` explaining the missing key,
+and Read/Update keep working.
+
+### How it works
+
+- `store/usersStore.ts` - list, create, update, delete with the project's
+  `{ success, error }` result shape.
+- `app/api/admin/users/route.ts` - POST/DELETE. Verifies the caller is an
+  admin using their own access token (the service key is never sent back up),
+  then creates/deletes the real `auth.users` login via the service client.
+- `app/admin/users/page.tsx` - admin-only table with search, role filter,
+  create/edit modal and a delete confirmation.
+
+Create makes the `auth.users` login first (`email_confirm: true`, so no
+verification email), then the `public.users` profile. If the profile insert
+fails it deletes the login again, so accounts are never left half-created.
+Delete removes the login, which cascades to the profile and clock-in records.
+Admins cannot delete their own account.
+
+## User management (admin) - run this in the Supabase SQL editor
+
+-- 1. The original CHECK constraint omitted 'trainee', which the app uses.
+--    Drop and recreate it so trainee accounts can exist.
+ALTER TABLE public.users DROP CONSTRAINT IF EXISTS users_role_check;
+
+ALTER TABLE public.users
+  ADD CONSTRAINT users_role_check
+  CHECK (role IN ('admin', 'trainer', 'trainee', 'visitor'));
+
+-- 2. Admins need to write to any user row, not just their own.
+--    Drop the old self-only UPDATE policy and replace it with an admin-aware one.
+DROP POLICY IF EXISTS "Users can update own profile" ON public.users;
+
+CREATE POLICY "Users can update own profile"
+  ON public.users
+  FOR UPDATE
+  USING (
+    auth.uid() = id
+    OR EXISTS (
+      SELECT 1 FROM public.users
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  )
+  WITH CHECK (
+    auth.uid() = id
+    OR EXISTS (
+      SELECT 1 FROM public.users
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
+
+-- 3. Admin INSERT / DELETE on the profile table.
+--    Note: creating the matching auth.users row still needs the service
+--    role key, which is why create/delete go through a server route.
+DROP POLICY IF EXISTS "Admins can insert users" ON public.users;
+
+CREATE POLICY "Admins can insert users"
+  ON public.users
+  FOR INSERT
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.users
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
+
+DROP POLICY IF EXISTS "Admins can delete users" ON public.users;
+
+CREATE POLICY "Admins can delete users"
+  ON public.users
+  FOR DELETE
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.users
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
 ```
 
 ### 3.3 Create Clock-In Records Table
@@ -491,6 +589,8 @@ Solution: Restart dev server after adding .env.local
 - [ ] Users table created
 - [ ] Clock-in records table created
 - [ ] RLS policies applied
+- [ ] Admin user-management policies applied (the `## User Management` section)
+- [ ] `SUPABASE_SERVICE_ROLE_KEY` added to `.env.local` (enables create/delete)
 - [ ] Demo users created (admin, trainer, visitor)
 - [ ] Sample records inserted
 - [ ] Login tested locally

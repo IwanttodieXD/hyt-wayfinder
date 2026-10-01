@@ -28,17 +28,23 @@ export default function TrainerPortal() {
 
   return (
     <>
-      <div className="min-h-screen bg-slate-950 flex flex-col">
+      <div className='min-h-screen bg-navy-950 flex flex-col'>
         {/* Header */}
-        <header className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-sm flex-shrink-0">
-          <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 flex items-center justify-center overflow-hidden">
-                <img src="/hyt_logo.png" alt="HYT Logo" className="w-full h-full object-contain" />
+        <header className='border-b border-navy-800 bg-navy-900/50 flex-shrink-0'>
+          <div className='max-w-7xl mx-auto px-4 py-3 flex items-center justify-between'>
+            <div className='flex items-center gap-3'>
+              <div className='w-12 h-12 flex items-center justify-center overflow-hidden'>
+                <img
+                  src='/hyt_logo.png'
+                  alt='HYT Logo'
+                  className='w-full h-full object-contain'
+                />
               </div>
               <div>
-                <h1 className="text-white font-bold text-lg leading-none">Trainer Portal</h1>
-                <p className="text-slate-400 text-xs mt-0.5">Welcome, {user.name}</p>
+                <h1 className='text-white font-bold text-lg leading-none'>
+                  Trainer Portal
+                </h1>
+                <p className='text-navy-300 text-xs mt-0.5'>Welcome, {user.name}</p>
               </div>
             </div>
 
@@ -47,7 +53,7 @@ export default function TrainerPortal() {
         </header>
 
         {/* Main Content - Full Screen Mobile View */}
-        <main className="flex-1 overflow-hidden">
+        <main className='flex-1 overflow-hidden'>
           <StudentMobileView />
         </main>
       </div>
