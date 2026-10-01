@@ -7,12 +7,14 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import QRCode from 'react-qr-code';
 
-// The QR value displayed by the kiosk station
-const KIOSK_QR_VALUE = 'HYT-KIOSK-01-CHECKIN-STATION';
+// Check-in QR value. Print this on paper (or show it on a laptop) at the
+// check-in station; the mobile app scans it to clock in and back out.
+const CHECKIN_QR_VALUE = 'HYT-KIOSK-01-CHECKIN-STATION';
 
 export default function QRScanner() {
-  const { status, clockIn, startRouteView, student } = useClockInStore();
-  const { addRecord } = useRecordsStore();
+  const { status, clockIn, clockOut, activeRecordId, startRouteView, student } =
+    useClockInStore();
+  const { addRecord, clockOutRecord } = useRecordsStore();
   const { user } = useAuthStore();
 
   const [scannerActive, setScannerActive] = useState(false);
@@ -46,9 +48,9 @@ export default function QRScanner() {
       if (handledRef.current) return;
       handledRef.current = true;
 
-      // Accept the kiosk QR; ignore personal user QRs here
+      // Accept the check-in QR; ignore personal user QRs here
       if (!decodedText.startsWith('HYT-KIOSK-')) {
-        setScanError('Invalid QR code. Scan the kiosk check-in QR code.');
+        setScanError('Invalid QR code. Scan the check-in QR code.');
         handledRef.current = false;
         return;
       }
@@ -59,8 +61,18 @@ export default function QRScanner() {
       setScannerActive(false);
       setScanning(true);
 
-      // Run the clock-in flow + DB record. Keep the returned record id so the
-      // "Clock Out" button can close the same row (time_out).
+      // Already clocked in? The same check-in QR scans you back out.
+      if (status !== 'not-clocked-in') {
+        if (activeRecordId) {
+          await clockOutRecord(activeRecordId);
+        }
+        clockOut();
+        setTimeout(() => setScanning(false), 1200);
+        return;
+      }
+
+      // First scan: clock in + create the DB record. Keep the returned record
+      // id so the next scan can close the same row (time_out).
       let recordId: string | undefined;
       if (user) {
         const result = await addRecord({
@@ -73,13 +85,19 @@ export default function QRScanner() {
         recordId = result.recordId;
       }
       clockIn(recordId);
-
-      setTimeout(() => {
-        startRouteView();
-        setScanning(false);
-      }, 1200);
+      setTimeout(() => setScanning(false), 1200);
     },
-    [user, student, clockIn, addRecord, startRouteView, stopScanner]
+    [
+      user,
+      student,
+      status,
+      activeRecordId,
+      clockIn,
+      clockOut,
+      addRecord,
+      clockOutRecord,
+      stopScanner,
+    ]
   );
 
   const startCamera = useCallback(async () => {
@@ -278,34 +296,36 @@ export default function QRScanner() {
           <div className='inline-flex items-center gap-2 px-4 py-2 rounded-full bg-orange-500/10 border border-orange-500/30 mb-4'>
             <i className='fa-solid fa-qrcode text-orange-400 text-sm'></i>
             <span className='text-orange-300 text-sm font-medium'>
-              Show this QR at the kiosk
+              Show this QR at check-in
             </span>
           </div>
-        ) : status === 'not-clocked-in' && !scannerActive ? (
+        ) : !scannerActive && !scanning ? (
           <button
             onClick={startCamera}
             className='inline-flex items-center gap-2 px-4 py-2 rounded-full bg-orange-500 hover:bg-orange-600 text-paper text-sm font-medium transition-colors duration-150 mb-4'
           >
             <i className='fa-solid fa-camera text-sm'></i>
-            Start camera to scan
+            {status === 'not-clocked-in'
+              ? 'Start camera to scan'
+              : 'Scan again to clock out'}
           </button>
         ) : (
           <div className='inline-flex items-center gap-2 px-4 py-2 rounded-full bg-orange-500/10 border border-orange-500/30 mb-4'>
             <i className='fa-solid fa-camera text-orange-400 text-sm'></i>
             <span className='text-orange-300 text-sm font-medium'>
               {status === 'not-clocked-in'
-                ? 'Point at the kiosk QR code'
-                : 'Ready to Navigate'}
+                ? 'Point at the check-in QR code'
+                : 'Clocked in — scan again to clock out'}
             </span>
           </div>
         )}
 
         <p className='text-navy-300 text-xs max-w-xs mx-auto mb-6'>
           {showQR
-            ? 'Present your personal QR code to the kiosk camera to clock in.'
+            ? 'Present your personal QR code to the check-in scanner to clock in.'
             : status === 'not-clocked-in'
-              ? 'Scan the kiosk QR code to clock in and receive your route to the destination.'
-              : 'You are clocked in. View your 3D route to the destination.'}
+              ? 'Scan the check-in QR code to clock in and receive your route to the destination.'
+              : 'You are clocked in. Scan the same check-in QR code again to clock out, or view your 3D route.'}
         </p>
       </div>
 

@@ -3,24 +3,19 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
-import { useClockInStore } from '@/store/clockInStore';
 import StudentMobileView from '@/components/StudentMobileView';
 import UserProfile from '@/components/UserProfile';
 
 export default function VisitorPortal() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
-  const { setViewMode, status } = useClockInStore();
 
   useEffect(() => {
     if (!isAuthenticated || user?.role !== 'visitor') {
       router.push('/login');
       return;
     }
-
-    // Auto-set to mobile view for QR scanner
-    setViewMode('mobile');
-  }, [isAuthenticated, user, router, setViewMode]);
+  }, [isAuthenticated, user, router]);
 
   if (!isAuthenticated || user?.role !== 'visitor') {
     return null;

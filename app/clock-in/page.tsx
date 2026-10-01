@@ -3,25 +3,12 @@
 import { useEffect } from 'react';
 import { useClockInStore } from '@/store/clockInStore';
 import { useAuthStore } from '@/store/authStore';
-import ViewModeSwitcher from '@/components/ViewModeSwitcher';
 import StudentMobileView from '@/components/StudentMobileView';
-import KioskStationView from '@/components/KioskStationView';
 import UserProfile from '@/components/UserProfile';
 
 export default function ClockInPage() {
-  const { viewMode, setViewMode, setStudentName } = useClockInStore();
+  const { setStudentName } = useClockInStore();
   const { user, isAuthenticated } = useAuthStore();
-
-  // Auto-set mobile view for trainers/visitors
-  useEffect(() => {
-    if (
-      isAuthenticated &&
-      user &&
-      (user.role === 'trainer' || user.role === 'trainee' || user.role === 'visitor')
-    ) {
-      setViewMode('mobile');
-    }
-  }, [isAuthenticated, user, setViewMode]);
 
   // Sync the logged-in user's name (from the database) into the clock-in store
   useEffect(() => {
@@ -33,7 +20,7 @@ export default function ClockInPage() {
   return (
     <>
       <div className='w-full min-h-screen bg-navy-950 flex flex-col'>
-        {/* Header with View Switcher */}
+        {/* Header */}
         <header className='flex-shrink-0 border-b border-navy-800 bg-navy-900/50 px-4 py-3 relative z-50'>
           <div className='max-w-7xl mx-auto flex items-center justify-between'>
             {/* Logo */}
@@ -55,9 +42,6 @@ export default function ClockInPage() {
               </div>
             </div>
 
-            {/* View Mode Switcher (only show if admin or not logged in) */}
-            {(!isAuthenticated || user?.role === 'admin') && <ViewModeSwitcher />}
-
             {/* User Profile or System Status */}
             {isAuthenticated && user ? (
               <UserProfile />
@@ -74,7 +58,7 @@ export default function ClockInPage() {
 
         {/* Main Content - scrolls when content is taller than the viewport */}
         <main className='flex-1 min-h-0 overflow-y-auto'>
-          {viewMode === 'mobile' ? <StudentMobileView /> : <KioskStationView />}
+          <StudentMobileView />
         </main>
       </div>
     </>

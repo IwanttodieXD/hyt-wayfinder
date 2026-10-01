@@ -6,6 +6,7 @@ import { useClockInStore } from '@/store/clockInStore';
 import { useRecordsStore } from '@/store/recordsStore';
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
+import { useWebGLSupport } from '@/lib/useWebGLSupport';
 
 // Waypoint data for route
 const waypoints = [
@@ -400,12 +401,39 @@ export default function RouteVisualization() {
     clockOut();
   };
 
+  const webgl = useWebGLSupport();
+
+  // Never mount <Canvas> until WebGL support is confirmed. The probe runs in an
+  // effect (after first render), so `null` (still checking) must also avoid
+  // mounting: react-three-fiber throws from an internal layout effect that no
+  // error boundary can intercept.
+  if (webgl !== true) {
+    return (
+      <div className='w-full h-full flex flex-col items-center justify-center gap-3 p-6 text-center bg-navy-950'>
+        <i
+          className={`fa-solid fa-cube text-4xl text-navy-600 ${webgl === null ? 'animate-pulse' : ''}`}
+        ></i>
+        {webgl === null ? (
+          <p className='text-navy-300 text-sm'>Loading 3D view...</p>
+        ) : (
+          <>
+            <p className='text-white font-semibold'>3D view unavailable</p>
+            <p className='text-navy-300 text-sm max-w-xs'>
+              This device cannot create a WebGL context, so the 3D route cannot be drawn
+              here.
+            </p>
+          </>
+        )}
+      </div>
+    );
+  }
+
   return (
-    <div className='theme-fixed-light w-full h-full relative'>
+    <div className='theme-fixed-light w-full h-full flex flex-col relative'>
       {/* 3D Canvas */}
       <Canvas
         camera={{ position: [-10, 15, 20], fov: 60 }}
-        className='bg-[#eef2f7]'
+        className='bg-[#eef2f7] flex-1 min-h-0'
         shadows
       >
         <color attach='background' args={['#eef2f7']} />
@@ -496,55 +524,54 @@ export default function RouteVisualization() {
         </div>
 
         {/* Waypoint Steps - REMOVED */}
+      </div>
 
-        {/* Bottom Control Bar.
-            The bar itself stays pointer-events-none so drags pass through to
-            the canvas; only the buttons accept clicks. Without this the full
-            width transparent panel swallows OrbitControls input. */}
-        <div className='absolute bottom-4 left-4 right-4 flex justify-end pointer-events-none'>
-          <div className='glass-panel border-navy-700 p-4 rounded-lg pointer-events-auto'>
-            <div className='flex items-center gap-3'>
-              <button
-                onClick={handlePlayPause}
-                className='
+      {/* Controls sit BELOW the canvas so they never cover the 3D view. */}
+      <div className='flex-shrink-0 px-3 pb-3 flex flex-col gap-2'>
+        <div className='glass-panel border-navy-700 p-3 rounded-lg'>
+          <div className='flex items-center gap-3'>
+            <button
+              onClick={handlePlayPause}
+              className='
                 flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-semibold
                 bg-orange-500 text-paper hover:bg-orange-600 transition-colors
                 '
-              >
-                <i
-                  className={`fa-solid ${isRouteAnimating ? 'fa-pause' : 'fa-play'}`}
-                ></i>
-                {isRouteAnimating
-                  ? 'Pause'
-                  : currentWaypoint >= waypoints.length - 1
-                    ? 'Replay'
-                    : 'Play'}{' '}
-                Route
-              </button>
+            >
+              <i className={`fa-solid ${isRouteAnimating ? 'fa-pause' : 'fa-play'}`}></i>
+              {isRouteAnimating
+                ? 'Pause'
+                : currentWaypoint >= waypoints.length - 1
+                  ? 'Replay'
+                  : 'Play'}{' '}
+              Route
+            </button>
 
-              <button
-                onClick={resetRoute}
-                className='
+            <button
+              onClick={resetRoute}
+              className='
                 px-4 py-3 rounded-lg font-semibold
                 bg-navy-700 text-navy-200 hover:bg-navy-600 transition-colors
                 '
-              >
-                <i className='fa-solid fa-rotate-left'></i>
-              </button>
-
-              <button
-                onClick={handleClockOut}
-                className='
-                px-4 py-3 rounded-lg font-semibold
-                bg-red-500/20 text-red-400 border border-red-500/30
-                hover:bg-red-500/30 transition-colors
-                '
-              >
-                <i className='fa-solid fa-right-from-bracket mr-2'></i>
-                Clock Out
-              </button>
-            </div>
+            >
+              <i className='fa-solid fa-rotate-left'></i>
+            </button>
           </div>
+        </div>
+
+        {/* Clock Out is its own row, separate from the playback controls, so
+            ending a visit never sits next to them. */}
+        <div>
+          <button
+            onClick={handleClockOut}
+            className='
+              w-full py-2.5 rounded-lg font-semibold text-sm
+              bg-red-600 hover:bg-red-700 text-paper
+              transition-colors duration-150
+              '
+          >
+            <i className='fa-solid fa-right-from-bracket mr-2'></i>
+            Clock Out
+          </button>
         </div>
       </div>
     </div>

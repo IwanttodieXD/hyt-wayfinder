@@ -130,7 +130,7 @@ export default function AdminDashboard() {
                   <i className='fa-solid fa-qrcode text-orange-400 text-2xl'></i>
                 </div>
                 <div>
-                  <h3 className='text-white font-semibold text-lg mb-1'>Kiosk View</h3>
+                  <h3 className='text-white font-semibold text-lg mb-1'>Clock-In</h3>
                   <p className='text-navy-300 text-sm'>Check-in station</p>
                 </div>
               </div>

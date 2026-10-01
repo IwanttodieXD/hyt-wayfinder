@@ -11,6 +11,7 @@ import Controls from './Controls';
 import PerformanceStats from './PerformanceStats';
 import Crosshair from './Crosshair';
 import CrosshairRaycaster from './CrosshairRaycaster';
+import ThreeErrorBoundary from './ThreeErrorBoundary';
 
 export default function Scene() {
   const [currentFloor, setCurrentFloor] = useState(1);
@@ -71,38 +72,40 @@ export default function Scene() {
       {/* Crosshair - shows when pointer is locked */}
       {isLocked && <Crosshair isTargeting={isTargeting} />}
 
-      <Canvas
-        camera={{
-          position: [0, 1.6, 10],
-          fov: 75,
-        }}
-        shadows
-        gl={{
-          antialias: true,
-          powerPreference: 'high-performance',
-        }}
-        dpr={[1, 2]} // Limit pixel ratio for better performance
-      >
-        <Sky sunPosition={[100, 20, 100]} />
-        <Environment preset='sunset' />
+      <ThreeErrorBoundary>
+        <Canvas
+          camera={{
+            position: [0, 1.6, 10],
+            fov: 75,
+          }}
+          shadows
+          gl={{
+            antialias: true,
+            powerPreference: 'high-performance',
+          }}
+          dpr={[1, 2]} // Limit pixel ratio for better performance
+        >
+          <Sky sunPosition={[100, 20, 100]} />
+          <Environment preset='sunset' />
 
-        <ambientLight intensity={0.5} />
-        <directionalLight
-          position={[10, 20, 10]}
-          intensity={1}
-          castShadow
-          shadow-mapSize={[2048, 2048]}
-        />
-        <pointLight position={[0, 10, 0]} intensity={0.5} />
+          <ambientLight intensity={0.5} />
+          <directionalLight
+            position={[10, 20, 10]}
+            intensity={1}
+            castShadow
+            shadow-mapSize={[2048, 2048]}
+          />
+          <pointLight position={[0, 10, 0]} intensity={0.5} />
 
-        <Building />
-        <CrosshairRaycaster onTargetChange={handleTargetChange} />
-        <Camera
-          onFloorChange={setCurrentFloor}
-          onLockChange={setIsLocked}
-          isMobile={isMobile}
-        />
-      </Canvas>
+          <Building />
+          <CrosshairRaycaster onTargetChange={handleTargetChange} />
+          <Camera
+            onFloorChange={setCurrentFloor}
+            onLockChange={setIsLocked}
+            isMobile={isMobile}
+          />
+        </Canvas>
+      </ThreeErrorBoundary>
     </>
   );
 }

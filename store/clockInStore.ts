@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 
-export type ViewMode = 'mobile' | 'kiosk';
 export type ClockInStatus = 'not-clocked-in' | 'clocked-in' | 'viewing-route';
 
 interface StudentProfile {
@@ -12,10 +11,6 @@ interface StudentProfile {
 }
 
 interface ClockInState {
-  // View mode
-  viewMode: ViewMode;
-  setViewMode: (mode: ViewMode) => void;
-
   // Student data
   student: StudentProfile;
   clockInTime: Date | null;
@@ -28,10 +23,6 @@ interface ClockInState {
   startRouteView: () => void;
   setStudentName: (name: string) => void;
 
-  // Kiosk stats
-  activeStudents: number;
-  dailyVisits: number;
-
   // Route animation state
   isRouteAnimating: boolean;
   currentWaypoint: number;
@@ -42,7 +33,6 @@ interface ClockInState {
 
 export const useClockInStore = create<ClockInState>((set) => ({
   // Initial state
-  viewMode: 'mobile',
   student: {
     id: '',
     name: '',
@@ -53,35 +43,28 @@ export const useClockInStore = create<ClockInState>((set) => ({
   clockInTime: null,
   status: 'not-clocked-in',
   activeRecordId: null,
-  activeStudents: 47,
-  dailyVisits: 203,
   isRouteAnimating: false,
   currentWaypoint: 0,
 
   // Actions
-  setViewMode: (mode) => set({ viewMode: mode }),
-
   setStudentName: (name) =>
     set((state) => ({ student: { ...state.student, name } })),
 
   clockIn: (recordId) =>
-    set((state) => ({
+    set({
       clockInTime: new Date(),
       status: 'clocked-in',
       activeRecordId: recordId ?? null,
-      activeStudents: state.activeStudents + 1,
-      dailyVisits: state.dailyVisits + 1,
-    })),
+    }),
 
   clockOut: () =>
-    set((state) => ({
+    set({
       clockInTime: null,
       status: 'not-clocked-in',
       activeRecordId: null,
       isRouteAnimating: false,
       currentWaypoint: 0,
-      activeStudents: Math.max(0, state.activeStudents - 1),
-    })),
+    }),
 
   startRouteView: () =>
     set({
