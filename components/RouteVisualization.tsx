@@ -349,7 +349,18 @@ function BuildingStructure() {
   );
 }
 
-export default function RouteVisualization() {
+interface RoomDestination {
+  room?: string;
+  name?: string;
+  floor?: string;
+  building?: string;
+}
+
+interface RouteVisualizationProps {
+  roomDestination?: RoomDestination | null;
+}
+
+export default function RouteVisualization({ roomDestination }: RouteVisualizationProps) {
   const {
     isRouteAnimating,
     currentWaypoint,

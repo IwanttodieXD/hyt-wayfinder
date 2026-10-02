@@ -122,7 +122,7 @@ export default function AdminDashboard() {
           </div>
 
           {/* Quick Actions */}
-          <div className='grid grid-cols-1 md:grid-cols-2 gap-3 mb-8'>
+          <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-8'>
             <Link
               href='/admin/records'
               className='glass-panel border-navy-800 p-6 rounded-lg hover:border-orange-500/50 transition-colors group'
@@ -166,6 +166,21 @@ export default function AdminDashboard() {
                 <div>
                   <h3 className='text-white font-semibold text-lg mb-1'>Manage Users</h3>
                   <p className='text-navy-300 text-sm'>Accounts and roles</p>
+                </div>
+              </div>
+            </Link>
+
+            <Link
+              href='/admin/room-qr'
+              className='glass-panel border-navy-800 p-6 rounded-lg hover:border-orange-500/50 transition-colors group'
+            >
+              <div className='flex items-center gap-3'>
+                <div className='w-14 h-14 rounded-lg bg-orange-500/20 flex items-center justify-center group-hover:bg-orange-500/30 transition-colors'>
+                  <i className='fa-solid fa-qrcode text-orange-400 text-2xl'></i>
+                </div>
+                <div>
+                  <h3 className='text-white font-semibold text-lg mb-1'>Room QR Codes</h3>
+                  <p className='text-navy-300 text-sm'>Generate QR codes for rooms</p>
                 </div>
               </div>
             </Link>

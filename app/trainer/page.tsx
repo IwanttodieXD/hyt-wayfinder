@@ -1,20 +1,37 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import { useRoleGuard } from '@/hooks/useRoleGuard';
-import { useClockInProfile } from '@/hooks/useClockInProfile';
-import StudentMobileView from '@/components/StudentMobileView';
 import UserProfile from '@/components/UserProfile';
+import dynamic from 'next/dynamic';
+
+// Dynamically import StudentMobileView to avoid SSR issues
+const StudentMobileView = dynamic(() => import('@/components/StudentMobileView'), {
+  ssr: false,
+  loading: () => (
+    <div className='flex items-center justify-center min-h-[400px]'>
+      <div className='text-white'>Loading...</div>
+    </div>
+  )
+});
 
 export default function TrainerPortal() {
   const { user } = useAuthStore();
+  const [isClient, setIsClient] = useState(false);
 
   const isAllowed = useRoleGuard(['trainer'], '/admin');
 
-  useClockInProfile();
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
-  if (!isAllowed) {
-    return null;
+  if (!isAllowed || !isClient) {
+    return (
+      <div className='min-h-screen bg-navy-950 flex items-center justify-center'>
+        <div className='text-white'>Loading...</div>
+      </div>
+    );
   }
 
   return (
@@ -45,7 +62,7 @@ export default function TrainerPortal() {
 
         {/* Main Content - Full Screen Mobile View */}
         <main className='flex-1 overflow-hidden'>
-          <StudentMobileView />
+          <StudentMobileView roomDestination={null} />
         </main>
       </div>
     </>

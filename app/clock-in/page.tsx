@@ -1,25 +1,41 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import { useRoleGuard } from '@/hooks/useRoleGuard';
-import { useClockInProfile } from '@/hooks/useClockInProfile';
-import StudentMobileView from '@/components/StudentMobileView';
 import UserProfile from '@/components/UserProfile';
+import dynamic from 'next/dynamic';
+
+// Dynamically import StudentMobileView to avoid SSR issues
+const StudentMobileView = dynamic(() => import('@/components/StudentMobileView'), {
+  ssr: false,
+  loading: () => (
+    <div className='flex items-center justify-center min-h-[400px]'>
+      <div className='text-white'>Loading...</div>
+    </div>
+  )
+});
 
 const ALLOWED_ROLES = ['visitor', 'trainee', 'trainer'] as const;
 
 export default function ClockInPage() {
   const { user, isAuthenticated } = useAuthStore();
+  const [isClient, setIsClient] = useState(false);
 
   // Visitors, trainees and trainers clock in from their own phone.
   // Admins use the station instead, so send them back to the dashboard.
   const isAllowed = useRoleGuard([...ALLOWED_ROLES], '/admin');
 
-  // Pull the signed-in user's name and destination into the clock-in store.
-  useClockInProfile();
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
-  if (!isAllowed) {
-    return null;
+  if (!isAllowed || !isClient) {
+    return (
+      <div className='min-h-screen bg-navy-950 flex items-center justify-center'>
+        <div className='text-white'>Loading...</div>
+      </div>
+    );
   }
 
   return (
@@ -65,7 +81,7 @@ export default function ClockInPage() {
             shrink so the taller route frame fits without pushing the header
             off screen. */}
         <main className='flex-1 min-h-0 overflow-hidden'>
-          <StudentMobileView />
+          <StudentMobileView roomDestination={null} />
         </main>
       </div>
     </>

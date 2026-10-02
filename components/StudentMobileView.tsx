@@ -2,17 +2,35 @@
 
 import { useClockInStore } from '@/store/clockInStore';
 import { useAuthStore } from '@/store/authStore';
+import { useClockInProfile } from '@/hooks/useClockInProfile';
 import QRScanner from './QRScanner';
 import RouteVisualization from './RouteVisualization';
 import ThreeErrorBoundary from './ThreeErrorBoundary';
 
-export default function StudentMobileView() {
+interface RoomDestination {
+  room?: string;
+  name?: string;
+  floor?: string;
+  building?: string;
+}
+
+interface StudentMobileViewProps {
+  roomDestination?: RoomDestination | null;
+}
+
+export default function StudentMobileView({ roomDestination }: StudentMobileViewProps) {
   const { status, student, clockInTime } = useClockInStore();
   const { user } = useAuthStore();
+
+  // Initialize the clock-in profile
+  useClockInProfile();
 
   // A destination only counts as assigned when the admin/user profile actually
   // set one; the store still holds a placeholder default before then.
   const hasDestination = !!user?.destination;
+  
+  // Check if we have a QR code destination
+  const hasQRDestination = !!roomDestination?.room && !!roomDestination?.name;
 
   // The 3D canvas is a full-width square, so its size is driven by the frame
   // width. A taller/wider frame during the route is what actually makes the
@@ -57,14 +75,37 @@ export default function StudentMobileView() {
             </div>
           </div>
 
-          {/* Destination Info */}
+          {/* QR Code Destination Info (if available) */}
+          {hasQRDestination && (
+            <div className='bg-orange-500/10 border border-orange-500/30 rounded-lg p-3 mb-3'>
+              <div className='flex items-start gap-3'>
+                <div className='w-10 h-10 rounded-lg bg-orange-500/30 flex items-center justify-center flex-shrink-0'>
+                  <i className='fa-solid fa-qrcode text-orange-400'></i>
+                </div>
+                <div className='flex-1 min-w-0'>
+                  <p className='text-orange-200 text-xs mb-1 font-semibold'>QR Code Destination</p>
+                  <h3 className='text-white font-semibold text-sm leading-tight mb-1'>
+                    {roomDestination.name}
+                  </h3>
+                  <p className='text-orange-200/80 text-xs'>
+                    {roomDestination.building && `${roomDestination.building}`}
+                    {roomDestination.floor && ` • Floor ${roomDestination.floor}`}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Regular Destination Info */}
           <div className='bg-navy-800/50 rounded-lg p-3 border border-navy-700'>
             <div className='flex items-start gap-3'>
               <div className='w-10 h-10 rounded-lg bg-orange-500/20 flex items-center justify-center flex-shrink-0'>
                 <i className='fa-solid fa-location-dot text-orange-400'></i>
               </div>
               <div className='flex-1 min-w-0'>
-                <p className='text-navy-300 text-xs mb-1'>Assigned Destination</p>
+                <p className='text-navy-300 text-xs mb-1'>
+                  {hasQRDestination ? 'Original Assignment' : 'Assigned Destination'}
+                </p>
                 <h3 className='text-white font-semibold text-sm leading-tight mb-1'>
                   {hasDestination ? student.destination : 'Not assigned yet'}
                 </h3>
@@ -98,7 +139,7 @@ export default function StudentMobileView() {
             <QRScanner />
           ) : (
             <ThreeErrorBoundary>
-              <RouteVisualization />
+              <RouteVisualization roomDestination={roomDestination} />
             </ThreeErrorBoundary>
           )}
         </div>

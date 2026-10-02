@@ -1,21 +1,60 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { useClockInStore } from '@/store/clockInStore';
 import { useAuthStore } from '@/store/authStore';
 import { useRecordsStore } from '@/store/recordsStore';
-import { useEffect } from 'react';
 import QRCode from 'react-qr-code';
+
+interface Room {
+  id: string;
+  name: string;
+  floor: number;
+  building: string;
+  description?: string;
+}
 
 export default function KioskStationView() {
   const { student } = useClockInStore();
   const { user } = useAuthStore();
   const { getActiveCount, getCompletedTodayCount, fetchTodayRecords } =
     useRecordsStore();
+  
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
 
   // Load today's records so the active/on-break counts are live
   useEffect(() => {
     fetchTodayRecords();
   }, [fetchTodayRecords]);
+
+  // Load rooms from localStorage
+  useEffect(() => {
+    const savedRooms = localStorage.getItem('hyt-rooms');
+    if (savedRooms) {
+      const loadedRooms = JSON.parse(savedRooms);
+      setRooms(loadedRooms);
+      if (loadedRooms.length > 0) {
+        setSelectedRoom(loadedRooms[0]); // Select first room by default
+      }
+    } else {
+      // Default rooms if none saved
+      const defaultRooms: Room[] = [
+        { id: 'room-101', name: 'Room 101', floor: 1, building: 'Main Building', description: 'Computer Lab' },
+        { id: 'room-102', name: 'Room 102', floor: 1, building: 'Main Building', description: 'Classroom' },
+        { id: 'room-201', name: 'Room 201', floor: 2, building: 'Main Building', description: 'Conference Room' },
+        { id: 'auditorium', name: 'Auditorium', floor: 1, building: 'Main Building', description: 'Main Auditorium' },
+        { id: 'cafeteria', name: 'Cafeteria', floor: 1, building: 'Student Center', description: 'Dining Area' }
+      ];
+      setRooms(defaultRooms);
+      setSelectedRoom(defaultRooms[0]);
+    }
+  }, []);
+
+  const generateQRData = (room: Room) => {
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    return `${baseUrl}/visitor?room=${encodeURIComponent(room.id)}&name=${encodeURIComponent(room.name)}&floor=${room.floor}&building=${encodeURIComponent(room.building)}`;
+  };
 
   const activeCount = getActiveCount();
   const onBreakCount = getCompletedTodayCount();
@@ -85,7 +124,7 @@ export default function KioskStationView() {
         </div>
 
         {/* Main Content Grid */}
-        <div className='grid grid-cols-1 lg:grid-cols-2 gap-3'>
+        <div className='grid grid-cols-1 xl:grid-cols-3 gap-3'>
           {/* QR Code Panel */}
           <div className='glass-panel border-navy-800 p-8 rounded-lg'>
             <div className='text-center mb-6'>
@@ -136,6 +175,96 @@ export default function KioskStationView() {
                 </p>
               </div>
             </div>
+          </div>
+
+          {/* Room Selection Panel */}
+          <div className='glass-panel border-navy-800 p-6 rounded-lg'>
+            <div className='mb-6'>
+              <div className='inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-500/10 border border-blue-500/30 mb-4'>
+                <i className='fa-solid fa-building text-blue-400'></i>
+                <span className='text-blue-300 font-semibold text-sm uppercase tracking-wider'>
+                  Room Selection
+                </span>
+              </div>
+              <h3 className='text-xl font-bold text-white mb-2'>Available Rooms</h3>
+              <p className='text-navy-300 text-sm'>Select a room to display its QR code</p>
+            </div>
+
+            <div className='space-y-2 max-h-96 overflow-y-auto'>
+              {rooms.map((room) => (
+                <button
+                  key={room.id}
+                  onClick={() => setSelectedRoom(room)}
+                  className={`w-full p-3 rounded-lg border text-left transition-all ${
+                    selectedRoom?.id === room.id
+                      ? 'bg-blue-500/20 border-blue-500/50 text-white'
+                      : 'bg-navy-900/50 border-navy-700 text-navy-200 hover:border-navy-600 hover:bg-navy-800/50'
+                  }`}
+                >
+                  <div className='font-semibold text-sm'>{room.name}</div>
+                  <div className='text-xs opacity-75'>
+                    {room.building} • Floor {room.floor}
+                    {room.description && ` • ${room.description}`}
+                  </div>
+                </button>
+              ))}
+              
+              {rooms.length === 0 && (
+                <div className='text-center py-8'>
+                  <i className='fa-solid fa-building text-navy-600 text-3xl mb-2'></i>
+                  <p className='text-navy-400 text-sm'>No rooms available</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Room QR Code Panel */}
+          <div className='glass-panel border-navy-800 p-8 rounded-lg'>
+            {selectedRoom ? (
+              <>
+                <div className='text-center mb-6'>
+                  <div className='inline-flex items-center gap-2 px-4 py-2 rounded-full bg-green-500/10 border border-green-500/30 mb-4'>
+                    <i className='fa-solid fa-location-dot text-green-400'></i>
+                    <span className='text-green-300 font-semibold text-sm uppercase tracking-wider'>
+                      Room QR
+                    </span>
+                  </div>
+                  <h3 className='text-xl font-bold text-white mb-1'>{selectedRoom.name}</h3>
+                  <p className='text-navy-300 text-sm mb-1'>{selectedRoom.building}</p>
+                  <p className='text-navy-400 text-xs'>Floor {selectedRoom.floor}</p>
+                </div>
+
+                <div className='flex justify-center mb-6'>
+                  <div className='bg-paper p-6 rounded-lg w-full max-w-[240px]'>
+                    <QRCode
+                      value={generateQRData(selectedRoom)}
+                      size={200}
+                      style={{ height: 'auto', maxWidth: '100%', width: '100%' }}
+                      viewBox={`0 0 200 200`}
+                    />
+                  </div>
+                </div>
+
+                <div className='space-y-2 text-center'>
+                  <p className='text-navy-300 text-sm'>
+                    Scan to navigate to {selectedRoom.name}
+                  </p>
+                  {selectedRoom.description && (
+                    <p className='text-navy-400 text-xs'>
+                      {selectedRoom.description}
+                    </p>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className='text-center py-12'>
+                <i className='fa-solid fa-qrcode text-navy-600 text-4xl mb-4'></i>
+                <h3 className='text-white font-semibold mb-2'>No Room Selected</h3>
+                <p className='text-navy-300 text-sm'>
+                  Choose a room from the list to display its QR code
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Webcam scanner hidden for the admin station. The admin uses this
