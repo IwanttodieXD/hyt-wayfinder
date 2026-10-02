@@ -142,47 +142,51 @@ export default function RegisterPage() {
                 </div>
               )}
 
-              {/* Profile Photo Upload */}
-              <div className='flex flex-col items-center'>
-                <label className='block text-sm font-medium text-orange-200 mb-3'>
-                  Profile Photo
-                </label>
-                <div
-                  onClick={() => fileInputRef.current?.click()}
-                  className='relative w-32 h-32 rounded-lg border-2 border-orange-500/30 bg-navy-900/80 hover:border-orange-500 cursor-pointer transition-colors group overflow-hidden flex items-center justify-center'
-                >
-                  {profilePhoto ? (
-                    <img
-                      src={profilePhoto}
-                      alt='Profile preview'
-                      className='w-full h-full object-cover'
-                    />
-                  ) : (
-                    <i className='fa-solid fa-camera text-3xl text-orange-400 group-hover:text-orange-400 transition-colors'></i>
-                  )}
-                  {/* Hover overlay */}
-                  <div className='absolute inset-0 bg-navy-900/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity'>
-                    <i className='fa-solid fa-camera text-2xl text-white'></i>
-                  </div>
-                </div>
-                <input
-                  ref={fileInputRef}
-                  type='file'
-                  accept='image/*'
-                  onChange={handlePhotoChange}
-                  className='hidden'
-                />
-                {profilePhoto && (
-                  <button
-                    type='button'
-                    onClick={() => setProfilePhoto('')}
-                    className='mt-2 text-xs text-red-400 hover:text-red-300 transition-colors'
+              {/* Profile photo upload hidden. The uploader is left in place below, just
+                not rendered, so it can be restored without redoing the
+                canvas-compression logic. */}
+              {false && (
+                <div className='flex flex-col items-center'>
+                  <label className='block text-sm font-medium text-orange-200 mb-3'>
+                    Profile Photo
+                  </label>
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    className='relative w-32 h-32 rounded-lg border-2 border-orange-500/30 bg-navy-900/80 hover:border-orange-500 cursor-pointer transition-colors group overflow-hidden flex items-center justify-center'
                   >
-                    Remove photo
-                  </button>
-                )}
-                <p className='mt-1 text-xs text-navy-500'>Optional</p>
-              </div>
+                    {profilePhoto ? (
+                      <img
+                        src={profilePhoto}
+                        alt='Profile preview'
+                        className='w-full h-full object-cover'
+                      />
+                    ) : (
+                      <i className='fa-solid fa-camera text-3xl text-orange-400 group-hover:text-orange-400 transition-colors'></i>
+                    )}
+                    {/* Hover overlay */}
+                    <div className='absolute inset-0 bg-navy-900/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity'>
+                      <i className='fa-solid fa-camera text-2xl text-white'></i>
+                    </div>
+                  </div>
+                  <input
+                    ref={fileInputRef}
+                    type='file'
+                    accept='image/*'
+                    onChange={handlePhotoChange}
+                    className='hidden'
+                  />
+                  {profilePhoto && (
+                    <button
+                      type='button'
+                      onClick={() => setProfilePhoto('')}
+                      className='mt-2 text-xs text-red-400 hover:text-red-300 transition-colors'
+                    >
+                      Remove photo
+                    </button>
+                  )}
+                  <p className='mt-1 text-xs text-navy-500'>Optional</p>
+                </div>
+              )}
 
               {/* Name Field */}
               <div>

@@ -79,13 +79,13 @@ export const useClockInStore = create<ClockInState>((set) => ({
 
   setCurrentWaypoint: (waypoint) => set({ currentWaypoint: waypoint }),
 
-  // Rewinds the animation only. It must NOT touch `status`: setting that to
-  // 'clocked-in' would make StudentMobileView swap the 3D view back out for
-  // the QR scanner, taking the Clock Out button with it and leaving the
-  // session with no visible way to end.
+  // Return: stops the animation, rewinds to the first waypoint, and drops back
+  // out of the 3D view to the scanner. Setting `status` to 'clocked-in' is what
+  // makes StudentMobileView render the QRScanner again instead of the route.
   resetRoute: () =>
     set({
       isRouteAnimating: false,
       currentWaypoint: 0,
+      status: 'clocked-in',
     }),
 }));

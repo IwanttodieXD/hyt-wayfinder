@@ -3,240 +3,22 @@
 import { useClockInStore } from '@/store/clockInStore';
 import { useAuthStore } from '@/store/authStore';
 import { useRecordsStore } from '@/store/recordsStore';
-import { supabase } from '@/lib/supabase';
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { Html5Qrcode } from 'html5-qrcode';
+import { useEffect } from 'react';
 import QRCode from 'react-qr-code';
 
 export default function KioskStationView() {
-  const { clockIn, clockOut, status, activeRecordId, student } = useClockInStore();
+  const { student } = useClockInStore();
   const { user } = useAuthStore();
-  const {
-    addRecord,
-    clockOutRecord,
-    getActiveCount,
-    getCompletedTodayCount,
-    fetchTodayRecords,
-  } = useRecordsStore();
-  const [scannerActive, setScannerActive] = useState(false);
-  const [scanError, setScanError] = useState('');
-  const [scanResult, setScanResult] = useState<{
-    name: string;
-    id: string;
-    action: 'in' | 'out';
-  } | null>(null);
-  const scannerRef = useRef<Html5Qrcode | null>(null);
-  const handledRef = useRef(false);
+  const { getActiveCount, getCompletedTodayCount, fetchTodayRecords } =
+    useRecordsStore();
 
   // Load today's records so the active/on-break counts are live
   useEffect(() => {
     fetchTodayRecords();
   }, [fetchTodayRecords]);
 
-  // Refresh counts whenever a scan completes
-  useEffect(() => {
-    if (scanResult) {
-      fetchTodayRecords();
-    }
-  }, [scanResult, fetchTodayRecords]);
-
   const activeCount = getActiveCount();
   const onBreakCount = getCompletedTodayCount();
-
-  // Stop only if the scanner is actually running. html5-qrcode throws
-  // "Cannot stop, scanner is not running or paused" otherwise.
-  const stopScanner = useCallback(async () => {
-    const scanner = scannerRef.current;
-    scannerRef.current = null;
-
-    if (!scanner) return;
-
-    try {
-      if (scanner.isScanning) {
-        await scanner.stop();
-      }
-      scanner.clear();
-    } catch {
-      // Teardown is best-effort; never block the UI on it.
-    }
-  }, []);
-
-  const handleScanSuccess = useCallback(
-    async (decodedText: string) => {
-      if (handledRef.current) return;
-      handledRef.current = true;
-
-      // Validate the expected QR format: HYT-USER:<userId>
-      if (!decodedText.startsWith('HYT-USER:')) {
-        setScanError('Invalid QR code. Please scan your personal HYT QR code.');
-        handledRef.current = false;
-        return;
-      }
-
-      const scannedUserId = decodedText.replace('HYT-USER:', '').trim();
-
-      // Falls back to the signed-in admin's name if the lookup below fails.
-      let scannedName = user?.name || 'Student';
-
-      // Stop the camera
-      await stopScanner();
-
-      setScannerActive(false);
-
-      // The kiosk scans other people's codes, so their destination has to come
-      // from their own profile rather than from the signed-in admin's.
-      // Admins can read every profile (RLS), and any failure falls back to the
-      // store's default rather than blocking the clock-in.
-      let scannedDestination = student.destination;
-      try {
-        const { data: scannedProfile } = await supabase
-          .from('users')
-          .select('name, destination')
-          .eq('id', scannedUserId)
-          .maybeSingle();
-
-        if (scannedProfile) {
-          scannedName = scannedProfile.name || 'Student';
-          if (scannedProfile.destination) {
-            scannedDestination = scannedProfile.destination;
-          }
-        }
-      } catch {
-        // Keep the fallback; a clock-in is more important than the label.
-      }
-
-      // Toggle: if already clocked in -> clock out; otherwise -> clock in
-      if (activeRecordId && status !== 'not-clocked-in') {
-        const closed = await clockOutRecord(activeRecordId);
-
-        if (!closed.success) {
-          // Leave the kiosk session untouched so the admin can retry; don't
-          // claim a clock-out that never reached the database.
-          setScanError(closed.error || 'Could not clock out. Please scan again.');
-          setScannerActive(false);
-          handledRef.current = false;
-          return;
-        }
-
-        setScanResult({
-          name: scannedName,
-          id: scannedUserId,
-          action: 'out',
-        });
-
-        clockOut();
-      } else {
-        setScanResult({
-          name: scannedName,
-          id: scannedUserId,
-          action: 'in',
-        });
-
-        let recordId: string | undefined;
-        if (user) {
-          const result = await addRecord({
-            userId: user.id,
-            destination: scannedDestination,
-            building: student.building,
-            room: student.room,
-            timeIn: new Date(),
-          });
-          recordId = result.recordId;
-        }
-
-        clockIn(recordId);
-
-        // No 3D route on a kiosk scan. The route is a personal flow driven by
-        // scanning the kiosk QR in the mobile view, so it is intentionally not
-        // started here.
-      }
-    },
-    [
-      user,
-      student,
-      status,
-      activeRecordId,
-      clockIn,
-      clockOut,
-      addRecord,
-      clockOutRecord,
-      stopScanner,
-    ]
-  );
-
-  const startCamera = useCallback(async () => {
-    setScanError('');
-    setScanResult(null);
-    handledRef.current = false;
-
-    // Html5Qrcode throws if the element id isn't in the DOM yet. On the first
-    // mount (and when switching into kiosk mode) it may not be.
-    if (typeof document === 'undefined' || !document.getElementById('qr-reader')) {
-      setScanError('Camera is still loading. Please try starting the scan again.');
-      setScannerActive(false);
-      return;
-    }
-
-    // Release any previous scanner before making another one.
-    await stopScanner();
-
-    try {
-      const html5Qrcode = new Html5Qrcode('qr-reader');
-      scannerRef.current = html5Qrcode;
-
-      await html5Qrcode.start(
-        { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 250, height: 250 } },
-        (decodedText) => handleScanSuccess(decodedText),
-        () => {
-          // per-frame failure; ignore
-        }
-      );
-
-      setScannerActive(true);
-    } catch (err: any) {
-      scannerRef.current = null;
-      setScanError(
-        err?.message?.includes('Permission')
-          ? 'Camera permission denied. Please allow camera access and try again.'
-          : 'Could not start camera. ' +
-              (err?.message ||
-                'Please ensure a camera is connected and you are on HTTPS/localhost.')
-      );
-      setScannerActive(false);
-    }
-  }, [handleScanSuccess, stopScanner]);
-
-  const stopCamera = useCallback(async () => {
-    await stopScanner();
-    setScannerActive(false);
-  }, [stopScanner]);
-
-  useEffect(() => {
-    // Release the camera on unmount, but only stop it if it's live.
-    return () => {
-      const scanner = scannerRef.current;
-      scannerRef.current = null;
-      if (!scanner) return;
-      try {
-        if (scanner.isScanning) {
-          scanner.stop().catch(() => {});
-        }
-        scanner.clear();
-      } catch {
-        // best-effort
-      }
-    };
-  }, []);
-  // Auto-open the camera on load
-  useEffect(() => {
-    startCamera();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const handleGuestScan = () => {
-    startCamera();
-  };
 
   return (
     <div className='w-full min-h-full bg-navy-950 p-8'>
@@ -317,14 +99,19 @@ export default function KioskStationView() {
               <p className='text-navy-300'>Use your mobile app to scan this QR code</p>
             </div>
 
-            {/* Large QR Code */}
-            <div className='bg-paper p-8 rounded-lg mb-6'>
-              <QRCode
-                value='HYT-KIOSK-01-CHECKIN-STATION'
-                size={256}
-                style={{ height: 'auto', maxWidth: '100%', width: '100%' }}
-                viewBox={`0 0 256 256`}
-              />
+            {/* Large QR Code - the white block is centered so the code sits in the
+                middle of the panel instead of hugging the left edge. */}
+            <div className='flex justify-center mb-6'>
+              {/* Fixed max width so the `width: 100%` on the QR resolves to a
+                  real 256px box, which is what lets the centering work. */}
+              <div className='bg-paper p-8 rounded-lg w-full max-w-[288px]'>
+                <QRCode
+                  value='HYT-KIOSK-01-CHECKIN-STATION'
+                  size={256}
+                  style={{ height: 'auto', maxWidth: '100%', width: '100%' }}
+                  viewBox={`0 0 256 256`}
+                />
+              </div>
             </div>
 
             <div className='space-y-3'>
@@ -351,96 +138,8 @@ export default function KioskStationView() {
             </div>
           </div>
 
-          {/* Guest Check-In Panel */}
-          <div className='glass-panel border-navy-800 p-8 rounded-lg'>
-            <div className='text-center mb-6'>
-              <div className='inline-flex items-center gap-2 px-4 py-2 rounded-full bg-navy-600/10 border border-navy-600/30 mb-4'>
-                <i className='fa-solid fa-id-card text-navy-300'></i>
-                <span className='text-navy-200 font-semibold text-sm uppercase tracking-wider'>
-                  Webcam Scanner
-                </span>
-              </div>
-              <h2 className='text-2xl font-bold text-white mb-2'>
-                Scan Your Personal QR
-              </h2>
-              <p className='text-navy-300'>
-                Show the QR code from your profile to clock in
-              </p>
-            </div>
-
-            {/* Camera Viewer */}
-            <div
-              className={`
-              relative bg-navy-900 border-2 rounded-lg p-4 mb-6 transition-colors duration-150 overflow-hidden
-              ${scannerActive ? 'border-orange-500  ' : 'border-navy-700'}
-              `}
-            >
-              <div id='qr-reader' className='w-full' />
-
-              {!scannerActive && !scanResult && !scanError && (
-                <div className='text-center py-3'>
-                  <i className='fa-solid fa-camera text-navy-600 text-6xl mb-4'></i>
-                  <p className='text-navy-500 text-sm'>Camera is off</p>
-                </div>
-              )}
-
-              {scanError && (
-                <div className='text-center py-5'>
-                  <i className='fa-solid fa-circle-exclamation text-red-500 text-5xl mb-3'></i>
-                  <p className='text-red-400 text-sm px-4'>{scanError}</p>
-                </div>
-              )}
-
-              {scanResult && (
-                <div className='space-y-4 animate-fade-in'>
-                  <div className='flex items-center justify-between pb-2 border-b border-navy-700'>
-                    <span className='text-navy-300 text-sm'>Name</span>
-                    <span className='text-white font-semibold'>{scanResult.name}</span>
-                  </div>
-                  <div className='flex items-center justify-between pb-2 border-b border-navy-700'>
-                    <span className='text-navy-300 text-sm'>User ID</span>
-                    <span className='text-white font-semibold font-mono text-xs'>
-                      {scanResult.id}
-                    </span>
-                  </div>
-                  <div className='flex items-center justify-center gap-2 mt-4 text-green-400'>
-                    <i className='fa-solid fa-circle-check'></i>
-                    <span className='font-semibold'>
-                      {scanResult.action === 'in'
-                        ? 'Clocked In! Loading route...'
-                        : 'Clocked Out! Goodbye.'}
-                    </span>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <button
-              onClick={scannerActive ? stopCamera : handleGuestScan}
-              className='
-                w-full px-4 py-3 rounded-lg font-bold text-base text-paper
-                bg-orange-500 hover:bg-orange-600
-                transition-colors duration-150
-                disabled:opacity-50 disabled:cursor-not-allowed
-                '
-            >
-              <i
-                className={`fa-solid ${scannerActive ? 'fa-stop' : 'fa-camera'} mr-2`}
-              ></i>
-              {scannerActive ? 'Stop Camera' : 'Start Camera Scan'}
-            </button>
-
-            <div className='mt-6 p-4 rounded-lg bg-orange-500/10 border border-orange-500/30'>
-              <div className='flex items-start gap-3'>
-                <i className='fa-solid fa-info-circle text-orange-400 mt-0.5'></i>
-                <p className='text-orange-300 text-xs leading-relaxed'>
-                  Open your profile menu and select &quot;My QR Code&quot; to display your
-                  personal QR code, then point it at the camera to clock in and receive
-                  your 3D route.
-                </p>
-              </div>
-            </div>
-          </div>
+          {/* Webcam scanner hidden for the admin station. The admin uses this
+              screen to monitor attendance, not to scan personal QR codes. */}
         </div>
 
         {/* Footer Info */}
