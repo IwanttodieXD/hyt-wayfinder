@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { DEFAULT_ROUTE_ID } from '@/lib/wayfinding';
 
 export type ClockInStatus = 'not-clocked-in' | 'clocked-in' | 'viewing-route';
 
@@ -16,6 +17,8 @@ interface ClockInState {
   clockInTime: Date | null;
   status: ClockInStatus;
   activeRecordId: string | null;
+  /** Which destination route to draw in 3D, set from the scanned QR code. */
+  activeRouteId: string;
 
   // Clock-in actions
   clockIn: (recordId?: string) => void;
@@ -29,6 +32,7 @@ interface ClockInState {
   currentWaypoint: number;
   setRouteAnimating: (animating: boolean) => void;
   setCurrentWaypoint: (waypoint: number) => void;
+  setActiveRoute: (routeId: string) => void;
   resetRoute: () => void;
 }
 
@@ -44,6 +48,7 @@ export const useClockInStore = create<ClockInState>((set) => ({
   clockInTime: null,
   status: 'not-clocked-in',
   activeRecordId: null,
+  activeRouteId: DEFAULT_ROUTE_ID,
   isRouteAnimating: false,
   currentWaypoint: 0,
 
@@ -78,6 +83,11 @@ export const useClockInStore = create<ClockInState>((set) => ({
   setRouteAnimating: (animating) => set({ isRouteAnimating: animating }),
 
   setCurrentWaypoint: (waypoint) => set({ currentWaypoint: waypoint }),
+
+  // Switching destination also rewinds the animation, otherwise the waypoint
+  // index would point into a different route's array.
+  setActiveRoute: (routeId) =>
+    set({ activeRouteId: routeId, currentWaypoint: 0, isRouteAnimating: false }),
 
   // Return: stops the animation, rewinds to the first waypoint, and drops back
   // out of the 3D view to the scanner. Setting `status` to 'clocked-in' is what

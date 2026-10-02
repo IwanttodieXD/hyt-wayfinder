@@ -25,6 +25,13 @@ interface RecordsState {
   getActiveCount: () => number;
   getTodayCount: () => number;
   getCompletedTodayCount: () => number;
+  /** Records still inside, i.e. clocked in with no time_out yet. */
+  getActiveRecords: () => ClockInRecord[];
+  /**
+   * Who is inside which room right now, grouped by room. Rooms with nobody in
+   * them are simply absent, so callers merge this against the full room list.
+   */
+  getOccupancyByRoom: () => { room: string; count: number; people: ClockInRecord[] }[];
   getAllRecords: () => ClockInRecord[];
   getRecordsByDate: (date: Date) => ClockInRecord[];
   fetchRecords: () => Promise<void>;
@@ -167,6 +174,31 @@ export const useRecordsStore = create<RecordsState>((set, get) => ({
 
   getActiveCount: () => {
     return get().records.filter((r) => r.status === 'active').length;
+  },
+
+  getActiveRecords: () => {
+    return get().records.filter((r) => r.status === 'active');
+  },
+
+  getOccupancyByRoom: () => {
+    const byRoom = new Map<string, ClockInRecord[]>();
+
+    for (const record of get().records) {
+      if (record.status !== 'active') continue;
+
+      const key = record.room?.trim() || 'Unassigned';
+      const people = byRoom.get(key);
+      if (people) {
+        people.push(record);
+      } else {
+        byRoom.set(key, [record]);
+      }
+    }
+
+    // Busiest room first so the rooms that need attention lead the list.
+    return Array.from(byRoom.entries())
+      .map(([room, people]) => ({ room, count: people.length, people }))
+      .sort((a, b) => b.count - a.count || a.room.localeCompare(b.room));
   },
 
   getTodayCount: () => {

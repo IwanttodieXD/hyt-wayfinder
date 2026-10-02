@@ -6,48 +6,17 @@ import { useClockInStore } from '@/store/clockInStore';
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { useWebGLSupport } from '@/lib/useWebGLSupport';
+import { getRoute, DESTINATION_ROUTES, type RouteWaypoint } from '@/lib/wayfinding';
 
-// Waypoint data for route
-const waypoints = [
-  {
-    position: [0, 0, 0],
-    label: 'Main Lobby',
-    stage: 1,
-    cameraOffset: [-3, 3, -3],
-  },
-  {
-    position: [5, 0, 3],
-    label: 'Hallway A',
-    stage: 1,
-    cameraOffset: [-2, 2, -2],
-  },
-  {
-    position: [10, 0, 5],
-    label: 'Elevator 3F',
-    stage: 2,
-    cameraOffset: [-1, 2, -2],
-  },
-  {
-    position: [10, 10, 5],
-    label: '3rd Floor Landing',
-    stage: 2,
-    cameraOffset: [-1, 2, -2],
-  },
-  {
-    position: [15, 10, 8],
-    label: 'Corridor B',
-    stage: 3,
-    cameraOffset: [-2, 2, -1],
-  },
-  {
-    position: [20, 10, 10],
-    label: 'Room 304',
-    stage: 3,
-    cameraOffset: [-3, 3, -2],
-  },
-] as const;
+type Waypoints = RouteWaypoint[];
 
-function AnimatedCamera({ enabled }: { enabled: boolean }) {
+function AnimatedCamera({
+  enabled,
+  waypoints,
+}: {
+  enabled: boolean;
+  waypoints: Waypoints;
+}) {
   const { isRouteAnimating, currentWaypoint } = useClockInStore();
   const { camera } = useThree();
 
@@ -74,7 +43,7 @@ function AnimatedCamera({ enabled }: { enabled: boolean }) {
   return null;
 }
 
-function WalkingAvatar() {
+function WalkingAvatar({ waypoints }: { waypoints: Waypoints }) {
   const { currentWaypoint, isRouteAnimating } = useClockInStore();
   const groupRef = useRef<THREE.Group>(null);
   const [progress, setProgress] = useState(0);
@@ -147,7 +116,7 @@ function WalkingAvatar() {
   );
 }
 
-function AnimatedPath() {
+function AnimatedPath({ waypoints }: { waypoints: Waypoints }) {
   const { isRouteAnimating, currentWaypoint } = useClockInStore();
   const [animatedPoints, setAnimatedPoints] = useState<THREE.Vector3[]>([]);
 
@@ -170,7 +139,7 @@ function AnimatedPath() {
   return <Line points={animatedPoints} color='#0891b2' lineWidth={3} dashed={false} />;
 }
 
-function RouteMarkers() {
+function RouteMarkers({ waypoints }: { waypoints: Waypoints }) {
   const { currentWaypoint, isRouteAnimating } = useClockInStore();
 
   return (
@@ -356,8 +325,14 @@ export default function RouteVisualization() {
     setRouteAnimating,
     setCurrentWaypoint,
     resetRoute,
+    activeRouteId,
+    setActiveRoute,
   } = useClockInStore();
   const [cameraMode, setCameraMode] = useState<'free' | 'follow'>('follow');
+
+  // The active destination selects which waypoint set the whole 3D scene uses.
+  const route = getRoute(activeRouteId);
+  const waypoints = route.waypoints;
 
   useEffect(() => {
     if (isRouteAnimating && currentWaypoint < waypoints.length - 1) {
@@ -461,10 +436,10 @@ export default function RouteVisualization() {
           {/* Scene elements */}
           <FloorGrid />
           <BuildingStructure />
-          <AnimatedPath />
-          <RouteMarkers />
-          <WalkingAvatar />
-          <AnimatedCamera enabled={cameraMode === 'follow'} />
+            <AnimatedPath waypoints={waypoints} />
+            <RouteMarkers waypoints={waypoints} />
+            <WalkingAvatar waypoints={waypoints} />
+            <AnimatedCamera enabled={cameraMode === 'follow'} waypoints={waypoints} />
 
           <OrbitControls
             enableZoom={true}
@@ -487,9 +462,10 @@ export default function RouteVisualization() {
                   <i className='fa-solid fa-route text-orange-400'></i>
                 </div>
                 <div>
-                  <p className='text-navy-300 text-xs mb-0.5'>Current Stage</p>
-                  <p className='text-white font-bold text-sm'>
-                    {waypoints[Math.min(currentWaypoint, waypoints.length - 1)].label}
+                  <p className='text-navy-300 text-xs mb-0.5'>Destination</p>
+                  <p className='text-white font-bold text-sm'>{route.label}</p>
+                  <p className='text-navy-400 text-xs'>
+                    {route.room} · {route.building}
                   </p>
                 </div>
               </div>
@@ -544,6 +520,24 @@ export default function RouteVisualization() {
                   : 'Play'}{' '}
               Route
             </button>
+
+            {/* Destination picker. Lets you jump between rooms without
+                rescanning; the station QR normally sets this automatically. */}
+            <select
+              value={route.id}
+              onChange={(e) => setActiveRoute(e.target.value)}
+              aria-label='Choose destination'
+              className='
+                px-3 py-3 rounded-lg font-semibold text-sm cursor-pointer
+                bg-navy-700 text-navy-100 hover:bg-navy-600 transition-colors
+                '
+            >
+              {DESTINATION_ROUTES.map((r) => (
+                <option key={r.id} value={r.id} className='bg-navy-900'>
+                  {r.label} ({r.room})
+                </option>
+              ))}
+            </select>
 
             <button
               onClick={resetRoute}

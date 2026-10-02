@@ -134,6 +134,16 @@ export default function UserProfile() {
               <button
                 onClick={() => {
                   setIsOpen(false);
+                  router.push('/occupancy');
+                }}
+                className='w-full px-4 py-2.5 rounded-lg text-left text-navy-200 hover:bg-navy-800/50 hover:text-white transition-colors flex items-center gap-3'
+              >
+                <i className='fa-solid fa-door-open w-5'></i>
+                <span>Live Occupancy</span>
+              </button>
+              <button
+                onClick={() => {
+                  setIsOpen(false);
                   router.push('/station');
                 }}
                 className='w-full px-4 py-2.5 rounded-lg text-left text-navy-200 hover:bg-navy-800/50 hover:text-white transition-colors flex items-center gap-3'

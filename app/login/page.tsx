@@ -45,7 +45,7 @@ export default function LoginPage() {
         <div className='relative w-full max-w-md'>
           {/* Logo */}
           <div className='text-center mb-8'>
-            <div className='inline-block w-24 h-24 mb-4'>
+            <div className='inline-block w-40 h-40 mb-4'>
               <img
                 src='/hyt_logo.png'
                 alt='HYT Logo'

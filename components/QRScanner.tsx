@@ -5,6 +5,7 @@ import { useRecordsStore } from '@/store/recordsStore';
 import { useAuthStore } from '@/store/authStore';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
+import { routeIdFromQr, getRoute } from '@/lib/wayfinding';
 import QRCode from 'react-qr-code';
 
 // Check-in QR value. Print this on paper (or show it on a laptop) at the
@@ -12,8 +13,14 @@ import QRCode from 'react-qr-code';
 const CHECKIN_QR_VALUE = 'HYT-KIOSK-01-CHECKIN-STATION';
 
 export default function QRScanner() {
-  const { status, clockIn, clockOut, activeRecordId, startRouteView, student } =
-    useClockInStore();
+  const {
+    status,
+    clockIn,
+    clockOut,
+    activeRecordId,
+    startRouteView,
+    setActiveRoute,
+  } = useClockInStore();
   const { addRecord, clockOutRecord } = useRecordsStore();
   const { user } = useAuthStore();
 
@@ -55,6 +62,13 @@ export default function QRScanner() {
         return;
       }
 
+      // The scanned code carries which destination to route to
+      // (HYT-KIOSK-01-CHECKIN-STATION:<routeId>), so set it before clocking in.
+      const scannedRouteId = routeIdFromQr(decodedText);
+      if (scannedRouteId) {
+        setActiveRoute(scannedRouteId);
+      }
+
       // Stop the camera
       await stopScanner();
 
@@ -90,13 +104,15 @@ export default function QRScanner() {
 
       // First scan: clock in + create the DB record. Keep the returned record
       // id so the next scan can close the same row (time_out).
+      // Record the room actually scanned, not the stale store placeholder.
+      const scannedRoute = getRoute(scannedRouteId);
       let recordId: string | undefined;
       if (user) {
         const result = await addRecord({
           userId: user.id,
-          destination: student.destination,
-          building: student.building,
-          room: student.room,
+          destination: scannedRoute.label,
+          building: scannedRoute.building,
+          room: scannedRoute.room,
           timeIn: new Date(),
         });
         recordId = result.recordId;
@@ -106,7 +122,6 @@ export default function QRScanner() {
     },
     [
       user,
-      student,
       status,
       activeRecordId,
       clockIn,
