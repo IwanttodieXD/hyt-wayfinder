@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useAuthStore, type UserRole } from '@/store/authStore';
+import { useAuthStore, type UserRole, DESTINATIONS } from '@/store/authStore';
 import { useUsersStore, type ManagedUser } from '@/store/usersStore';
 import UserProfile from '@/components/UserProfile';
 
@@ -19,9 +19,21 @@ const ROLE_STYLES: Record<UserRole, string> = {
 const INPUT =
   'w-full px-4 py-2.5 rounded-lg bg-navy-950/60 border border-navy-700 text-white placeholder-navy-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors';
 
-type FormState = { name: string; email: string; role: UserRole; password: string };
+type FormState = {
+  name: string;
+  email: string;
+  role: UserRole;
+  password: string;
+  destination: string;
+};
 
-const EMPTY_FORM: FormState = { name: '', email: '', role: 'trainee', password: '' };
+const EMPTY_FORM: FormState = {
+  name: '',
+  email: '',
+  role: 'trainee',
+  password: '',
+  destination: '',
+};
 
 export default function UsersPage() {
   const router = useRouter();
@@ -88,6 +100,7 @@ export default function UsersPage() {
       email: target.email,
       role: target.role,
       password: '',
+      destination: target.destination ?? '',
     });
     setFormError(null);
     setIsModalOpen(true);
@@ -117,6 +130,9 @@ export default function UsersPage() {
         name: form.name.trim(),
         email: form.email.trim(),
         role: form.role,
+        // Normalized to null when cleared, so an admin can remove an
+        // assignment rather than only ever setting one.
+        destination: form.destination || null,
       });
       setIsSaving(false);
       if (!success) return setFormError(error || 'Could not save changes.');
@@ -130,6 +146,7 @@ export default function UsersPage() {
       email: form.email.trim(),
       role: form.role,
       password: form.password,
+      destination: form.destination || undefined,
     });
     setIsSaving(false);
     if (!success) return setFormError(error || 'Could not create the user.');
@@ -260,7 +277,7 @@ export default function UsersPage() {
               <table className='w-full'>
                 <thead className='bg-navy-900/50 border-b border-navy-800'>
                   <tr>
-                    {['User', 'Role', 'Joined', 'Actions'].map((heading) => (
+                    {['User', 'Role', 'Destination', 'Joined', 'Actions'].map((heading) => (
                       <th
                         key={heading}
                         className='px-4 py-3 text-left text-xs font-semibold text-navy-400 uppercase tracking-wider'
@@ -297,6 +314,16 @@ export default function UsersPage() {
                         >
                           {u.role}
                         </span>
+                      </td>
+                      <td className='px-4 py-3'>
+                        {u.destination ? (
+                          <span className='inline-flex items-center gap-1.5 text-navy-300 text-sm'>
+                            <i className='fa-solid fa-location-dot text-orange-400 text-xs'></i>
+                            {u.destination}
+                          </span>
+                        ) : (
+                          <span className='text-navy-600 text-sm'>—</span>
+                        )}
                       </td>
                       <td className='px-4 py-3 whitespace-nowrap text-navy-300 text-sm'>
                         {u.createdAt.toLocaleDateString('en-US', {
@@ -424,6 +451,34 @@ export default function UsersPage() {
                     {ROLES.map((role) => (
                       <option key={role} value={role} className='bg-navy-900'>
                         {role}
+                      </option>
+                    ))}
+                  </select>
+                  <i className='fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-navy-400 text-xs pointer-events-none'></i>
+                </div>
+              </div>
+              <div>
+                <label className='block text-sm font-medium text-navy-200 mb-2'>
+                  Destination
+                </label>
+                <div className='relative'>
+                  <select
+                    value={form.destination}
+                    onChange={(e) =>
+                      setForm({ ...form, destination: e.target.value })
+                    }
+                    className={`w-full px-4 py-2.5 rounded-lg appearance-none bg-navy-950/60 border border-navy-700 text-white focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors cursor-pointer`}
+                  >
+                    <option value='' className='bg-navy-900'>
+                      Not assigned
+                    </option>
+                    {DESTINATIONS.map((destination) => (
+                      <option
+                        key={destination}
+                        value={destination}
+                        className='bg-navy-900'
+                      >
+                        {destination}
                       </option>
                     ))}
                   </select>

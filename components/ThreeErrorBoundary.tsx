@@ -23,7 +23,14 @@ export default class ThreeErrorBoundary extends Component<
   }
 
   render() {
-    if (!this.state.hasError) return this.props.children;
+    // The wrapper div is essential, not cosmetic: a class component renders no
+    // DOM box of its own, so returning `children` directly meant the child's
+    // `h-full` resolved against an auto-height parent. That collapsed the flex
+    // chain and squashed the 3D canvas down to a sliver.
+    if (!this.state.hasError) {
+      return <div className='w-full h-full'>{this.props.children}</div>;
+    }
+
     if (this.props.fallback) return this.props.fallback;
 
     return (

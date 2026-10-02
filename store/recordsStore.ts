@@ -99,15 +99,35 @@ export const useRecordsStore = create<RecordsState>((set, get) => ({
     set({ isLoading: true });
     
     try {
-      // First, get the record to calculate duration
-      const record = get().records.find((r) => r.id === recordId);
-      if (!record) {
-        set({ isLoading: false });
-        return { success: false, error: 'Record not found' };
+      const timeOut = new Date();
+
+      // The duration needs the original time_in. Prefer the in-memory row, but
+      // fall back to reading it from the database: after a page refresh this
+      // store starts empty, and bailing out with "Record not found" would
+      // leave the row stuck on 'active' forever.
+      let timeIn = get().records.find((r) => r.id === recordId)?.timeIn;
+
+      if (!timeIn) {
+        const { data, error: lookupError } = await supabase
+          .from('clock_in_records')
+          .select('time_in')
+          .eq('id', recordId)
+          .maybeSingle();
+
+        if (lookupError) {
+          set({ isLoading: false });
+          return { success: false, error: lookupError.message };
+        }
+
+        if (!data) {
+          set({ isLoading: false });
+          return { success: false, error: 'This clock-in record no longer exists.' };
+        }
+
+        timeIn = new Date(data.time_in);
       }
 
-      const timeOut = new Date();
-      const duration = calculateDuration(record.timeIn, timeOut);
+      const duration = calculateDuration(timeIn, timeOut);
 
       const { error } = await supabase
         .from('clock_in_records')

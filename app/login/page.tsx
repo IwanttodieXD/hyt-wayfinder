@@ -29,7 +29,7 @@ export default function LoginPage() {
       if (user?.role === 'admin') {
         router.push('/admin');
       } else {
-        // Trainer or visitor goes to clock-in page (QR scanner)
+        // Trainer, trainee or visitor goes to the mobile clock-in page
         router.push('/clock-in');
       }
     } else {

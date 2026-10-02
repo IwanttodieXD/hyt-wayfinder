@@ -22,6 +22,7 @@ interface ClockInState {
   clockOut: () => void;
   startRouteView: () => void;
   setStudentName: (name: string) => void;
+  setDestination: (destination: string) => void;
 
   // Route animation state
   isRouteAnimating: boolean;
@@ -50,6 +51,9 @@ export const useClockInStore = create<ClockInState>((set) => ({
   setStudentName: (name) =>
     set((state) => ({ student: { ...state.student, name } })),
 
+  setDestination: (destination) =>
+    set((state) => ({ student: { ...state.student, destination } })),
+
   clockIn: (recordId) =>
     set({
       clockInTime: new Date(),
@@ -75,10 +79,13 @@ export const useClockInStore = create<ClockInState>((set) => ({
 
   setCurrentWaypoint: (waypoint) => set({ currentWaypoint: waypoint }),
 
+  // Rewinds the animation only. It must NOT touch `status`: setting that to
+  // 'clocked-in' would make StudentMobileView swap the 3D view back out for
+  // the QR scanner, taking the Clock Out button with it and leaving the
+  // session with no visible way to end.
   resetRoute: () =>
     set({
       isRouteAnimating: false,
       currentWaypoint: 0,
-      status: 'clocked-in',
     }),
 }));

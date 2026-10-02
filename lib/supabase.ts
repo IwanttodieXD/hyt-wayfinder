@@ -16,6 +16,7 @@ export interface Database {
           name: string;
           role: 'admin' | 'trainer' | 'trainee' | 'visitor';
           avatar: string | null;
+          destination: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -25,6 +26,7 @@ export interface Database {
           name: string;
           role?: 'admin' | 'trainer' | 'trainee' | 'visitor';
           avatar?: string | null;
+          destination?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -33,6 +35,7 @@ export interface Database {
           name?: string;
           role?: 'admin' | 'trainer' | 'trainee' | 'visitor';
           avatar?: string | null;
+          destination?: string | null;
           updated_at?: string;
         };
       };

@@ -1,23 +1,19 @@
 'use client';
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
+import { useRoleGuard } from '@/hooks/useRoleGuard';
+import { useClockInProfile } from '@/hooks/useClockInProfile';
 import StudentMobileView from '@/components/StudentMobileView';
 import UserProfile from '@/components/UserProfile';
 
 export default function VisitorPortal() {
-  const router = useRouter();
-  const { user, isAuthenticated } = useAuthStore();
+  const { user } = useAuthStore();
 
-  useEffect(() => {
-    if (!isAuthenticated || user?.role !== 'visitor') {
-      router.push('/login');
-      return;
-    }
-  }, [isAuthenticated, user, router]);
+  const isAllowed = useRoleGuard(['visitor'], '/admin');
 
-  if (!isAuthenticated || user?.role !== 'visitor') {
+  useClockInProfile();
+
+  if (!isAllowed) {
     return null;
   }
 
@@ -39,7 +35,7 @@ export default function VisitorPortal() {
                 <h1 className='text-white font-bold text-lg leading-none'>
                   Visitor Portal
                 </h1>
-                <p className='text-navy-300 text-xs mt-0.5'>Welcome, {user.name}</p>
+                <p className='text-navy-300 text-xs mt-0.5'>Welcome, {user?.name}</p>
               </div>
             </div>
 

@@ -1,22 +1,16 @@
 'use client';
 
+import KioskStationView from '@/components/KioskStationView';
+import UserProfile from '@/components/UserProfile';
 import { useAuthStore } from '@/store/authStore';
 import { useRoleGuard } from '@/hooks/useRoleGuard';
-import { useClockInProfile } from '@/hooks/useClockInProfile';
-import StudentMobileView from '@/components/StudentMobileView';
-import UserProfile from '@/components/UserProfile';
 
-const ALLOWED_ROLES = ['visitor', 'trainee', 'trainer'] as const;
-
-export default function ClockInPage() {
+// The attendance station is an admin-only tool: it scans other people's QR
+// codes, so it must never be reachable by a visitor, trainee or trainer.
+export default function StationPage() {
   const { user, isAuthenticated } = useAuthStore();
 
-  // Visitors, trainees and trainers clock in from their own phone.
-  // Admins use the station instead, so send them back to the dashboard.
-  const isAllowed = useRoleGuard([...ALLOWED_ROLES], '/admin');
-
-  // Pull the signed-in user's name and destination into the clock-in store.
-  useClockInProfile();
+  const isAllowed = useRoleGuard(['admin'], '/admin');
 
   if (!isAllowed) {
     return null;
@@ -24,10 +18,10 @@ export default function ClockInPage() {
 
   return (
     <>
-      <div className='h-screen bg-navy-950 flex flex-col'>
+      <div className='w-full min-h-screen bg-navy-950 flex flex-col'>
         {/* Header */}
-        <header className='border-b border-navy-800 bg-navy-900/50 flex-shrink-0'>
-          <div className='max-w-7xl mx-auto px-4 py-3 flex items-center justify-between'>
+        <header className='flex-shrink-0 border-b border-navy-800 bg-navy-900/50 px-4 py-3 relative z-50'>
+          <div className='max-w-7xl mx-auto flex items-center justify-between'>
             {/* Logo */}
             <div className='flex items-center gap-3'>
               <div className='w-12 h-12 flex items-center justify-center overflow-hidden'>
@@ -42,7 +36,7 @@ export default function ClockInPage() {
                   Attendance
                 </h1>
                 <p className='text-navy-300 text-xs mt-0.5'>
-                  {isAuthenticated && user ? `${user.name} - ` : ''}My Check-In
+                  {isAuthenticated && user ? `${user.name} - ` : ''}Attendance Station
                 </p>
               </div>
             </div>
@@ -61,11 +55,9 @@ export default function ClockInPage() {
           </div>
         </header>
 
-        {/* Main Content - Full Screen Mobile View. `min-h-0` lets this flex child
-            shrink so the taller route frame fits without pushing the header
-            off screen. */}
-        <main className='flex-1 min-h-0 overflow-hidden'>
-          <StudentMobileView />
+        {/* Main Content - scrolls when content is taller than the viewport */}
+        <main className='flex-1 min-h-0 overflow-y-auto'>
+          <KioskStationView />
         </main>
       </div>
     </>

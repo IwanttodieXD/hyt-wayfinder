@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuthStore, UserRole } from '@/store/authStore';
+import { useAuthStore, UserRole, DESTINATIONS } from '@/store/authStore';
 import Link from 'next/link';
 
 export default function RegisterPage() {
@@ -16,6 +16,7 @@ export default function RegisterPage() {
     password: '',
     confirmPassword: '',
     role: 'visitor' as UserRole,
+    destination: '',
   });
   const [profilePhoto, setProfilePhoto] = useState<string>('');
   const [error, setError] = useState('');
@@ -95,6 +96,7 @@ export default function RegisterPage() {
       password: formData.password,
       role: formData.role,
       avatar: profilePhoto || undefined,
+      destination: formData.destination || undefined,
     });
 
     if (result.success) {
@@ -102,7 +104,7 @@ export default function RegisterPage() {
       if (formData.role === 'admin') {
         router.push('/admin');
       } else {
-        // Trainer or visitor goes to clock-in page (QR scanner)
+        // Trainer, trainee or visitor goes to the mobile clock-in page
         router.push('/clock-in');
       }
     } else {
@@ -332,6 +334,50 @@ export default function RegisterPage() {
                     </p>
                   </button>
                 </div>
+              </div>
+
+              {/* Destination Field */}
+              <div>
+                <label
+                  htmlFor='destination'
+                  className='block text-sm font-medium text-orange-200 mb-2'
+                >
+                  Destination
+                </label>
+                <div className='relative'>
+                  <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
+                    <i className='fa-solid fa-location-dot text-orange-400'></i>
+                  </div>
+                  <select
+                    id='destination'
+                    value={formData.destination}
+                    onChange={(e) =>
+                      setFormData({ ...formData, destination: e.target.value })
+                    }
+                    className='
+                      w-full pl-12 pr-4 py-3 rounded-lg appearance-none
+                      bg-navy-900/80 border-2 border-orange-500/30
+                      text-white placeholder-navy-500
+                      focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500
+                      transition-colors
+                      '
+                  >
+                    <option value=''>Select a destination</option>
+                    {DESTINATIONS.map((destination) => (
+                      <option
+                        key={destination}
+                        value={destination}
+                        className='bg-navy-900'
+                      >
+                        {destination}
+                      </option>
+                    ))}
+                  </select>
+                  <i className='fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-navy-400 text-xs pointer-events-none'></i>
+                </div>
+                <p className='text-navy-400 text-xs mt-2'>
+                  Where you are headed on your first visit.
+                </p>
               </div>
 
               {/* Password Field */}

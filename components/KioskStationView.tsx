@@ -3,6 +3,7 @@
 import { useClockInStore } from '@/store/clockInStore';
 import { useAuthStore } from '@/store/authStore';
 import { useRecordsStore } from '@/store/recordsStore';
+import { supabase } from '@/lib/supabase';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import QRCode from 'react-qr-code';
@@ -74,24 +75,59 @@ export default function KioskStationView() {
 
       const scannedUserId = decodedText.replace('HYT-USER:', '').trim();
 
+      // Falls back to the signed-in admin's name if the lookup below fails.
+      let scannedName = user?.name || 'Student';
+
       // Stop the camera
       await stopScanner();
 
       setScannerActive(false);
 
+      // The kiosk scans other people's codes, so their destination has to come
+      // from their own profile rather than from the signed-in admin's.
+      // Admins can read every profile (RLS), and any failure falls back to the
+      // store's default rather than blocking the clock-in.
+      let scannedDestination = student.destination;
+      try {
+        const { data: scannedProfile } = await supabase
+          .from('users')
+          .select('name, destination')
+          .eq('id', scannedUserId)
+          .maybeSingle();
+
+        if (scannedProfile) {
+          scannedName = scannedProfile.name || 'Student';
+          if (scannedProfile.destination) {
+            scannedDestination = scannedProfile.destination;
+          }
+        }
+      } catch {
+        // Keep the fallback; a clock-in is more important than the label.
+      }
+
       // Toggle: if already clocked in -> clock out; otherwise -> clock in
       if (activeRecordId && status !== 'not-clocked-in') {
+        const closed = await clockOutRecord(activeRecordId);
+
+        if (!closed.success) {
+          // Leave the kiosk session untouched so the admin can retry; don't
+          // claim a clock-out that never reached the database.
+          setScanError(closed.error || 'Could not clock out. Please scan again.');
+          setScannerActive(false);
+          handledRef.current = false;
+          return;
+        }
+
         setScanResult({
-          name: user?.name || 'Student',
+          name: scannedName,
           id: scannedUserId,
           action: 'out',
         });
 
-        await clockOutRecord(activeRecordId);
         clockOut();
       } else {
         setScanResult({
-          name: user?.name || 'Student',
+          name: scannedName,
           id: scannedUserId,
           action: 'in',
         });
@@ -100,7 +136,7 @@ export default function KioskStationView() {
         if (user) {
           const result = await addRecord({
             userId: user.id,
-            destination: student.destination,
+            destination: scannedDestination,
             building: student.building,
             room: student.room,
             timeIn: new Date(),

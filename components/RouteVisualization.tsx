@@ -3,7 +3,6 @@
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, Line, PerspectiveCamera } from '@react-three/drei';
 import { useClockInStore } from '@/store/clockInStore';
-import { useRecordsStore } from '@/store/recordsStore';
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { useWebGLSupport } from '@/lib/useWebGLSupport';
@@ -357,10 +356,7 @@ export default function RouteVisualization() {
     setRouteAnimating,
     setCurrentWaypoint,
     resetRoute,
-    clockOut,
-    activeRecordId,
   } = useClockInStore();
-  const { clockOutRecord } = useRecordsStore();
   const [cameraMode, setCameraMode] = useState<'free' | 'follow'>('follow');
 
   useEffect(() => {
@@ -393,14 +389,6 @@ export default function RouteVisualization() {
     setCameraMode((prev) => (prev === 'free' ? 'follow' : 'free'));
   };
 
-  // Close the DB record (time_out) before clearing local state.
-  const handleClockOut = async () => {
-    if (activeRecordId) {
-      await clockOutRecord(activeRecordId);
-    }
-    clockOut();
-  };
-
   const webgl = useWebGLSupport();
 
   // Never mount <Canvas> until WebGL support is confirmed. The probe runs in an
@@ -430,100 +418,111 @@ export default function RouteVisualization() {
 
   return (
     <div className='theme-fixed-light w-full h-full flex flex-col relative'>
-      {/* 3D Canvas */}
-      <Canvas
-        camera={{ position: [-10, 15, 20], fov: 60 }}
-        className='bg-[#eef2f7] flex-1 min-h-0'
-        shadows
-      >
+      {/* Width-driven square viewport. No `max-h-full` here on purpose: it
+          clamped the height to whatever was left over after the header and
+          controls, which collapsed the square back into a short wide
+          rectangle. Driving purely from `w-full` guarantees a true 1:1 box
+          that spans edge to edge. The parent clips, and StudentMobileView
+          gives the route view a taller frame so the square has room. */}
+      <div className='flex-1 min-h-0 flex items-center justify-center mb-3 overflow-hidden'>
+        <div className='relative w-full aspect-square'>
+          {/* 3D Canvas */}
+          <Canvas
+            camera={{ position: [-10, 15, 20], fov: 60 }}
+            className='h-full w-full bg-[#eef2f7]'
+            shadows
+          >
         <color attach='background' args={['#eef2f7']} />
-        <fog attach='fog' args={['#eef2f7', 15, 60]} />
+          <color attach='background' args={['#eef2f7']} />
+          <fog attach='fog' args={['#eef2f7', 15, 60]} />
 
-        {/* Lighting */}
-        <ambientLight intensity={0.8} />
-        <directionalLight
-          position={[10, 20, 10]}
-          intensity={1}
-          color='#ffffff'
-          castShadow
-        />
-        <pointLight
-          position={[10, 15, 10]}
-          intensity={0.8}
-          color='#0891b2'
-          distance={20}
-        />
-        <pointLight
-          position={[20, 12, 10]}
-          intensity={0.6}
-          color='#f59e0b'
-          distance={15}
-        />
-        <pointLight position={[0, 2, 0]} intensity={0.4} color='#0891b2' distance={10} />
+          {/* Lighting */}
+          <ambientLight intensity={0.8} />
+          <directionalLight
+            position={[10, 20, 10]}
+            intensity={1}
+            color='#ffffff'
+            castShadow
+          />
+          <pointLight
+            position={[10, 15, 10]}
+            intensity={0.8}
+            color='#0891b2'
+            distance={20}
+          />
+          <pointLight
+            position={[20, 12, 10]}
+            intensity={0.6}
+            color='#f59e0b'
+            distance={15}
+          />
+          <pointLight position={[0, 2, 0]} intensity={0.4} color='#0891b2' distance={10} />
 
-        {/* Scene elements */}
-        <FloorGrid />
-        <BuildingStructure />
-        <AnimatedPath />
-        <RouteMarkers />
-        <WalkingAvatar />
-        <AnimatedCamera enabled={cameraMode === 'follow'} />
+          {/* Scene elements */}
+          <FloorGrid />
+          <BuildingStructure />
+          <AnimatedPath />
+          <RouteMarkers />
+          <WalkingAvatar />
+          <AnimatedCamera enabled={cameraMode === 'follow'} />
 
-        <OrbitControls
-          enableZoom={true}
-          enablePan={true}
-          minDistance={5}
-          maxDistance={50}
-          maxPolarAngle={Math.PI / 2.1}
-        />
-      </Canvas>
+          <OrbitControls
+            enableZoom={true}
+            enablePan={true}
+            minDistance={5}
+            maxDistance={50}
+            maxPolarAngle={Math.PI / 2.1}
+          />
+        </Canvas>
 
-      {/* HUD Controls Overlay */}
-      <div className='absolute inset-0 pointer-events-none'>
-        {/* Top HUD - row stays click-through so the canvas remains draggable;
-            the panels themselves re-enable pointer events. */}
-        <div className='absolute top-4 left-4 right-4 flex items-start justify-between pointer-events-none gap-3'>
-          {/* Stage Indicator */}
-          <div className='glass-panel border-navy-700 px-4 py-3 rounded-lg pointer-events-auto'>
-            <div className='flex items-center gap-3'>
-              <div className='w-10 h-10 rounded-lg bg-orange-500/20 flex items-center justify-center'>
-                <i className='fa-solid fa-route text-orange-400'></i>
+        {/* HUD Controls Overlay */}
+        <div className='absolute inset-0 pointer-events-none'>
+          {/* Top HUD - row stays click-through so the canvas remains draggable;
+              the panels themselves re-enable pointer events. */}
+          <div className='absolute top-4 left-4 right-4 flex items-start justify-between pointer-events-none gap-3'>
+            {/* Stage Indicator */}
+            <div className='glass-panel border-navy-700 px-4 py-3 rounded-lg pointer-events-auto'>
+              <div className='flex items-center gap-3'>
+                <div className='w-10 h-10 rounded-lg bg-orange-500/20 flex items-center justify-center'>
+                  <i className='fa-solid fa-route text-orange-400'></i>
+                </div>
+                <div>
+                  <p className='text-navy-300 text-xs mb-0.5'>Current Stage</p>
+                  <p className='text-white font-bold text-sm'>
+                    {waypoints[Math.min(currentWaypoint, waypoints.length - 1)].label}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className='text-navy-300 text-xs mb-0.5'>Current Stage</p>
+            </div>
+
+            {/* Progress */}
+            <div className='glass-panel border-navy-700 px-4 py-3 rounded-lg flex items-center gap-3 pointer-events-auto'>
+              <div className='text-right'>
+                <p className='text-navy-300 text-xs mb-0.5'>Progress</p>
                 <p className='text-white font-bold text-sm'>
-                  {waypoints[Math.min(currentWaypoint, waypoints.length - 1)].label}
+                  {currentWaypoint + 1} / {waypoints.length}
                 </p>
               </div>
+              <div className='h-8 w-px bg-navy-700'></div>
+              <button
+                onClick={toggleCameraMode}
+                className='px-3 py-1.5 rounded-lg bg-navy-700 hover:bg-navy-600 transition-colors text-xs font-semibold text-navy-200'
+                title={
+                  cameraMode === 'follow'
+                    ? 'Switch to Free Camera'
+                    : 'Switch to Follow Camera'
+                }
+              >
+                <i
+                  className={`fa-solid ${cameraMode === 'follow' ? 'fa-video' : 'fa-hand'}`}
+                ></i>
+              </button>
             </div>
           </div>
-
-          {/* Progress */}
-          <div className='glass-panel border-navy-700 px-4 py-3 rounded-lg flex items-center gap-3 pointer-events-auto'>
-            <div className='text-right'>
-              <p className='text-navy-300 text-xs mb-0.5'>Progress</p>
-              <p className='text-white font-bold text-sm'>
-                {currentWaypoint + 1} / {waypoints.length}
-              </p>
-            </div>
-            <div className='h-8 w-px bg-navy-700'></div>
-            <button
-              onClick={toggleCameraMode}
-              className='px-3 py-1.5 rounded-lg bg-navy-700 hover:bg-navy-600 transition-colors text-xs font-semibold text-navy-200'
-              title={
-                cameraMode === 'follow'
-                  ? 'Switch to Free Camera'
-                  : 'Switch to Follow Camera'
-              }
-            >
-              <i
-                className={`fa-solid ${cameraMode === 'follow' ? 'fa-video' : 'fa-hand'}`}
-              ></i>
-            </button>
-          </div>
-        </div>
 
         {/* Waypoint Steps - REMOVED */}
+          </div>
+        </div>
       </div>
 
       {/* Controls sit BELOW the canvas so they never cover the 3D view. */}
@@ -549,29 +548,13 @@ export default function RouteVisualization() {
             <button
               onClick={resetRoute}
               className='
-                px-4 py-3 rounded-lg font-semibold
+                px-5 py-3 rounded-lg font-semibold text-sm
                 bg-navy-700 text-navy-200 hover:bg-navy-600 transition-colors
                 '
             >
-              <i className='fa-solid fa-rotate-left'></i>
+              Return
             </button>
           </div>
-        </div>
-
-        {/* Clock Out is its own row, separate from the playback controls, so
-            ending a visit never sits next to them. */}
-        <div>
-          <button
-            onClick={handleClockOut}
-            className='
-              w-full py-2.5 rounded-lg font-semibold text-sm
-              bg-red-600 hover:bg-red-700 text-paper
-              transition-colors duration-150
-              '
-          >
-            <i className='fa-solid fa-right-from-bracket mr-2'></i>
-            Clock Out
-          </button>
         </div>
       </div>
     </div>

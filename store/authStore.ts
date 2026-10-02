@@ -4,12 +4,28 @@ import { supabase } from '@/lib/supabase';
 
 export type UserRole = 'admin' | 'trainer' | 'trainee' | 'visitor';
 
+/**
+ * Destinations a user can be assigned to. Shared by the register form and the
+ * admin user-management form so both offer the same list.
+ */
+export const DESTINATIONS = [
+  'TESDA Electronics Lab',
+  'Computer Laboratory',
+  'Main Office',
+  'Library',
+  'Conference Room A',
+  'Training Hall',
+] as const;
+
+export type Destination = (typeof DESTINATIONS)[number];
+
 export interface User {
   id: string;
   email: string;
   name: string;
   role: UserRole;
   avatar?: string;
+  destination?: string;
   qrCode?: string;
   createdAt: Date;
 }
@@ -30,6 +46,7 @@ interface AuthState {
     name: string;
     role: UserRole;
     avatar?: string;
+    destination?: string;
   }) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   updateProfile: (updates: Partial<User>) => void;
@@ -82,6 +99,7 @@ export const useAuthStore = create<AuthState>()(
             name: userData.name,
             role: userData.role as UserRole,
             avatar: userData.avatar || undefined,
+            destination: userData.destination || undefined,
             qrCode: `HYT-USER:${userData.id}`,
             createdAt: new Date(userData.created_at),
           };
@@ -148,6 +166,9 @@ export const useAuthStore = create<AuthState>()(
                 name: data.name,
                 role: data.role,
                 avatar,
+                // Left out entirely when blank, so an existing value survives
+                // rather than being overwritten with NULL.
+                ...(data.destination ? { destination: data.destination } : {}),
               },
               { onConflict: 'id' }
             )
@@ -200,6 +221,7 @@ export const useAuthStore = create<AuthState>()(
             name: userData.name,
             role: userData.role as UserRole,
             avatar: userData.avatar || undefined,
+            destination: userData.destination || undefined,
             qrCode: `HYT-USER:${userData.id}`,
             createdAt: new Date(userData.created_at),
           };
@@ -259,6 +281,7 @@ export const useAuthStore = create<AuthState>()(
             name: userData.name,
             role: userData.role as UserRole,
             avatar: userData.avatar || undefined,
+            destination: userData.destination || undefined,
             qrCode: `HYT-USER:${userData.id}`,
             createdAt: new Date(userData.created_at),
           };

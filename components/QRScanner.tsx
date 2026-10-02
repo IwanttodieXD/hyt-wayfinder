@@ -63,9 +63,26 @@ export default function QRScanner() {
 
       // Already clocked in? The same check-in QR scans you back out.
       if (status !== 'not-clocked-in') {
-        if (activeRecordId) {
-          await clockOutRecord(activeRecordId);
+        if (!activeRecordId) {
+          // Should not happen, but without a record id there is no row to
+          // close. Say so instead of silently showing "clocked out".
+          setScanError('Could not clock out: no active check-in was found.');
+          handledRef.current = false;
+          setTimeout(() => setScanning(false), 1200);
+          return;
         }
+
+        const result = await clockOutRecord(activeRecordId);
+
+        if (!result.success) {
+          // Keep the session marked as clocked in so the next scan retries
+          // rather than losing the record.
+          setScanError(result.error || 'Could not clock out. Please try again.');
+          handledRef.current = false;
+          setTimeout(() => setScanning(false), 2000);
+          return;
+        }
+
         clockOut();
         setTimeout(() => setScanning(false), 1200);
         return;

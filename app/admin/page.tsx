@@ -96,7 +96,7 @@ export default function AdminDashboard() {
                   <i className='fa-solid fa-user-check text-orange-400 text-xl'></i>
                 </div>
                 <Link
-                  href='/clock-in'
+                  href='/station'
                   className='text-navy-400 hover:text-orange-300 transition-colors'
                 >
                   <i className='fa-solid fa-arrow-right'></i>
@@ -141,7 +141,7 @@ export default function AdminDashboard() {
             </Link>
 
             <Link
-              href='/clock-in'
+              href='/station'
               className='glass-panel border-navy-800 p-6 rounded-lg hover:border-orange-500/50 transition-colors group'
             >
               <div className='flex items-center gap-3'>
@@ -149,8 +149,8 @@ export default function AdminDashboard() {
                   <i className='fa-solid fa-qrcode text-orange-400 text-2xl'></i>
                 </div>
                 <div>
-                  <h3 className='text-white font-semibold text-lg mb-1'>Attendance</h3>
-                  <p className='text-navy-300 text-sm'>Check-in / Check-out</p>
+                  <h3 className='text-white font-semibold text-lg mb-1'>Station</h3>
+                  <p className='text-navy-300 text-sm'>Scan to check-in / check-out</p>
                 </div>
               </div>
             </Link>

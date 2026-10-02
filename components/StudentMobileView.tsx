@@ -1,32 +1,34 @@
 'use client';
 
-import { useState } from 'react';
 import { useClockInStore } from '@/store/clockInStore';
-import { useRecordsStore } from '@/store/recordsStore';
 import { useAuthStore } from '@/store/authStore';
 import QRScanner from './QRScanner';
 import RouteVisualization from './RouteVisualization';
 import ThreeErrorBoundary from './ThreeErrorBoundary';
 
 export default function StudentMobileView() {
-  const { status, student, clockInTime, clockOut, activeRecordId } = useClockInStore();
-  const { clockOutRecord } = useRecordsStore();
+  const { status, student, clockInTime } = useClockInStore();
   const { user } = useAuthStore();
-  const [clockingOut, setClockingOut] = useState(false);
 
-  const handleClockOut = async () => {
-    setClockingOut(true);
-    if (activeRecordId) {
-      await clockOutRecord(activeRecordId);
-    }
-    clockOut();
-    setClockingOut(false);
-  };
+  // A destination only counts as assigned when the admin/user profile actually
+  // set one; the store still holds a placeholder default before then.
+  const hasDestination = !!user?.destination;
+
+  // The 3D canvas is a full-width square, so its size is driven by the frame
+  // width. A taller/wider frame during the route is what actually makes the
+  // 3D window bigger - on the scanner the frame keeps its phone dimensions.
+  const showingRoute = status === 'viewing-route';
 
   return (
     <div className='w-full min-h-full bg-navy-950 flex items-center justify-center p-4'>
       {/* Mobile Device Frame */}
-      <div className='relative w-full max-w-md h-full max-h-[800px] min-h-[560px] bg-navy-900 rounded-lg border-4 border-navy-800 overflow-hidden flex flex-col'>
+      <div
+        className={`relative w-full h-full bg-navy-900 rounded-lg border-4 border-navy-800 overflow-hidden flex flex-col transition-all duration-300 ${
+          showingRoute
+            ? 'max-w-2xl max-h-[min(1150px,calc(100dvh-5rem))] min-h-[680px]'
+            : 'max-w-md max-h-[800px] min-h-[560px]'
+        }`}
+      >
         {/* App Header */}
         <div className='bg-navy-900 px-4 py-3 border-b border-navy-800/50'>
           <div className='flex items-center justify-between mb-3'>
@@ -64,10 +66,12 @@ export default function StudentMobileView() {
               <div className='flex-1 min-w-0'>
                 <p className='text-navy-300 text-xs mb-1'>Assigned Destination</p>
                 <h3 className='text-white font-semibold text-sm leading-tight mb-1'>
-                  {student.destination}
+                  {hasDestination ? student.destination : 'Not assigned yet'}
                 </h3>
                 <p className='text-navy-500 text-xs'>
-                  {student.building}, {student.room}
+                  {hasDestination
+                    ? `${student.building}, ${student.room}`
+                    : 'Ask an administrator to set your destination.'}
                 </p>
               </div>
             </div>
@@ -99,27 +103,8 @@ export default function StudentMobileView() {
           )}
         </div>
 
-        {/* Fallback Clock-Out button (when clocked in, not viewing route) */}
-        {status === 'clocked-in' && (
-          <div className='flex-shrink-0 px-4 pb-1'>
-            <button
-              onClick={handleClockOut}
-              disabled={clockingOut}
-              className='
-                w-full py-2.5 rounded-lg font-bold text-sm text-paper
-                bg-red-600 hover:bg-red-700
-                transition-colors duration-150
-                disabled:opacity-50 disabled:cursor-not-allowed
-                flex items-center justify-center gap-2
-                '
-            >
-              <i
-                className={`fa-solid ${clockingOut ? 'fa-spinner fa-spin' : 'fa-right-from-bracket'}`}
-              ></i>
-              {clockingOut ? 'Clocking Out...' : 'Clock Out'}
-            </button>
-          </div>
-        )}
+        {/* Clock-out happens by scanning the check-in QR code again, or with the
+            Clock Out button on the 3D route screen. */}
 
         {/* Home Indicator (iOS style) */}
         <div className='bg-navy-950 py-2 flex items-center justify-center'>

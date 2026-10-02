@@ -8,6 +8,7 @@ export interface ManagedUser {
   name: string;
   role: UserRole;
   avatar: string | null;
+  destination: string | null;
   createdAt: Date;
 }
 
@@ -16,6 +17,7 @@ export interface NewUserInput {
   name: string;
   role: UserRole;
   password: string;
+  destination?: string;
 }
 
 interface UsersState {
@@ -27,7 +29,7 @@ interface UsersState {
   createUser: (input: NewUserInput) => Promise<{ success: boolean; error?: string }>;
   updateUser: (
     id: string,
-    updates: Partial<Pick<ManagedUser, 'name' | 'role' | 'email'>>
+    updates: Partial<Pick<ManagedUser, 'name' | 'role' | 'email' | 'destination'>>
   ) => Promise<{ success: boolean; error?: string }>;
   deleteUser: (id: string) => Promise<{ success: boolean; error?: string }>;
   getUserCount: () => number;
@@ -41,6 +43,7 @@ function mapRow(row: any): ManagedUser {
     name: row.name,
     role: row.role as UserRole,
     avatar: row.avatar ?? null,
+    destination: row.destination ?? null,
     createdAt: new Date(row.created_at),
   };
 }

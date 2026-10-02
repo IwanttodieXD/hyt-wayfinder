@@ -83,6 +83,7 @@ CREATE TABLE public.users (
   name TEXT NOT NULL,
   role TEXT NOT NULL CHECK (role IN ('admin', 'trainer', 'visitor')),
   avatar TEXT,
+  destination TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -157,6 +158,12 @@ Delete removes the login, which cascades to the profile and clock-in records.
 Admins cannot delete their own account.
 
 ## User management (admin) - run this in the Supabase SQL editor
+
+-- 0. Destination assignment, used by the register form and the admin
+--    Add User / Edit User form. Nullable so existing rows are left untouched
+--    and a user can exist without one; IF NOT EXISTS makes it safe to re-run.
+ALTER TABLE public.users
+  ADD COLUMN IF NOT EXISTS destination TEXT;
 
 -- 1. The original CHECK constraint omitted 'trainee', which the app uses.
 --    Drop and recreate it so trainee accounts can exist.

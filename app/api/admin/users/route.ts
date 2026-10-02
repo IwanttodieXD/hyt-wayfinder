@@ -102,7 +102,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { email, name, role, password } = body ?? {};
+  const { email, name, role, password, destination } = body ?? {};
 
   if (!email || !name || !role || !password) {
     return NextResponse.json(
@@ -121,6 +121,15 @@ export async function POST(request: Request) {
   if (!['admin', 'trainer', 'trainee', 'visitor'].includes(role)) {
     return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
   }
+
+  // Optional, but must be a string when present so a stray object or number
+  // can't reach the column.
+  if (destination !== undefined && destination !== null && typeof destination !== 'string') {
+    return NextResponse.json({ error: 'Invalid destination' }, { status: 400 });
+  }
+
+  const trimmedDestination =
+    typeof destination === 'string' ? destination.trim() : '';
 
   // 1. Create the login. email_confirm skips the verification email step,
   //    which suits an admin provisioning accounts by hand.
@@ -151,6 +160,9 @@ export async function POST(request: Request) {
       email,
       name,
       role,
+      // Omitted when blank so the column falls back to its NULL default
+      // instead of being written as an empty string.
+      ...(trimmedDestination ? { destination: trimmedDestination } : {}),
     },
     { onConflict: 'id' }
   );
