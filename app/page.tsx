@@ -22,8 +22,8 @@ export default function HomePage() {
       if (user.role === 'admin') {
         router.push('/admin');
       } else {
-        // Trainer, trainee or visitor goes to the mobile clock-in page
-        router.push('/clock-in');
+        // Trainer, trainee or visitor goes to the mobile check-in page
+        router.push('/check-in');
       }
     } else {
       // Not logged in, redirect to login page

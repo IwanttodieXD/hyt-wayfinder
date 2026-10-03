@@ -8,14 +8,14 @@ import UserProfile from '@/components/UserProfile';
 
 const ALLOWED_ROLES = ['visitor', 'trainee', 'trainer'] as const;
 
-export default function ClockInPage() {
+export default function CheckInPage() {
   const { user, isAuthenticated } = useAuthStore();
 
-  // Visitors, trainees and trainers clock in from their own phone.
+  // Visitors, trainees and trainers check in from their own phone.
   // Admins use the station instead, so send them back to the dashboard.
   const isAllowed = useRoleGuard([...ALLOWED_ROLES], '/admin');
 
-  // Pull the signed-in user's name and destination into the clock-in store.
+  // Pull the signed-in user's name and destination into the check-in store.
   useClockInProfile();
 
   if (!isAllowed) {

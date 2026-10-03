@@ -46,12 +46,12 @@ export default function StudentMobileView() {
               {status === 'not-clocked-in' ? (
                 <>
                   <i className='fa-solid fa-circle-xmark mr-1'></i>
-                  Not Clocked In
+                  Not Checked In
                 </>
               ) : (
                 <>
                   <i className='fa-solid fa-circle-check mr-1'></i>
-                  Clocked In
+                  Checked In
                 </>
               )}
             </div>
@@ -77,12 +77,12 @@ export default function StudentMobileView() {
             </div>
           </div>
 
-          {/* Clock-in Time */}
+          {/* Check-in Time */}
           {clockInTime && (
             <div className='mt-3 flex items-center justify-center gap-2 text-xs text-navy-300'>
-              <i className='fa-solid fa-clock'></i>
+              <i className='fa-regular fa-clock'></i>
               <span>
-                Clocked in at{' '}
+                Checked in at{' '}
                 {clockInTime.toLocaleTimeString('en-US', {
                   hour: '2-digit',
                   minute: '2-digit',
@@ -103,8 +103,8 @@ export default function StudentMobileView() {
           )}
         </div>
 
-        {/* Clock-out happens by scanning the check-in QR code again, or with the
-            Clock Out button on the 3D route screen. */}
+        {/* Check-out happens by scanning the check-in QR code again, or with the
+            Check Out button on the 3D route screen. */}
 
         {/* Home Indicator (iOS style) */}
         <div className='bg-navy-950 py-2 flex items-center justify-center'>

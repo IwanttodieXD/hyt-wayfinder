@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { useRecordsStore } from '@/store/recordsStore';
 import { useRoomPresenceStore } from '@/store/roomPresenceStore';
-import { DESTINATION_ROUTES } from '@/lib/wayfinding';
+import { useRoomsStore } from '@/store/roomsStore';
 
 /**
  * Live room-by-room occupancy: who is inside which room right now.
@@ -11,43 +11,49 @@ import { DESTINATION_ROUTES } from '@/lib/wayfinding';
  * Two numbers, and they answer different questions:
  *
  * - "Inside the building" comes from attendance (records with no time_out).
- *   Someone who has clocked in but not scanned a room door yet counts here.
+ *   Someone who has checked in but not scanned a room door yet counts here.
  * - The per-room breakdown comes from room presence, which only records a room
  *   once the person has actually scanned that room's door code.
  *
- * Rooms come from the route registry so empty ones still appear, which makes it
- * obvious at a glance which rooms are free. A room that isn't in the registry
- * is appended as "Unassigned" rather than dropped, so scanned-but-unknown rooms
- * are still visible instead of silently disappearing.
+ * Rooms come from the `rooms` table so empty ones still appear, which makes it
+ * obvious at a glance which rooms are free. A presence row whose room is no
+ * longer active is still shown rather than dropped, so scanned-but-retired rooms
+ * stay visible instead of silently disappearing.
  */
 export default function RoomOccupancy() {
   const { getActiveCount, fetchTodayRecords } = useRecordsStore();
   const { getOccupancyByRoom, fetchTodayPresence } = useRoomPresenceStore();
+  const { getActiveRooms, getAllRooms, fetchRooms } = useRoomsStore();
 
   useEffect(() => {
     fetchTodayRecords();
     fetchTodayPresence();
-  }, [fetchTodayRecords, fetchTodayPresence]);
+    fetchRooms();
+  }, [fetchTodayRecords, fetchTodayPresence, fetchRooms]);
 
-  // Everyone clocked in, regardless of whether they've scanned a door yet.
+  // Everyone checked in, regardless of whether they've scanned a door yet.
   const insideCount = getActiveCount();
 
+  // Presence is grouped by room id. Active rooms come first so the grid reads in
+  // building order; anything left over is a room that has been retired but still
+  // has people recorded against it, which is worth showing rather than hiding.
   const occupancy = (() => {
-    const byRoom = new Map(getOccupancyByRoom().map((r) => [r.room, r]));
+    const byRoom = new Map(getOccupancyByRoom().map((r) => [r.roomId, r]));
 
-    const known = DESTINATION_ROUTES.map((route) => ({
-      id: route.id,
-      label: route.label,
-      room: route.room,
-      people: byRoom.get(route.room)?.people ?? [],
+    const known = getActiveRooms().map((room) => ({
+      id: room.id,
+      label: room.name,
+      room: room.roomNumber,
+      people: byRoom.get(room.id)?.people ?? [],
     }));
 
+    const activeIds = new Set(getActiveRooms().map((r) => r.id));
     const extra = Array.from(byRoom.entries())
-      .filter(([room]) => !DESTINATION_ROUTES.some((r) => r.room === room))
-      .map(([room, entry]) => ({
-        id: room,
+      .filter(([roomId]) => !activeIds.has(roomId))
+      .map(([roomId, entry]) => ({
+        id: roomId,
         label: entry.roomLabel,
-        room,
+        room: entry.room,
         people: entry.people,
       }));
 

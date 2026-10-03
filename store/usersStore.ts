@@ -7,9 +7,9 @@ export interface ManagedUser {
   email: string;
   name: string;
   role: UserRole;
-  avatar: string | null;
-  destination: string | null;
   createdAt: Date;
+  /** Set when the account was retired. History is kept; the row is not deleted. */
+  archivedAt: Date | null;
 }
 
 export interface NewUserInput {
@@ -17,7 +17,12 @@ export interface NewUserInput {
   name: string;
   role: UserRole;
   password: string;
-  destination?: string;
+}
+
+export interface UpdateUserInput {
+  name: string;
+  email: string;
+  role: UserRole;
 }
 
 interface UsersState {
@@ -29,9 +34,10 @@ interface UsersState {
   createUser: (input: NewUserInput) => Promise<{ success: boolean; error?: string }>;
   updateUser: (
     id: string,
-    updates: Partial<Pick<ManagedUser, 'name' | 'role' | 'email' | 'destination'>>
+    updates: UpdateUserInput
   ) => Promise<{ success: boolean; error?: string }>;
-  deleteUser: (id: string) => Promise<{ success: boolean; error?: string }>;
+  /** Retires the account by setting `archived_at`. Nothing is deleted. */
+  archiveUser: (id: string) => Promise<{ success: boolean; error?: string }>;
   getUserCount: () => number;
   getUsersByRole: (role: UserRole) => number;
 }
@@ -42,9 +48,42 @@ function mapRow(row: any): ManagedUser {
     email: row.email,
     name: row.name,
     role: row.role as UserRole,
-    avatar: row.avatar ?? null,
-    destination: row.destination ?? null,
     createdAt: new Date(row.created_at),
+    archivedAt: row.archived_at ? new Date(row.archived_at) : null,
+  };
+}
+
+/**
+ * Posts JSON to the admin route with the caller's access token attached.
+ *
+ * The token is required: without it, RLS evaluates `auth.uid()` as NULL and the
+ * admin check inside the route fails. Creating and archiving accounts also need
+ * the service role key server-side, which is why they cannot be done from the
+ * browser directly.
+ */
+async function adminRequest(
+  path: string,
+  method: 'POST' | 'PATCH' | 'DELETE',
+  body?: unknown
+): Promise<{ ok: boolean; status: number; error?: string }> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+
+  const res = await fetch(path, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+
+  const payload = await res.json().catch(() => ({}));
+
+  return {
+    ok: res.ok,
+    status: res.status,
+    error: res.ok ? undefined : payload.error || `Request failed (${res.status})`,
   };
 }
 
@@ -57,9 +96,12 @@ export const useUsersStore = create<UsersState>()((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
+      // Archived accounts are hidden by default: the admin list is about who is
+      // currently active. They are still readable for attendance history.
       const { data, error } = await supabase
         .from('users')
         .select('*')
+        .is('archived_at', null)
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -73,30 +115,18 @@ export const useUsersStore = create<UsersState>()((set, get) => ({
     }
   },
 
-  // Creating an account needs a real auth.users row, which the anon key
-  // cannot make. This goes through a server route using the service role
-  // key. Until SUPABASE_SERVICE_ROLE_KEY is set, that route returns 501.
+  // Creating an account needs a real auth.users row, which the anon key cannot
+  // make. This goes through a server route using the service role key. Until
+  // SUPABASE_SERVICE_ROLE_KEY is set, that route returns 501.
   createUser: async (input) => {
     set({ isLoading: true, error: null });
 
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
+      const { ok, error } = await adminRequest('/api/admin/users', 'POST', input);
 
-      const res = await fetch('/api/admin/users', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify(input),
-      });
-
-      const payload = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        set({ isLoading: false, error: payload.error || 'Failed to create user' });
-        return { success: false, error: payload.error || 'Failed to create user' };
+      if (!ok) {
+        set({ isLoading: false, error: error || 'Failed to create user' });
+        return { success: false, error: error || 'Failed to create user' };
       }
 
       // Refresh so the new row lands in the right sort position.
@@ -110,26 +140,35 @@ export const useUsersStore = create<UsersState>()((set, get) => ({
     }
   },
 
-  // Update only touches public.users, so the anon key + RLS is enough.
+  // Goes through the server route rather than writing with the anon key: RLS
+  // only permits updating your own row, so editing another user directly from
+  // the browser would be rejected by the database.
   updateUser: async (id, updates) => {
     set({ isLoading: true, error: null });
 
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .update({ ...updates, updated_at: new Date().toISOString() })
-        .eq('id', id)
-        .select()
-        .single();
+      const { ok, error } = await adminRequest('/api/admin/users', 'PATCH', {
+        id,
+        ...updates,
+      });
 
-      if (error) {
-        set({ isLoading: false, error: error.message });
-        return { success: false, error: error.message };
+      if (!ok) {
+        set({ isLoading: false, error: error || 'Failed to update user' });
+        return { success: false, error: error || 'Failed to update user' };
       }
 
       // Keep local state in sync without a full refetch.
       set((state) => ({
-        users: state.users.map((u) => (u.id === id ? mapRow(data) : u)),
+        users: state.users.map((u) =>
+          u.id === id
+            ? {
+                ...u,
+                name: updates.name,
+                email: updates.email,
+                role: updates.role,
+              }
+            : u
+        ),
         isLoading: false,
       }));
 
@@ -141,25 +180,21 @@ export const useUsersStore = create<UsersState>()((set, get) => ({
     }
   },
 
-  // Deleting must remove the auth.users row too, so it needs the service
-  // role key via the server route.
-  deleteUser: async (id) => {
+  // Archiving, not deleting. The new schema forbids deleting a user outright:
+  // `users` is referenced by attendance with ON DELETE RESTRICT and no DELETE
+  // policy is granted, so history would be destroyed (or the delete rejected).
+  archiveUser: async (id) => {
     set({ isLoading: true, error: null });
 
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
+      const { ok, error } = await adminRequest(
+        `/api/admin/users?id=${encodeURIComponent(id)}`,
+        'DELETE'
+      );
 
-      const res = await fetch(`/api/admin/users?id=${encodeURIComponent(id)}`, {
-        method: 'DELETE',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-
-      const payload = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        set({ isLoading: false, error: payload.error || 'Failed to delete user' });
-        return { success: false, error: payload.error || 'Failed to delete user' };
+      if (!ok) {
+        set({ isLoading: false, error: error || 'Failed to archive user' });
+        return { success: false, error: error || 'Failed to archive user' };
       }
 
       set((state) => ({
@@ -169,7 +204,7 @@ export const useUsersStore = create<UsersState>()((set, get) => ({
 
       return { success: true };
     } catch (err: any) {
-      const message = err?.message || 'Failed to delete user';
+      const message = err?.message || 'Failed to archive user';
       set({ isLoading: false, error: message });
       return { success: false, error: message };
     }

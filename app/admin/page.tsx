@@ -74,7 +74,7 @@ export default function AdminDashboard() {
               here — this dashboard is about today's movement through the
               building, not the size of the account list. */}
           <div className='grid grid-cols-1 md:grid-cols-2 gap-3 mb-8'>
-            {/* Active Clock-Ins */}
+            {/* Active Check-Ins */}
             <div className='glass-panel border-navy-800 p-6 rounded-lg'>
               <div className='flex items-center justify-between mb-4'>
                 <div className='w-12 h-12 rounded-lg bg-green-500/20 flex items-center justify-center'>
@@ -87,7 +87,7 @@ export default function AdminDashboard() {
                   </span>
                 </div>
               </div>
-              <p className='text-navy-300 text-sm mb-1'>Active Clock-Ins</p>
+              <p className='text-navy-300 text-sm mb-1'>Active Check-Ins</p>
               <p className='text-white text-3xl font-bold'>{activeCount}</p>
             </div>
 
@@ -124,7 +124,7 @@ export default function AdminDashboard() {
                     Attendance Records
                   </h3>
                   <p className='text-navy-300 text-sm'>
-                    Who clocked in and out of the building
+                    Who checked in and out of the building
                   </p>
                 </div>
               </div>
@@ -144,6 +144,25 @@ export default function AdminDashboard() {
                   </h3>
                   <p className='text-navy-300 text-sm'>
                     Who entered each room, and when
+                  </p>
+                </div>
+              </div>
+            </Link>
+
+            <Link
+              href='/admin/rooms'
+              className='glass-panel border-navy-800 p-6 rounded-lg hover:border-orange-500/50 transition-colors group'
+            >
+              <div className='flex items-center gap-3'>
+                <div className='w-14 h-14 rounded-lg bg-orange-500/20 flex items-center justify-center group-hover:bg-orange-500/30 transition-colors'>
+                  <i className='fa-solid fa-door-closed text-orange-400 text-2xl'></i>
+                </div>
+                <div>
+                  <h3 className='text-white font-semibold text-lg mb-1'>
+                    Rooms
+                  </h3>
+                  <p className='text-navy-300 text-sm'>
+                    Add, rename or retire rooms and their codes
                   </p>
                 </div>
               </div>
@@ -214,7 +233,8 @@ export default function AdminDashboard() {
                         {record.userName || 'User ' + record.userId.slice(0, 8)}
                       </p>
                       <p className='text-navy-300 text-sm'>
-                        {record.destination} • {record.room}
+                        {record.purposeLabel || 'No purpose recorded'} •{' '}
+                        {record.room}
                       </p>
                     </div>
                   </div>

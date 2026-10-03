@@ -231,6 +231,41 @@ ALTER TABLE public.clock_in_records ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.room_visits   ENABLE ROW LEVEL SECURITY;
 
 
+-- ----------------------------------------------------------------------------
+-- Table privileges
+--
+-- Required, and easy to forget: RLS and GRANT are two separate gates. Without a
+-- table-level privilege Postgres rejects the statement outright with 42501
+-- ("permission denied for table users") and never evaluates the policies at
+-- all. The policies below are inert until these grants exist.
+--
+-- Grants are deliberately narrower than "all on all tables":
+--   * No DELETE anywhere. Nothing may remove attendance or presence history.
+--   * users is SELECT/INSERT/UPDATE only, matching the archive-not-delete rule.
+--   * rooms and purposes are readable by anyone but writable by admins; RLS
+--     decides *who*, GRANT decides whether the operation is possible at all.
+-- ----------------------------------------------------------------------------
+
+GRANT USAGE ON SCHEMA public TO anon, authenticated;
+
+-- Reference data.
+GRANT SELECT ON public.rooms    TO anon, authenticated;
+GRANT SELECT ON public.purposes TO anon, authenticated;
+GRANT INSERT, UPDATE ON public.rooms    TO authenticated;
+GRANT INSERT, UPDATE ON public.purposes TO authenticated;
+
+-- Profiles. No DELETE: accounts are archived, never removed.
+GRANT SELECT, INSERT, UPDATE ON public.users TO authenticated;
+
+-- Attendance and presence. No DELETE, so a visit cannot be destroyed through
+-- the API even by an admin.
+GRANT SELECT, INSERT, UPDATE ON public.clock_in_records TO authenticated;
+GRANT SELECT, INSERT, UPDATE ON public.room_visits     TO authenticated;
+
+-- Sequences, for anything defaulting to nextval.
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated;
+
+
 CREATE OR REPLACE FUNCTION is_admin()
 RETURNS BOOLEAN AS $$
   SELECT EXISTS (
@@ -280,6 +315,81 @@ CREATE POLICY "admins insert users"
 
 -- No DELETE policy on purpose. Accounts are archived via archived_at, so
 -- attendance history can never be destroyed through the API.
+
+
+-- ----------------------------------------------------------------------------
+-- Self-registration fix
+--
+-- Problem: a person signing up for themselves could not create their own profile
+-- row. The only INSERT policy was "admins insert users" (WITH CHECK is_admin()),
+-- and there is no trigger on auth.users to create the row for them. So
+-- registration always failed with:
+--
+--   Failed to create user profile: permission denied for table users
+--
+-- Two changes:
+--   1. A trigger on auth.users, so a profile exists the moment the login does.
+--      SECURITY DEFINER because the inserting role is `supabase_auth_admin`,
+--      which has no grants on public.users.
+--   2. A self-insert policy, as a belt-and-braces path for anyone whose profile
+--      row is missing (e.g. registration that predates this trigger).
+--
+-- The role is hardcoded to 'visitor' and deliberately ignores anything in
+-- raw_user_meta_data. Self-registration must never be able to mint an admin:
+-- allowing the client to choose its own role would be a privilege escalation.
+-- Roles other than visitor are granted by an admin through /admin/users.
+
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO public.users (id, email, name, role)
+  VALUES (
+    NEW.id,
+    NEW.email,
+    COALESCE(
+      NULLIF(NEW.raw_user_meta_data ->> 'name', ''),
+      split_part(NEW.email, '@', 1)
+    ),
+    'visitor'
+  )
+  ON CONFLICT (id) DO NOTHING;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+
+-- Fallback for a profile that is somehow absent. Scoped tightly: a user may
+-- only insert a row for their own id, and only with the 'visitor' role, so this
+-- cannot be used to grant anyone elevated access.
+--
+-- Dropped before creation so this file stays re-runnable alongside
+-- 20260101000002_registration_fix.sql, which declares the same policies.
+DROP POLICY IF EXISTS "users insert own row" ON public.users;
+
+CREATE POLICY "users insert own row"
+  ON public.users FOR INSERT
+  WITH CHECK (auth.uid() = id AND role = 'visitor');
+
+
+-- Purposes are needed by the registration form, which runs BEFORE anyone has
+-- signed in. The existing policy requires auth.role() = 'authenticated', so the
+-- picker was always empty for a new visitor.
+--
+-- Safe to open up: purposes is a fixed list of labels with no user data in it.
+DROP POLICY IF EXISTS "purposes readable when signed in" ON public.purposes;
+DROP POLICY IF EXISTS "purposes readable by anyone" ON public.purposes;
+
+CREATE POLICY "purposes readable by anyone"
+  ON public.purposes FOR SELECT
+  USING (TRUE);
 
 
 -- clock_in_records:

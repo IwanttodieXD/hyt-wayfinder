@@ -96,7 +96,7 @@ Your app is ready for Vercel! Here's what's already configured:
 ## 📦 What Gets Deployed
 
 ### Included:
-- ✅ All pages (login, register, admin, clock-in, tour)
+- ✅ All pages (login, register, admin, check-in, tour)
 - ✅ Components (QR scanner, 3D visualization, etc.)
 - ✅ State stores (auth, records, clock-in)
 - ✅ Assets (logo, images)

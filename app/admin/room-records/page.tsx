@@ -8,7 +8,7 @@ import {
   visitDuration,
   type RoomPresence,
 } from '@/store/roomPresenceStore';
-import { DESTINATION_ROUTES } from '@/lib/wayfinding';
+import { useRoomsStore } from '@/store/roomsStore';
 import UserProfile from '@/components/UserProfile';
 import { useRoleGuard } from '@/hooks/useRoleGuard';
 
@@ -33,6 +33,7 @@ export default function RoomRecordsPage() {
   const isAllowed = useRoleGuard(['admin'], '/admin');
 
   const { presence, fetchAllPresence } = useRoomPresenceStore();
+  const { getAllRooms, fetchRooms } = useRoomsStore();
 
   const [searchTerm, setSearchTerm] = useState('');
   // 'all' shows every room at once; otherwise a single room number.
@@ -46,8 +47,9 @@ export default function RoomRecordsPage() {
   useEffect(() => {
     if (isAllowed) {
       fetchAllPresence();
+      fetchRooms();
     }
-  }, [isAllowed, fetchAllPresence]);
+  }, [isAllowed, fetchAllPresence, fetchRooms]);
 
   const daysInSelectedMonth = new Date(
     Number(selectedYear),
@@ -56,7 +58,7 @@ export default function RoomRecordsPage() {
   ).getDate();
 
   // Only years that actually appear in the data, plus the current one - same
-  // approach as the clock-in records page.
+  // approach as the check-in records page.
   const availableYears = useMemo(
     () =>
       Array.from(
@@ -90,49 +92,61 @@ export default function RoomRecordsPage() {
       entry.room.toLowerCase().includes(term) ||
       entry.roomLabel.toLowerCase().includes(term);
 
-    const matchesRoom = roomFilter === 'all' || entry.room === roomFilter;
+    const matchesRoom = roomFilter === 'all' || entry.roomId === roomFilter;
 
     return matchesSearch && matchesRoom && matchesDate(entry);
   });
 
-  // Group into per-room sections. Registry order first so rooms keep a stable,
-  // familiar order, then any unexpected rooms that were still scanned.
+  // Group into per-room sections, keyed by room id. Rooms from the `rooms` table
+  // come first so sections keep a stable, familiar order, then any room that was
+  // retired but still has visits against it.
   const grouped = useMemo(() => {
     const byRoom = new Map<string, RoomPresence[]>();
     for (const entry of filtered) {
-      const list = byRoom.get(entry.room) ?? [];
+      const list = byRoom.get(entry.roomId) ?? [];
       list.push(entry);
-      byRoom.set(entry.room, list);
+      byRoom.set(entry.roomId, list);
     }
 
-    const known = DESTINATION_ROUTES.filter((r) => byRoom.has(r.room)).map((r) => ({
-      room: r.room,
-      label: r.label,
-      visits: byRoom.get(r.room) ?? [],
-    }));
+    const known = getAllRooms()
+      .filter((r) => byRoom.has(r.id))
+      .map((r) => ({
+        roomId: r.id,
+        room: r.roomNumber,
+        label: r.name,
+        visits: byRoom.get(r.id) ?? [],
+      }));
 
+    const knownIds = new Set(getAllRooms().map((r) => r.id));
     const extra = Array.from(byRoom.entries())
-      .filter(([room]) => !DESTINATION_ROUTES.some((r) => r.room === room))
-      .map(([room, visits]) => ({
-        room,
-        label: visits[0]?.roomLabel || room,
+      .filter(([roomId]) => !knownIds.has(roomId))
+      .map(([roomId, visits]) => ({
+        roomId,
+        room: visits[0]?.room || '',
+        label: visits[0]?.roomLabel || 'Unknown Room',
         visits,
       }));
 
     return [...known, ...extra];
-  }, [filtered]);
+  }, [filtered, getAllRooms]);
 
-  // Rooms in the filter dropdown: every registered room, so an admin can pick a
+  // Rooms in the filter dropdown: every room in the table, so an admin can pick a
   // room that currently has no visits instead of it being missing.
   const roomOptions = useMemo(() => {
-    const scanned = new Map(presence.map((p) => [p.room, p.roomLabel]));
+    const scanned = new Map(presence.map((p) => [p.roomId, p.roomLabel]));
+    const knownIds = new Set(getAllRooms().map((r) => r.id));
+
     return [
-      ...DESTINATION_ROUTES.map((r) => ({ room: r.room, label: r.label })),
+      ...getAllRooms().map((r) => ({
+        roomId: r.id,
+        label: r.name,
+        room: r.roomNumber,
+      })),
       ...Array.from(scanned.entries())
-        .filter(([room]) => !DESTINATION_ROUTES.some((r) => r.room === room))
-        .map(([room, label]) => ({ room, label })),
+        .filter(([roomId]) => !knownIds.has(roomId))
+        .map(([roomId, label]) => ({ roomId, label, room: label })),
     ];
-  }, [presence]);
+  }, [presence, getAllRooms]);
 
   const periodLabel =
     selectedDay === 'all'
@@ -238,7 +252,7 @@ export default function RoomRecordsPage() {
                     All rooms
                   </option>
                   {roomOptions.map((r) => (
-                    <option key={r.room} value={r.room} className='bg-navy-900'>
+                    <option key={r.roomId} value={r.roomId} className='bg-navy-900'>
                       {r.label} ({r.room})
                     </option>
                   ))}
@@ -339,10 +353,10 @@ export default function RoomRecordsPage() {
           </div>
         ) : (
           <div className='space-y-6'>
-            {grouped.map(({ room, label, visits }) => {
+            {grouped.map(({ roomId, room, label, visits }) => {
               const inside = visits.filter((v) => !v.exitedAt).length;
               return (
-                <div key={room} className='glass-panel border-navy-800 rounded-lg overflow-hidden'>
+                <div key={roomId} className='glass-panel border-navy-800 rounded-lg overflow-hidden'>
                   <div className='flex items-center justify-between px-5 py-4 bg-navy-900/50 border-b border-navy-800'>
                     <div className='flex items-center gap-3'>
                       <i className='fa-solid fa-door-closed text-navy-400'></i>

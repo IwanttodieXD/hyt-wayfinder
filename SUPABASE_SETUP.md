@@ -291,7 +291,7 @@ Attendance (`clock_in_records`) is only ever written by scanning the single
 ground floor code. Presence (`room_presence`) is only ever written by scanning
 a room's door code. The two never mix, so a visitor can't change their
 attendance by scanning the wrong poster, and occupancy history survives
-independently of who is currently clocked in.
+independently of who is currently checked in.
 
 Rows are append-only: scanning a door opens a row with `entered_at` and no
 `exited_at`; scanning another room closes the previous open row first. That
@@ -467,7 +467,7 @@ Should: Redirect to QR scanner
 ## 📊 Step 6: Insert Sample Clock-In Records
 
 ```sql
--- Sample active clock-in
+-- Sample active check-in
 INSERT INTO public.clock_in_records (
   user_id,
   user_name,
@@ -489,7 +489,7 @@ VALUES (
   'active'
 );
 
--- Sample completed clock-in
+-- Sample completed check-in
 INSERT INTO public.clock_in_records (
   user_id,
   user_name,
@@ -588,7 +588,7 @@ Monitor: Slow queries, Index usage
 ### Real-time Subscriptions
 
 ```typescript
-// Listen to clock-in record changes
+// Listen to check-in record changes
 const subscription = supabase
   .channel('clock-ins')
   .on(

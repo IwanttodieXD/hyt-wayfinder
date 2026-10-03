@@ -3,6 +3,7 @@
 import { useClockInStore } from '@/store/clockInStore';
 import { useRecordsStore } from '@/store/recordsStore';
 import { useRoomPresenceStore } from '@/store/roomPresenceStore';
+import { useRoomsStore } from '@/store/roomsStore';
 import { useAuthStore } from '@/store/authStore';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
@@ -19,7 +20,10 @@ export default function QRScanner() {
     setActiveRoute,
   } = useClockInStore();
   const { addRecord, clockOutRecord } = useRecordsStore();
-  const { enterRoom, getCurrentRoom } = useRoomPresenceStore();
+  const { enterRoom, leaveRoom, getCurrentRoom } = useRoomPresenceStore();
+  const { fetchRooms, fetchPurposes, getRoomByQr, getRoomByNumber, getActivePurposes } =
+    useRoomsStore();
+  const activePurposes = getActivePurposes();
   const { user } = useAuthStore();
 
   const [scannerActive, setScannerActive] = useState(false);
@@ -29,6 +33,15 @@ export default function QRScanner() {
   // Room of the last successful door scan, so the viewfinder can confirm where
   // the person was recorded rather than leaving them guessing.
   const [lastRoom, setLastRoom] = useState<string | null>(null);
+  // R2: set when someone tries to check out while recorded inside a room. Holds
+  // the room so the dialog can name it, and gates the check-out behind a choice.
+  const [pendingClockOut, setPendingClockOut] = useState<{
+    roomLabel: string;
+    recordId: string;
+  } | null>(null);
+  // Why they are in the building today. Written to the attendance row, not the
+  // user, because it is per visit rather than per person.
+  const [purposeId, setPurposeId] = useState<string>('');
   const scannerRef = useRef<Html5Qrcode | null>(null);
 const handledRef = useRef(false);
   // The viewfinder element, so the scan box can be sized to what's actually
@@ -80,6 +93,52 @@ const handledRef = useRef(false);
     }
   }, []);
 
+  /**
+   * Closes the attendance visit and, if the person was recorded inside a room,
+   * that room row too (R3). Both are closed together so the two tables can never
+   * disagree about where someone is. Callers must have already handled R2.
+   */
+  const performClockOut = useCallback(
+    async (recordId: string) => {
+      const result = await clockOutRecord(recordId);
+
+      if (!result.success) {
+        // Keep the session marked as checked in so the next scan retries
+        // rather than losing the record.
+        setScanError(result.error || 'Could not check out. Please try again.');
+        return false;
+      }
+
+      // Attendance is closed; presence must not be left dangling open.
+      if (user) {
+        await leaveRoom(user.id);
+      }
+
+      clockOut();
+      setPendingClockOut(null);
+      return true;
+    },
+    [clockOutRecord, clockOut, leaveRoom, user]
+  );
+
+  // Confirm handler for the R2 dialog. Cancelling closes nothing at all.
+  const confirmClockOut = useCallback(async () => {
+    if (!pendingClockOut) return;
+    await performClockOut(pendingClockOut.recordId);
+  }, [pendingClockOut, performClockOut]);
+
+  const cancelClockOut = useCallback(() => {
+    setPendingClockOut(null);
+    setScanError('');
+  }, []);
+
+  // Rooms must be loaded before a door code can be resolved to a room id, and
+  // purposes before check-in can record one.
+  useEffect(() => {
+    fetchRooms();
+    fetchPurposes();
+  }, [fetchRooms, fetchPurposes]);
+
   const handleScanSuccess = useCallback(
     async (decodedText: string) => {
       if (handledRef.current) return;
@@ -100,7 +159,7 @@ const handledRef = useRef(false);
       setScanning(true);
 
       // A room door code only records that this person is in that room. It must
-      // never touch attendance, so branch before any clock-in state is read.
+      // never touch attendance, so branch before any check-in state is read.
       if (parsed.kind === 'room') {
         if (!user) {
           setScanError('Sign in before scanning a room code.');
@@ -109,17 +168,43 @@ const handledRef = useRef(false);
           return;
         }
 
-        const route = getRoute(parsed.routeId);
+        // R1: a room scan without an active check-in is refused. Without this,
+        // someone can walk into Room 304, never touch the entrance code, and
+        // create a presence row that contradicts their attendance record.
+        if (status === 'not-clocked-in') {
+          setScanError(
+            'Check in at the entrance first. We only record rooms for people who are checked in.'
+          );
+          handledRef.current = false;
+          setTimeout(() => setScanning(false), 3000);
+          return;
+        }
+
+        // Rooms are resolved from the `rooms` table, so the presence row carries
+        // the room's id rather than the text that was scanned.
+        const room = getRoomByQr(decodedText) ?? getRoomByNumber(parsed.roomNumber);
+
+        if (!room) {
+          setScanError(
+            'That room code is not recognised. Ask an admin to check the rooms list.'
+          );
+          handledRef.current = false;
+          setTimeout(() => setScanning(false), 2500);
+          return;
+        }
+
         const result = await enterRoom({
           userId: user.id,
-          room: parsed.room,
-          roomLabel: route.label,
+          roomId: room.id,
+          // Links this room entry to the attendance visit it happened under, so
+          // the trail stays per-visit rather than blurring across days.
+          clockInId: activeRecordId ?? null,
         });
 
         if (!result.success) {
           setScanError(result.error || 'Could not record your room. Please try again.');
         } else {
-          setLastRoom(parsed.room);
+          setLastRoom(room.roomNumber);
         }
 
         handledRef.current = false;
@@ -128,48 +213,71 @@ const handledRef = useRef(false);
       }
 
       // Ground floor code: this is the attendance action.
-      // Scanning again while clocked in clocks back out.
+      // Scanning again while checked in checks back out.
       if (status !== 'not-clocked-in') {
         if (!activeRecordId) {
           // Should not happen, but without a record id there is no row to
-          // close. Say so instead of silently showing "clocked out".
-          setScanError('Could not clock out: no active check-in was found.');
+          // close. Say so instead of silently showing "checked out".
+          setScanError('Could not check out: no active check-in was found.');
           handledRef.current = false;
           setTimeout(() => setScanning(false), 1200);
           return;
         }
 
-        const result = await clockOutRecord(activeRecordId);
-
-        if (!result.success) {
-          // Keep the session marked as clocked in so the next scan retries
-          // rather than losing the record.
-          setScanError(result.error || 'Could not clock out. Please try again.');
+        // R2: checking out while recorded inside a room is the one genuinely
+        // ambiguous action in this flow, so ask rather than guess. The door
+        // scan is self-reported, so "they left the room but are still in the
+        // building" is indistinguishable from "they left the building".
+        const current = user ? getCurrentRoom(user.id) : null;
+        if (current) {
+          setPendingClockOut({
+            roomLabel: current.roomLabel,
+            recordId: activeRecordId,
+          });
+          // Keep the session checked in until they choose. Cancelling means
+          // they remain checked in and inside the room (R3).
           handledRef.current = false;
-          setTimeout(() => setScanning(false), 2000);
+          setScanning(false);
           return;
         }
 
-        clockOut();
+        await performClockOut(activeRecordId);
+        handledRef.current = false;
         setTimeout(() => setScanning(false), 1200);
         return;
       }
 
-      // First scan: clock in + create the DB record. Keep the returned record
-      // id so the next scan can close the same row (time_out).
+      // First scan: check in + create the DB record. Keep the returned record
+      // id so the next scan can close the same row (time_out), and so room
+      // scans can be linked to this visit.
+      //
       // The ground floor code carries no room, so the route comes from the
       // person's assigned destination rather than from the code.
-      setActiveRoute(routeIdForDestination(user?.destination));
+      const route = getRoute(routeIdForDestination(user?.destination));
+      setActiveRoute(route.id);
       let recordId: string | undefined;
       if (user) {
-        // The ground floor code carries no room, so the destination comes from
-        // the person's profile and the building/room from the route registry.
-        const route = getRoute(routeIdForDestination(user.destination));
+        // The assigned room is now a room_id, resolved from `rooms`.
+        const assigned = getRoomByNumber(user.destination);
+
+        // The purpose chosen at check-in wins. Otherwise fall back to the one
+        // held pending from registration, so a visitor who told us why they
+        // came doesn't have to answer again on their first visit.
+        const purpose =
+          activePurposes.find((p) => p.id === purposeId) ??
+          activePurposes.find((p) => p.label === user.purpose);
+
+        // Guard against writing a `fallback-*` placeholder id into a UUID
+        // column, which would fail the insert and lose the whole check-in.
+        // The signed-in user can normally read purposes, so this only triggers
+        // if that fetch also failed.
+        const purposeIdToWrite =
+          purpose && !purpose.id.startsWith('fallback-') ? purpose.id : null;
+
         const result = await addRecord({
           userId: user.id,
-          destination: user.destination || route.label,
-          building: route.building,
-          room: route.room,
+          roomId: assigned?.id ?? null,
+          purposeId: purposeIdToWrite,
           timeIn: new Date(),
         });
         recordId = result.recordId;
@@ -182,12 +290,16 @@ const handledRef = useRef(false);
       status,
       activeRecordId,
       clockIn,
-      clockOut,
       addRecord,
-      clockOutRecord,
       stopScanner,
       enterRoom,
+      getCurrentRoom,
+      getRoomByQr,
+      getRoomByNumber,
       setActiveRoute,
+      performClockOut,
+      purposeId,
+      activePurposes,
     ]
   );
 
@@ -333,6 +445,23 @@ const handledRef = useRef(false);
             <div className='absolute inset-0 bg-navy-950/90 flex flex-col items-center justify-center p-4'>
               <i className='fa-solid fa-circle-exclamation text-red-500 text-4xl mb-3'></i>
               <p className='text-red-400 text-xs text-center'>{scanError}</p>
+
+              {/* R1 offers the fix rather than just the problem: someone who
+                  scanned a room door has clearly arrived, so point them at the
+                  check-in flow instead of making them guess what to do next. */}
+              {status === 'not-clocked-in' && (
+                <button
+                  onClick={startCamera}
+                  className='
+                    mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-full
+                    bg-orange-500 hover:bg-orange-600 text-paper text-xs font-medium
+                    transition-colors duration-150
+                  '
+                >
+                  <i className='fa-solid fa-door-open'></i>
+                  Check in at the entrance
+                </button>
+              )}
             </div>
           )}
 
@@ -437,7 +566,7 @@ const handledRef = useRef(false);
             <i className='fa-solid fa-camera text-sm'></i>
             {status === 'not-clocked-in'
               ? 'Start camera to scan'
-              : 'Scan again to clock out'}
+              : 'Scan again to check out'}
           </button>
         ) : (
           <div className='inline-flex items-center gap-2 px-4 py-2 rounded-full bg-orange-500/10 border border-orange-500/30 mb-4'>
@@ -445,25 +574,62 @@ const handledRef = useRef(false);
             <span className='text-orange-300 text-sm font-medium'>
               {status === 'not-clocked-in'
                 ? 'Point at the ground floor check-in code'
-                : 'Clocked in — scan again to clock out'}
+                : 'Checked in — scan again to check out'}
             </span>
           </div>
         )}
 
         <p className='text-navy-300 text-xs max-w-xs mx-auto mb-2'>
           {showQR
-            ? 'Present your personal QR code to the check-in scanner to clock in.'
+            ? 'Present your personal QR code to the check-in scanner to check in.'
             : status === 'not-clocked-in'
-              ? 'Scan the ground floor code to clock in and receive your route.'
-              : 'You are clocked in. Scan the ground floor code again to clock out, or view your 3D route.'}
+              ? 'Scan the ground floor code to check in and receive your route.'
+              : 'You are checked in. Scan the ground floor code again to check out, or view your 3D route.'}
         </p>
 
         {/* Room codes are a separate action from attendance, so they are called
             out separately rather than folded into the instructions above. */}
         <p className='text-navy-500 text-xs max-w-xs mx-auto mb-4'>
           <i className='fa-solid fa-door-open'></i> Room door codes only record
-          which room you are in — they do not clock you in or out.
+          which room you are in — they do not check you in or out.
         </p>
+
+        {/* Current state, as one plain line. This replaces a mode toggle: the
+            scanner already knows which kind of code was scanned, so there is
+            nothing to choose, only something to report. */}
+        {status !== 'not-clocked-in' && (
+          <p className='text-navy-300 text-xs mb-3'>
+            Checked in ·{' '}
+            {(() => {
+              const current = user ? getCurrentRoom(user.id) : null;
+              return current ? `In ${current.roomLabel}` : 'In the lobby';
+            })()}
+          </p>
+        )}
+
+        {/* Why this visit is happening. Optional, and only asked before
+            check-in, because purpose is recorded per visit rather than per
+            person. */}
+        {status === 'not-clocked-in' && activePurposes.length > 0 && (
+          <label className='flex flex-col gap-1 mb-3 w-full max-w-xs'>
+            <span className='text-navy-400 text-xs'>Reason for your visit</span>
+            <select
+              value={purposeId}
+              onChange={(e) => setPurposeId(e.target.value)}
+              className='
+                bg-navy-800 border border-navy-700 text-navy-100 text-sm
+                rounded-lg px-3 py-2
+              '
+            >
+              <option value=''>Select a reason</option>
+              {activePurposes.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
 
         {/* Confirms the last door scan actually registered. */}
         {lastRoom && !scanError && !scannerActive && (
@@ -487,7 +653,46 @@ const handledRef = useRef(false);
         )}
       </div>
 
-      {/* View Route (when clocked in) */}
+      {/* R2: the check-out confirmation. Shown only when the person is recorded
+          inside a room, because that is the one case where the intent behind a
+          second entrance scan is genuinely ambiguous. */}
+      {pendingClockOut && (
+        <div className='fixed inset-0 z-50 bg-navy-950/80 flex items-center justify-center p-4'>
+          <div className='glass-panel border-navy-700 rounded-lg p-6 max-w-sm w-full'>
+            <h3 className='text-white font-bold text-lg mb-2'>
+              Leave the building?
+            </h3>
+            <p className='text-navy-300 text-sm mb-6'>
+              You are recorded in {pendingClockOut.roomLabel}. Checking out
+              closes your attendance and that room entry.
+            </p>
+            <div className='flex gap-3'>
+              <button
+                onClick={cancelClockOut}
+                className='
+                  flex-1 px-4 py-3 rounded-lg font-semibold text-sm
+                  bg-navy-700 hover:bg-navy-600 text-navy-100
+                  transition-colors duration-150
+                '
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmClockOut}
+                className='
+                  flex-1 px-4 py-3 rounded-lg font-semibold text-sm
+                  bg-orange-500 hover:bg-orange-600 text-paper
+                  transition-colors duration-150
+                '
+              >
+                Check out anyway
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* View Route (when checked in) */}
       {status !== 'not-clocked-in' && (
         <button
           onClick={startRouteView}

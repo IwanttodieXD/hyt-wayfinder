@@ -1,14 +1,18 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore, UserRole, DESTINATIONS } from '@/store/authStore';
+import { useRoomsStore } from '@/store/roomsStore';
 import Link from 'next/link';
 
 export default function RegisterPage() {
   const router = useRouter();
   const { register } = useAuthStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Purposes come from the `purposes` lookup table, not a hardcoded list, so
+  // adding a reason in the database makes it selectable here immediately.
+  const { fetchPurposes, getActivePurposes } = useRoomsStore();
 
   const [formData, setFormData] = useState({
     name: '',
@@ -17,10 +21,22 @@ export default function RegisterPage() {
     confirmPassword: '',
     role: 'visitor' as UserRole,
     destination: '',
+    purpose: '',
   });
   const [profilePhoto, setProfilePhoto] = useState<string>('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  // Set once the account exists but the email still needs confirming. Drives the
+  // "check your inbox" screen instead of an error message.
+  const [pendingConfirmation, setPendingConfirmation] = useState<string | null>(
+    null
+  );
+
+  const purposes = getActivePurposes();
+
+  useEffect(() => {
+    fetchPurposes();
+  }, [fetchPurposes]);
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -97,24 +113,80 @@ export default function RegisterPage() {
       role: formData.role,
       avatar: profilePhoto || undefined,
       destination: formData.destination || undefined,
+      purpose: formData.purpose || undefined,
     });
 
-    if (result.success) {
-      // Role-based redirect
-      if (formData.role === 'admin') {
-        router.push('/admin');
-      } else {
-        // Trainer, trainee or visitor goes to the mobile clock-in page
-        router.push('/clock-in');
-      }
-    } else {
-      setError(result.error || 'Registration failed');
+    // The account exists but the address is not confirmed yet, so there is no
+    // session and nothing more to do here. This is a success state, not a
+    // failure: sending them to their inbox is the correct next step.
+    if (result.needsConfirmation) {
+      setPendingConfirmation(formData.email);
       setLoading(false);
+      return;
     }
-  };
+
+    if (result.success) {
+        // Everyone who self-registers starts as a visitor, whatever role was
+        // picked on the form: the database only accepts role='visitor' from a
+        // self-insert, so an admin has to grant anything higher. Redirecting on
+        // the requested role would land them on a page they cannot use.
+        router.push('/check-in');
+      } else {
+        setError(result.error || 'Registration failed');
+        setLoading(false);
+      }
+    };
 
   return (
     <>
+      {/* Account created, email not yet confirmed. A success screen, not an
+          error: there is genuinely nothing to fix, they just need to click the
+          link Supabase emailed them. */}
+      {pendingConfirmation && (
+        <div className='min-h-screen bg-navy-900 flex items-center justify-center p-4'>
+          <div className='w-full max-w-md text-center'>
+            <div className='glass-panel border-navy-700 rounded-lg p-8'>
+              <div className='w-16 h-16 mx-auto mb-5 rounded-full bg-orange-500/20 flex items-center justify-center'>
+                <i className='fa-solid fa-envelope-open-text text-orange-400 text-2xl'></i>
+              </div>
+              <h1 className='text-2xl font-bold text-white mb-3'>
+                Check your email
+              </h1>
+              <p className='text-navy-300 text-sm mb-2'>
+                We sent a confirmation link to
+              </p>
+              <p className='text-white font-semibold mb-6 break-all'>
+                {pendingConfirmation}
+              </p>
+              <p className='text-navy-400 text-sm mb-6'>
+                Open it to activate your account, then sign in. The link expires
+                after a while, so if it has gone stale just register again.
+              </p>
+              <Link
+                href='/login'
+                className='
+                  inline-block w-full px-4 py-3 rounded-lg
+                  bg-orange-500 hover:bg-orange-600 text-paper
+                  font-semibold text-sm transition-colors
+                '
+              >
+                Go to Sign In
+              </Link>
+              <button
+                onClick={() => {
+                  setPendingConfirmation(null);
+                  setError('');
+                }}
+                className='mt-4 text-navy-400 hover:text-navy-200 text-sm transition-colors'
+              >
+                Use a different email
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!pendingConfirmation && (
       <div className='min-h-screen bg-navy-900 flex items-center justify-center p-4'>
         {/* Register Card */}
         <div className='relative w-full max-w-md'>
@@ -136,9 +208,24 @@ export default function RegisterPage() {
             <form onSubmit={handleSubmit} className='space-y-5'>
               {/* Error Message */}
               {error && (
-                <div className='p-4 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm flex items-start gap-2'>
-                  <i className='fa-solid fa-circle-exclamation mt-0.5'></i>
-                  <span>{error}</span>
+                <div className='p-4 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm'>
+                  <div className='flex items-start gap-2'>
+                    <i className='fa-solid fa-circle-exclamation mt-0.5'></i>
+                    <span>{error}</span>
+                  </div>
+
+                  {/* An address that already has a login can never register
+                      again, so don't leave them on this form with no way out.
+                      Signing in repairs a missing profile automatically. */}
+                  {/already has an account|already registered/i.test(error) && (
+                    <Link
+                      href='/login'
+                      className='mt-3 inline-flex items-center gap-2 text-orange-300 hover:text-orange-200 font-semibold transition-colors'
+                    >
+                      <i className='fa-solid fa-right-to-bracket'></i>
+                      Go to sign in
+                    </Link>
+                  )}
                 </div>
               )}
 
@@ -338,15 +425,25 @@ export default function RegisterPage() {
                     </p>
                   </button>
                 </div>
+                {/* Roles are not self-granted. The database only accepts a
+                    self-insert with role='visitor', so picking trainer or trainee
+                    records a request that an admin still has to approve. */}
+                <p className='text-navy-400 text-xs mt-2'>
+                  Everyone starts as a visitor. An administrator can upgrade this
+                  role after you register.
+                </p>
               </div>
 
-              {/* Destination Field */}
+              {/* Assigned room. Not saved to the account: the new schema has no
+                destination column on `users`. It is held for this session and
+                written to the visitor's first attendance record when they check
+                in, which is where a room belongs. */}
               <div>
                 <label
                   htmlFor='destination'
                   className='block text-sm font-medium text-orange-200 mb-2'
                 >
-                  Destination
+                  Assigned room
                 </label>
                 <div className='relative'>
                   <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
@@ -366,7 +463,7 @@ export default function RegisterPage() {
                       transition-colors
                       '
                   >
-                    <option value=''>Select a destination</option>
+                    <option value=''>No assigned room</option>
                     {DESTINATIONS.map((destination) => (
                       <option
                         key={destination}
@@ -380,7 +477,55 @@ export default function RegisterPage() {
                   <i className='fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-navy-400 text-xs pointer-events-none'></i>
                 </div>
                 <p className='text-navy-400 text-xs mt-2'>
-                  Where you are headed on your first visit.
+                  Optional. Recorded on your first check-in; you can go to any
+                  room later by scanning its door code.
+                </p>
+              </div>
+
+              {/* Purpose picker. Also per visit, not per person: the schema puts
+                  purpose_id on clock_in_records so a trainee can attend a Meeting
+                  one day and an Orientation the next. This seeds the first visit. */}
+              <div>
+                <label
+                  htmlFor='purpose'
+                  className='block text-sm font-medium text-orange-200 mb-2'
+                >
+                  Reason for your visit
+                </label>
+                <div className='relative'>
+                  <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
+                    <i className='fa-solid fa-clipboard-question text-orange-400'></i>
+                  </div>
+                  <select
+                    id='purpose'
+                    value={formData.purpose}
+                    onChange={(e) =>
+                      setFormData({ ...formData, purpose: e.target.value })
+                    }
+                    className='
+                      w-full pl-12 pr-4 py-3 rounded-lg appearance-none
+                      bg-navy-900/80 border-2 border-orange-500/30
+                      text-white placeholder-navy-500
+                      focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500
+                      transition-colors
+                    '
+                  >
+                    <option value=''>Not sure yet</option>
+                    {purposes.map((purpose) => (
+                      <option
+                        key={purpose.id}
+                        value={purpose.label}
+                        className='bg-navy-900'
+                      >
+                        {purpose.label}
+                      </option>
+                    ))}
+                  </select>
+                  <i className='fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-navy-400 text-xs pointer-events-none'></i>
+                </div>
+                <p className='text-navy-400 text-xs mt-2'>
+                  Optional. Applied to your first check-in, and you can pick a
+                  different reason on later visits.
                 </p>
               </div>
 
@@ -502,6 +647,7 @@ export default function RegisterPage() {
           </div>
         </div>
       </div>
+      )}
     </>
   );
 }

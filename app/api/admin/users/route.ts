@@ -1,17 +1,18 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-// Create/delete a user account.
+// Create/update/archive a user account.
 //
-// Creating a real login requires an auth.users row, and deleting one must
-// remove it. Neither is possible with the anon key, so both use the service
-// role key, which must stay server-side.
+// Creating a real login requires an auth.users row, which the anon key cannot
+// make. Updating *another* user's profile also needs the service role key: RLS
+// grants "users update own row" only, so an admin editing someone else through
+// the anon key would be silently rejected by the database.
 //
-// Until SUPABASE_SERVICE_ROLE_KEY is configured, this returns 501 and the UI
-// disables Create/Delete while Read/Update keep working over RLS.
+// Until SUPABASE_SERVICE_ROLE_KEY is configured, create/archive return 501 and
+// the UI disables those actions.
 
 const SERVICE_KEY_NOT_SET =
-  'User creation/deletion needs SUPABASE_SERVICE_ROLE_KEY. Add it to .env.local to enable.';
+  'User creation/archiving needs SUPABASE_SERVICE_ROLE_KEY. Add it to .env.local to enable.';
 
 function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -102,7 +103,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { email, name, role, password, destination } = body ?? {};
+  const { email, name, role, password } = body ?? {};
 
   if (!email || !name || !role || !password) {
     return NextResponse.json(
@@ -121,15 +122,6 @@ export async function POST(request: Request) {
   if (!['admin', 'trainer', 'trainee', 'visitor'].includes(role)) {
     return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
   }
-
-  // Optional, but must be a string when present so a stray object or number
-  // can't reach the column.
-  if (destination !== undefined && destination !== null && typeof destination !== 'string') {
-    return NextResponse.json({ error: 'Invalid destination' }, { status: 400 });
-  }
-
-  const trimmedDestination =
-    typeof destination === 'string' ? destination.trim() : '';
 
   // 1. Create the login. email_confirm skips the verification email step,
   //    which suits an admin provisioning accounts by hand.
@@ -160,9 +152,6 @@ export async function POST(request: Request) {
       email,
       name,
       role,
-      // Omitted when blank so the column falls back to its NULL default
-      // instead of being written as an empty string.
-      ...(trimmedDestination ? { destination: trimmedDestination } : {}),
     },
     { onConflict: 'id' }
   );
@@ -179,6 +168,80 @@ export async function POST(request: Request) {
   return NextResponse.json({ success: true, id: created.user.id }, { status: 201 });
 }
 
+/**
+ * Edit another user's profile.
+ *
+ * Routed through the service key on purpose. RLS only permits updating your own
+ * row (`USING (auth.uid() = id)`), so an admin editing someone else over the anon
+ * key is rejected by the database no matter what the UI believes.
+ *
+ * Only the columns that exist on the new schema are writable here.
+ */
+export async function PATCH(request: Request) {
+  const admin = await requireAdmin(request);
+  if (!admin.ok) {
+    return NextResponse.json({ error: admin.error }, { status: admin.status });
+  }
+
+  const service = getServiceClient();
+  if (!service) {
+    return NextResponse.json({ error: SERVICE_KEY_NOT_SET }, { status: 501 });
+  }
+
+  let body: any;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
+
+  const { id, name, email, role } = body ?? {};
+
+  if (!id || typeof id !== 'string') {
+    return NextResponse.json({ error: 'A user id is required' }, { status: 400 });
+  }
+
+  if (typeof name !== 'string' || !name.trim()) {
+    return NextResponse.json({ error: 'Name is required' }, { status: 400 });
+  }
+
+  if (typeof email !== 'string' || !email.trim()) {
+    return NextResponse.json({ error: 'Email is required' }, { status: 400 });
+  }
+
+  if (!['admin', 'trainer', 'trainee', 'visitor'].includes(role)) {
+    return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
+  }
+
+  // Guard against an admin demoting themselves and locking everyone out of
+  // the admin area.
+  if (id === admin.userId && role !== 'admin') {
+    return NextResponse.json(
+      { error: 'You cannot change your own role' },
+      { status: 400 }
+    );
+  }
+
+  const { error } = await service
+    .from('users')
+    .update({ name: name.trim(), email: email.trim(), role })
+    .eq('id', id);
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 400 });
+  }
+
+  return NextResponse.json({ success: true });
+}
+
+/**
+ * Archive a user rather than deleting them.
+ *
+ * Attendance history must survive someone leaving, so the schema has no DELETE
+ * path at all: `users` is referenced by `clock_in_records` and `room_visits`
+ * with ON DELETE RESTRICT, and no DELETE policy is granted. Setting
+ * `archived_at` retires the account while keeping every visit row intact.
+ */
 export async function DELETE(request: Request) {
   const admin = await requireAdmin(request);
   if (!admin.ok) {
@@ -198,13 +261,23 @@ export async function DELETE(request: Request) {
   // Guard against an admin locking themselves out.
   if (id === admin.userId) {
     return NextResponse.json(
-      { error: 'You cannot delete your own account' },
+      { error: 'You cannot archive your own account' },
       { status: 400 }
     );
   }
 
-  // Remove the login first; the public.users row cascades from auth.users.
-  const { error } = await service.auth.admin.deleteUser(id);
+  // Only the profile row is touched. Deliberately NOT
+  // `auth.admin.deleteUser`: `users.id` cascades from `auth.users`, so removing
+  // the login would delete the profile and take the attendance history with it
+  // (or fail outright on the ON DELETE RESTRICT foreign keys).
+  //
+  // Consequence: an archived person keeps a working login. Their sessions stop
+  // resolving a usable profile, so the app treats them as signed out, but to
+  // revoke authentication itself you must ban the user in Supabase Auth.
+  const { error } = await service
+    .from('users')
+    .update({ archived_at: new Date().toISOString() })
+    .eq('id', id);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 400 });

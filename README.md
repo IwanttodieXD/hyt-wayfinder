@@ -3,7 +3,7 @@
 A visitor management and 3D wayfinding system for the HYT Global Institute
 building. Visitors register, check in by scanning the QR code at their lobby
 station, and are shown an animated 3D route to their destination. Staff get
-occupancy and clock-in record dashboards.
+occupancy and check-in record dashboards.
 
 > **Looking for an overview?** See [PROJECT_SUMMARY.md](./PROJECT_SUMMARY.md) for
 > what the system does, how it's organised, what you can do with it, and known
@@ -21,7 +21,7 @@ occupancy and clock-in record dashboards.
 - Animated 3D route visualization per destination (Three.js / React Three Fiber)
 - First-person 3D building exploration with collision detection
 - Room occupancy tracking and a kiosk status view
-- Admin dashboard, clock-in records table, and user management CRUD
+- Admin dashboard, check-in records table, and user management CRUD
 - Dark mode and responsive/mobile layouts
 
 ## Tech Stack
@@ -107,13 +107,13 @@ mixed-case path otherwise produces two module copies and
 | --- | --- |
 | `/` | Landing page; redirects by role |
 | `/login`, `/register` | Authentication |
-| `/clock-in` | Mobile QR scanner and clock-in/out (trainer, trainee, visitor) |
+| `/check-in` | Mobile QR scanner and check-in/out (trainer, trainee, visitor) |
 | `/station` | Lobby kiosk — displays the check-in QR code |
 | `/trainer` | Trainer/instructor view |
 | `/visitor` | Visitor view |
 | `/occupancy` | Live room occupancy |
 | `/admin` | Admin dashboard |
-| `/admin/records` | Attendance records (clock-in/out) |
+| `/admin/records` | Attendance records (check-in/out) |
 | `/admin/room-records` | Room visit history, grouped per room |
 | `/admin/users` | User management (requires `SUPABASE_SERVICE_ROLE_KEY` for create/delete) |
 | `/api/admin/users` | Server route for admin user create/delete |
@@ -129,7 +129,7 @@ is resolved from your assigned destination instead of from the code.
 
 **Room presence — one per room, on the door.** `HYT-ROOM-01:<ROOM_ID>`.
 Scanning one records that you are inside that room right now. It never touches
-attendance, so scanning the wrong poster can't change your clock-in status.
+attendance, so scanning the wrong poster can't change your check-in status.
 Rows are append-only: scanning a room closes any room you were in before, so
 "who was in Room 304 at 3pm" is answerable, not just "who is there now".
 
@@ -179,7 +179,7 @@ lock the pointer), `Space` to jump.
 app/
   page.tsx                  # Landing / role-based redirect
   login, register/          # Auth pages
-  clock-in/                 # Mobile QR scan + check-in
+  check-in/                # Mobile QR scan + check-in
   station/                  # Attendance + room door QR codes
   trainer/, visitor/, occupancy/
   admin/                    # Dashboard, records, user management

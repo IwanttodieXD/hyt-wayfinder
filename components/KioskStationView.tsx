@@ -8,12 +8,12 @@ import Link from 'next/link';
 import QRCode from 'react-qr-code';
 import {
   ATTENDANCE_QR_VALUE,
-  DESTINATION_ROUTES,
 } from '@/lib/wayfinding';
 import {
   useRoomPresenceStore,
   visitDuration,
 } from '@/store/roomPresenceStore';
+import { useRoomsStore } from '@/store/roomsStore';
 
 // Everything the print window needs, without dragging in the waypoint data.
 type PrintableCode = {
@@ -44,10 +44,16 @@ export default function KioskStationView() {
   // can see at a glance which rooms already have people in them.
   const { getOccupancyByRoom, fetchTodayPresence, presence } =
     useRoomPresenceStore();
+  // One poster per room in the `rooms` table, so adding a room in the admin UI
+  // is enough to get it printed here. Inactive rooms are excluded but their
+  // history is untouched.
+  const { getActiveRooms, fetchRooms, getRoomById } = useRoomsStore();
+  const rooms = getActiveRooms();
 
   // Which room's records the drill-down is showing, or null when closed. The
-  // headcount badge is the way in.
-  const [openRoom, setOpenRoom] = useState<string | null>(null);
+  // headcount badge is the way in. Held as a room id so it cannot drift from
+  // the rooms table.
+  const [openRoomId, setOpenRoomId] = useState<string | null>(null);
 
   // Drives the clock below. Without this the time is frozen at whatever it was
   // when the component rendered, and never advances.
@@ -57,7 +63,8 @@ export default function KioskStationView() {
   useEffect(() => {
     fetchTodayRecords();
     fetchTodayPresence();
-  }, [fetchTodayRecords, fetchTodayPresence]);
+    fetchRooms();
+  }, [fetchTodayRecords, fetchTodayPresence, fetchRooms]);
 
   // Tick once a minute, aligned to the minute boundary so the displayed minute
   // flips when it actually changes rather than up to a minute late.
@@ -74,33 +81,34 @@ export default function KioskStationView() {
 
   // Escape closes the drill-down, matching the usual expectation for a dialog.
   useEffect(() => {
-    if (!openRoom) return;
+    if (!openRoomId) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpenRoom(null);
+      if (e.key === 'Escape') setOpenRoomId(null);
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [openRoom]);
+  }, [openRoomId]);
 
   // Stop the page behind the overlay from scrolling while it's open.
   useEffect(() => {
-    if (!openRoom) return;
+    if (!openRoomId) return;
     const previous = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
       document.body.style.overflow = previous;
     };
-  }, [openRoom]);
+  }, [openRoomId]);
 
   const activeCount = getActiveCount();
   const onBreakCount = getCompletedTodayCount();
 
   // Only one pass over the occupancy map, rather than rebuilding it per poster.
+  // Keyed by room id, matching how presence rows are stored.
   const roomCounts = (() => {
     const byRoom = new Map(
-      getOccupancyByRoom().map((r) => [r.room, r.people.length])
+      getOccupancyByRoom().map((r) => [r.roomId, r.people.length])
     );
-    return (room: string) => byRoom.get(room) ?? 0;
+    return (roomId: string) => byRoom.get(roomId) ?? 0;
   })();
 
   // How many of the people inside have scanned a room door. This is what makes
@@ -114,16 +122,16 @@ export default function KioskStationView() {
   // Visits for the open room, newest first. Split so people still inside sit at
   // the top, which is what the person checking the room actually cares about.
   const openRoomVisits = (() => {
-    if (!openRoom) return null;
-    const route = DESTINATION_ROUTES.find((r) => r.room === openRoom);
-    if (!route) return null;
+    if (!openRoomId) return null;
+    const room = getRoomById(openRoomId);
+    if (!room) return null;
 
     const visits = presence
-      .filter((p) => p.room === openRoom)
+      .filter((p) => p.roomId === openRoomId)
       .sort((a, b) => b.enteredAt.getTime() - a.enteredAt.getTime());
 
     return {
-      route,
+      room,
       inside: visits.filter((v) => !v.exitedAt),
       history: visits.filter((v) => v.exitedAt),
     };
@@ -183,7 +191,7 @@ export default function KioskStationView() {
           </p>
         </div>
 
-          {/* Live stats. Each card states what it counts, since "Clock Out" next to a
+          {/* Live stats. Each card states what it counts, since "Check Out" next to a
             coffee-cup icon was ambiguous about whether it meant the action or
             the number of people who had already done it. */}
           <div className='grid grid-cols-1 md:grid-cols-3 gap-3'>
@@ -289,7 +297,7 @@ export default function KioskStationView() {
             </span>
           </div>
           <h2 className='text-2xl font-bold text-white mb-2'>
-            Scan to Clock In or Out
+            Scan to Check In or Out
           </h2>
           <p className='text-navy-300'>
             This is the only code that records attendance. Post it at the ground
@@ -342,7 +350,7 @@ export default function KioskStationView() {
         </div>
 
         {/* Room codes. Clearly labelled as tracking-only so they are never
-            mistaken for a way to clock attendance. */}
+            mistaken for a way to record attendance. */}
         <div className='text-center mb-6'>
           <div className='inline-flex items-center gap-2 px-4 py-2 rounded-full bg-navy-700/50 border border-navy-700 mb-4'>
             <i className='fa-solid fa-door-open text-navy-300'></i>
@@ -353,16 +361,22 @@ export default function KioskStationView() {
           <h2 className='text-2xl font-bold text-white mb-2'>Room Door Codes</h2>
           <p className='text-navy-300'>
             Post one on each room door. Scanning records who is inside that room
-            — it does not clock anyone in or out.
+            — it does not check anyone in or out.
           </p>
         </div>
 
         {/* One panel per room, so each code is a self-contained unit that can be
             printed and posted on its own door. */}
         <div className='grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-4'>
-          {DESTINATION_ROUTES.map((route) => (
+          {rooms.length === 0 && (
+          <p className='text-navy-400 text-sm text-center py-8'>
+            No rooms yet. Add rooms under Admin &rarr; Rooms to print their codes.
+          </p>
+        )}
+
+        {rooms.map((room) => (
             <div
-              key={route.id}
+              key={room.id}
               className='glass-panel border-navy-800 rounded-lg p-6 flex flex-col items-center'
             >
               {/* Fixed max width so the `width: 100%` on the QR resolves to a
@@ -372,11 +386,11 @@ export default function KioskStationView() {
                     via a ref, because react-qr-code's ref type is a union that
                     is awkward to satisfy. */}
                 <div
-                  data-qr-panel={route.id}
+                  data-qr-panel={room.id}
                   className='bg-paper p-6 rounded-lg w-full max-w-[240px] shadow-lg'
                 >
                   <QRCode
-                    value={route.qrValue}
+                    value={room.qrValue}
                     size={208}
                     style={{ height: 'auto', maxWidth: '100%', width: '100%' }}
                     viewBox={`0 0 208 208`}
@@ -384,10 +398,10 @@ export default function KioskStationView() {
                 </div>
               </div>
               <p className='text-white font-bold text-sm text-center'>
-                {route.label}
+                {room.name}
               </p>
               <p className='text-navy-400 text-xs text-center mt-1'>
-                {route.room} · {route.building}
+                {room.roomNumber} · {room.building}
               </p>
 
               {/* Live headcount for this room. Clicking opens that room's records, so a
@@ -397,14 +411,14 @@ export default function KioskStationView() {
                   be stale the moment it went up. */}
               <button
                 type='button'
-                onClick={() => setOpenRoom(route.room)}
-                aria-label={`View records for ${route.label}`}
+                onClick={() => setOpenRoomId(room.id)}
+                aria-label={`View records for ${room.name}`}
                 className={`
                   mt-3 w-full px-3 py-2 rounded-lg border text-center
                   transition-colors duration-150 cursor-pointer
                   focus:outline-none focus:ring-2 focus:ring-orange-500/60
                   ${
-                    roomCounts(route.room) > 0
+                    roomCounts(room.id) > 0
                       ? 'bg-green-500/10 border-green-500/30 hover:bg-green-500/20'
                       : 'bg-navy-900/50 border-navy-700 hover:border-navy-600 hover:bg-navy-800/50'
                   }
@@ -412,20 +426,28 @@ export default function KioskStationView() {
               >
                 <span
                   className={`text-xs font-semibold ${
-                    roomCounts(route.room) > 0
+                    roomCounts(room.id) > 0
                       ? 'text-green-300'
                       : 'text-navy-400'
                   }`}
                 >
                   <i className='fa-solid fa-users mr-1'></i>
-                  {roomCounts(route.room)}{' '}
-                  {roomCounts(route.room) === 1 ? 'person' : 'people'} inside
+                  {roomCounts(room.id)}{' '}
+                  {roomCounts(room.id) === 1 ? 'person' : 'people'} inside
                   <i className='fa-solid fa-chevron-right ml-2 text-[10px] opacity-60'></i>
                 </span>
               </button>
 
               <button
-                onClick={() => handlePrintQR(route)}
+                onClick={() =>
+                  handlePrintQR({
+                    id: room.id,
+                    label: room.name,
+                    room: room.roomNumber,
+                    building: room.building,
+                    qrValue: room.qrValue,
+                  })
+                }
                 className='
                   mt-4 w-full px-4 py-2.5 rounded-lg font-semibold text-sm
                   bg-orange-500 hover:bg-orange-600 text-paper
@@ -448,12 +470,12 @@ export default function KioskStationView() {
             className='fixed inset-0 z-50 flex items-center justify-center p-4'
             role='dialog'
             aria-modal='true'
-            aria-label={`${openRoomVisits.route.label} records`}
+            aria-label={`${openRoomVisits.room.name} records`}
           >
             {/* Clicking the backdrop closes it. */}
             <div
               className='absolute inset-0 bg-navy-950/80 backdrop-blur-sm'
-              onClick={() => setOpenRoom(null)}
+              onClick={() => setOpenRoomId(null)}
             />
 
             <div className='relative w-full max-w-2xl max-h-[80vh] flex flex-col glass-panel border-navy-700 rounded-lg overflow-hidden'>
@@ -462,15 +484,16 @@ export default function KioskStationView() {
                 <div>
                   <h3 className='text-white font-bold text-lg flex items-center gap-2'>
                     <i className='fa-solid fa-door-closed text-navy-400'></i>
-                    {openRoomVisits.route.label}
+                    {openRoomVisits.room.name}
                   </h3>
                   <p className='text-navy-400 text-xs mt-0.5'>
-                    {openRoomVisits.route.room} · {openRoomVisits.route.building}
+                    {openRoomVisits.room.roomNumber} ·{' '}
+                    {openRoomVisits.room.building}
                   </p>
                 </div>
                 <button
                   type='button'
-                  onClick={() => setOpenRoom(null)}
+                  onClick={() => setOpenRoomId(null)}
                   aria-label='Close'
                   className='text-navy-400 hover:text-white transition-colors text-lg leading-none p-1'
                 >
@@ -602,7 +625,7 @@ export default function KioskStationView() {
                 <span className='text-green-300 font-semibold'>
                   ground floor attendance code
                 </span>{' '}
-                to clock in and receive your 3D route.
+                to check in and receive your 3D route.
               </p>
             </div>
             <div className='flex items-start gap-3 text-sm'>
@@ -626,7 +649,7 @@ export default function KioskStationView() {
                 <span className='text-green-300 font-semibold'>
                   ground floor code again
                 </span>{' '}
-                to clock out.
+                to check out.
               </p>
             </div>
           </div>

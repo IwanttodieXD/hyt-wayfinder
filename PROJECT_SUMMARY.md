@@ -11,7 +11,7 @@ building. It replaces a paper sign-in sheet with two separate things:
 
 **1. Attendance — who is in the building.**
 One QR code at the ground floor entrance. Visitors scan it on their phone to
-clock in, and scan it again to clock out. This is the only code that records
+check in, and scan it again to check out. This is the only code that records
 attendance.
 
 **2. Room presence — who is in which room.**
@@ -74,13 +74,13 @@ Admin-only pages are enforced with `useRoleGuard`, which redirects non-admins to
 | `/` | Anyone | Redirects by auth state and role |
 | `/login` | Anyone | Sign in |
 | `/register` | Anyone | Create a visitor/trainee/trainer account |
-| `/clock-in` | visitor, trainee, trainer | Mobile scanner: clock in/out, scan room doors, view 3D route |
+| `/check-in` | visitor, trainee, trainer | Mobile scanner: check in/out, scan room doors, view 3D route |
 | `/trainer` | trainer | Trainer view |
 | `/visitor` | visitor | Visitor view |
 | `/station` | admin | Print the attendance code and each room's door code, plus a live per-room headcount |
 | `/occupancy` | admin | Who is inside which room right now |
 | `/admin` | admin | Dashboard |
-| `/admin/records` | admin | Attendance records (clock-in/out), searchable, exportable |
+| `/admin/records` | admin | Attendance records (check-in/out), searchable, exportable |
 | `/admin/room-records` | admin | Room visit history, grouped per room |
 | `/admin/users` | admin | Create, edit and delete accounts |
 | `/api/admin/users` | server | Account create/delete via the service role key |

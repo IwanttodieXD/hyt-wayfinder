@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useAuthStore, type UserRole, DESTINATIONS } from '@/store/authStore';
+import { useAuthStore, type UserRole } from '@/store/authStore';
 import { useUsersStore, type ManagedUser } from '@/store/usersStore';
 import UserProfile from '@/components/UserProfile';
 
@@ -24,7 +24,6 @@ type FormState = {
   email: string;
   role: UserRole;
   password: string;
-  destination: string;
 };
 
 const EMPTY_FORM: FormState = {
@@ -32,13 +31,12 @@ const EMPTY_FORM: FormState = {
   email: '',
   role: 'trainee',
   password: '',
-  destination: '',
 };
 
 export default function UsersPage() {
   const router = useRouter();
   const { user: currentUser, isAuthenticated } = useAuthStore();
-  const { users, isLoading, fetchUsers, createUser, updateUser, deleteUser } =
+  const { users, isLoading, fetchUsers, createUser, updateUser, archiveUser } =
     useUsersStore();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -100,7 +98,6 @@ export default function UsersPage() {
       email: target.email,
       role: target.role,
       password: '',
-      destination: target.destination ?? '',
     });
     setFormError(null);
     setIsModalOpen(true);
@@ -130,9 +127,6 @@ export default function UsersPage() {
         name: form.name.trim(),
         email: form.email.trim(),
         role: form.role,
-        // Normalized to null when cleared, so an admin can remove an
-        // assignment rather than only ever setting one.
-        destination: form.destination || null,
       });
       setIsSaving(false);
       if (!success) return setFormError(error || 'Could not save changes.');
@@ -146,7 +140,6 @@ export default function UsersPage() {
       email: form.email.trim(),
       role: form.role,
       password: form.password,
-      destination: form.destination || undefined,
     });
     setIsSaving(false);
     if (!success) return setFormError(error || 'Could not create the user.');
@@ -154,15 +147,15 @@ export default function UsersPage() {
     setNotice({ kind: 'success', text: `Created ${form.name.trim()}.` });
   };
 
-  const confirmDelete = async () => {
+  const confirmArchive = async () => {
     if (!deleteTarget) return;
-    const { success, error } = await deleteUser(deleteTarget.id);
+    const { success, error } = await archiveUser(deleteTarget.id);
     const name = deleteTarget.name;
     setDeleteTarget(null);
     setNotice(
       success
-        ? { kind: 'success', text: `Deleted ${name}.` }
-        : { kind: 'error', text: error || 'Could not delete the user.' }
+        ? { kind: 'success', text: `Archived ${name}. Their visit history is kept.` }
+        : { kind: 'error', text: error || 'Could not archive the user.' }
     );
   };
 
@@ -295,7 +288,7 @@ export default function UsersPage() {
               <table className='w-full'>
                 <thead className='bg-navy-900/50 border-b border-navy-800'>
                   <tr>
-                    {['User', 'Role', 'Destination', 'Joined', 'Actions'].map((heading) => (
+                    {['User', 'Role', 'Joined', 'Actions'].map((heading) => (
                       <th
                         key={heading}
                         className='px-4 py-3 text-left text-xs font-semibold text-navy-400 uppercase tracking-wider'
@@ -333,16 +326,6 @@ export default function UsersPage() {
                           {u.role}
                         </span>
                       </td>
-                      <td className='px-4 py-3'>
-                        {u.destination ? (
-                          <span className='inline-flex items-center gap-1.5 text-navy-300 text-sm'>
-                            <i className='fa-solid fa-location-dot text-orange-400 text-xs'></i>
-                            {u.destination}
-                          </span>
-                        ) : (
-                          <span className='text-navy-600 text-sm'>—</span>
-                        )}
-                      </td>
                       <td className='px-4 py-3 whitespace-nowrap text-navy-300 text-sm'>
                         {u.createdAt.toLocaleDateString('en-US', {
                           month: 'short',
@@ -363,12 +346,12 @@ export default function UsersPage() {
                             disabled={u.id === currentUser?.id}
                             title={
                               u.id === currentUser?.id
-                                ? 'You cannot delete your own account'
-                                : 'Delete user'
+                                ? 'You cannot archive your own account'
+                                : 'Archive user'
                             }
                             className='px-3 py-1.5 rounded-lg bg-red-600 border border-red-500/30 text-paper hover:bg-red-700 text-xs font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
                           >
-                            Delete
+                            Archive
                           </button>
                         </div>
                       </td>
@@ -475,34 +458,15 @@ export default function UsersPage() {
                   <i className='fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-navy-400 text-xs pointer-events-none'></i>
                 </div>
               </div>
-              <div>
-                <label className='block text-sm font-medium text-navy-200 mb-2'>
-                  Destination
-                </label>
-                <div className='relative'>
-                  <select
-                    value={form.destination}
-                    onChange={(e) =>
-                      setForm({ ...form, destination: e.target.value })
-                    }
-                    className={`w-full px-4 py-2.5 rounded-lg appearance-none bg-navy-950/60 border border-navy-700 text-white focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors cursor-pointer`}
-                  >
-                    <option value='' className='bg-navy-900'>
-                      Not assigned
-                    </option>
-                    {DESTINATIONS.map((destination) => (
-                      <option
-                        key={destination}
-                        value={destination}
-                        className='bg-navy-900'
-                      >
-                        {destination}
-                      </option>
-                    ))}
-                  </select>
-                  <i className='fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-navy-400 text-xs pointer-events-none'></i>
-                </div>
-              </div>
+              {/* There is no assigned-room field here any more. `users` has no
+                  destination/building column on the new schema: the room belongs to
+                  a visit, recorded on `clock_in_records.room_id` when the person
+                  checks in. An admin sets it per check-in, or leaves it blank and
+                  the person scans a room door instead. */}
+              <p className='text-navy-500 text-xs'>
+                Assigned rooms are no longer stored on the account. They are
+                recorded per visit when the person checks in.
+              </p>
               {!editing && (
                 <div>
                   <label className='block text-sm font-medium text-navy-200 mb-2'>
@@ -553,11 +517,11 @@ export default function UsersPage() {
                 <i className='fa-solid fa-triangle-exclamation text-red-400'></i>
               </div>
               <div>
-                <h2 className='text-white font-bold'>Delete user?</h2>
+                <h2 className='text-white font-bold'>Archive user?</h2>
                 <p className='text-navy-300 text-sm mt-1'>
-                  This permanently removes{' '}
                   <span className='text-white font-semibold'>{deleteTarget.name}</span>{' '}
-                  and their login. Their clock-in records are deleted too.
+                  will no longer be able to sign in, and will be hidden from this
+                  list. Their attendance and room-visit history is kept.
                 </p>
               </div>
             </div>
@@ -569,10 +533,10 @@ export default function UsersPage() {
                 Cancel
               </button>
               <button
-                onClick={confirmDelete}
+                onClick={confirmArchive}
                 className='flex-1 px-4 py-2.5 rounded-lg bg-red-600 hover:bg-red-700 text-paper font-semibold text-sm transition-colors'
               >
-                Delete
+                Archive
               </button>
             </div>
           </div>
