@@ -282,7 +282,79 @@ CREATE INDEX records_time_in_idx ON public.clock_in_records(time_in);
 CREATE INDEX records_created_at_idx ON public.clock_in_records(created_at DESC);
 ```
 
-### 3.4 Create Automatic Timestamp Update Function
+### 3.4 Create Room Presence Table
+
+Room presence answers a different question from attendance: of the people
+currently checked in, **which room is each one in right now?**
+
+Attendance (`clock_in_records`) is only ever written by scanning the single
+ground floor code. Presence (`room_presence`) is only ever written by scanning
+a room's door code. The two never mix, so a visitor can't change their
+attendance by scanning the wrong poster, and occupancy history survives
+independently of who is currently clocked in.
+
+Rows are append-only: scanning a door opens a row with `entered_at` and no
+`exited_at`; scanning another room closes the previous open row first. That
+means "who was in Room 304 at 3pm" is answerable, not just "who is there now".
+
+```sql
+-- Create room_presence table
+CREATE TABLE public.room_presence (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  user_id UUID REFERENCES public.users(id) ON DELETE CASCADE NOT NULL,
+  room TEXT NOT NULL,
+  room_label TEXT NOT NULL,
+  entered_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+  exited_at TIMESTAMPTZ
+);
+
+-- Enable Row Level Security
+ALTER TABLE public.room_presence ENABLE ROW LEVEL SECURITY;
+
+-- Policy: Users can view their own presence history
+CREATE POLICY "Users can view own presence"
+  ON public.room_presence
+  FOR SELECT
+  USING (auth.uid() = user_id);
+
+-- Policy: Users can insert their own presence
+CREATE POLICY "Users can create own presence"
+  ON public.room_presence
+  FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+-- Policy: Admins can view all presence
+CREATE POLICY "Admins can view all presence"
+  ON public.room_presence
+  FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.users
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
+
+-- Admins can close anyone's rows (needed when correcting presence data)
+CREATE POLICY "Admins can update presence"
+  ON public.room_presence
+  FOR UPDATE
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.users
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
+
+-- Create indexes. The partial index on open rows is what makes the
+-- "who is where right now" lookup fast as history grows.
+CREATE INDEX presence_user_id_idx ON public.room_presence(user_id);
+CREATE INDEX presence_room_idx ON public.room_presence(room);
+CREATE INDEX presence_entered_at_idx ON public.room_presence(entered_at DESC);
+CREATE INDEX presence_open_idx ON public.room_presence(user_id)
+  WHERE exited_at IS NULL;
+```
+
+### 3.5 Create Automatic Timestamp Update Function
 
 ```sql
 -- Function to update updated_at timestamp
@@ -595,6 +667,7 @@ Solution: Restart dev server after adding .env.local
 - [ ] API credentials copied to `.env.local`
 - [ ] Users table created
 - [ ] Clock-in records table created
+- [ ] `room_presence` table created (the `## 3.4` section)
 - [ ] RLS policies applied
 - [ ] Admin user-management policies applied (the `## User Management` section)
 - [ ] `SUPABASE_SERVICE_ROLE_KEY` added to `.env.local` (enables create/delete)

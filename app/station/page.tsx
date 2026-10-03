@@ -41,17 +41,8 @@ export default function StationPage() {
               </div>
             </div>
 
-            {/* User Profile or System Status */}
-            {isAuthenticated && user ? (
-              <UserProfile />
-            ) : (
-              <div className='hidden md:flex items-center gap-2 px-4 py-2 rounded-lg bg-green-500/10 border border-green-500/30'>
-                <div className='w-2 h-2 rounded-full bg-green-400 animate-pulse'></div>
-                <span className='text-green-300 text-sm font-semibold'>
-                  System Online
-                </span>
-              </div>
-            )}
+            {/* User Profile */}
+            {isAuthenticated && user ? <UserProfile /> : null}
           </div>
         </header>
 

@@ -208,11 +208,29 @@ export default function UsersPage() {
             </button>
           </div>
 
-          <div className='grid grid-cols-2 md:grid-cols-4 gap-3 mb-6'>
-            <div className='glass-panel border-navy-800 p-4 rounded-lg'>
-              <p className='text-navy-300 text-xs mb-1'>Total Users</p>
-              <p className='text-white text-2xl font-bold'>{users.length}</p>
+          {/* Total Users. Given the same prominence as on the dashboard, since it's the
+              headline number for this page; the role counts below are the
+              breakdown of it. */}
+          <div className='mb-3'>
+            <div className='glass-panel border-orange-500/30 rounded-lg p-6'>
+              <div className='flex items-center gap-5'>
+                <div className='w-16 h-16 rounded-xl bg-orange-500/20 flex items-center justify-center flex-shrink-0'>
+                  <i className='fa-solid fa-users text-orange-400 text-3xl'></i>
+                </div>
+                <div className='min-w-0'>
+                  <p className='text-orange-300 text-xs font-semibold uppercase tracking-wider mb-1'>
+                    Total Users
+                  </p>
+                  <p className='text-white text-5xl font-bold leading-none tabular-nums'>
+                    {users.length}
+                  </p>
+                </div>
+              </div>
             </div>
+          </div>
+
+          {/* Role breakdown of the total above. */}
+          <div className='grid grid-cols-2 md:grid-cols-4 gap-3 mb-6'>
             {ROLES.map((role) => (
               <div key={role} className='glass-panel border-navy-800 p-4 rounded-lg'>
                 <p className='text-navy-300 text-xs mb-1 capitalize'>{role}s</p>

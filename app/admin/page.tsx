@@ -70,8 +70,10 @@ export default function AdminDashboard() {
             </p>
           </div>
 
-          {/* Live Metrics */}
-          <div className='grid grid-cols-1 md:grid-cols-3 gap-3 mb-8'>
+          {/* Live Metrics. Total users deliberately lives on /admin/users rather than
+              here — this dashboard is about today's movement through the
+              building, not the size of the account list. */}
+          <div className='grid grid-cols-1 md:grid-cols-2 gap-3 mb-8'>
             {/* Active Clock-Ins */}
             <div className='glass-panel border-navy-800 p-6 rounded-lg'>
               <div className='flex items-center justify-between mb-4'>
@@ -105,20 +107,6 @@ export default function AdminDashboard() {
               <p className='text-navy-300 text-sm mb-1'>Attendance Today</p>
               <p className='text-white text-3xl font-bold'>{todayCount}</p>
             </div>
-
-            {/* System Status */}
-            <div className='glass-panel border-navy-800 p-6 rounded-lg'>
-              <div className='flex items-center justify-between mb-4'>
-                <div className='w-12 h-12 rounded-lg bg-navy-600/20 flex items-center justify-center'>
-                  <i className='fa-solid fa-server text-navy-300 text-xl'></i>
-                </div>
-              </div>
-              <p className='text-navy-300 text-sm mb-1'>System Status</p>
-              <p className='text-green-400 text-lg font-bold flex items-center gap-2'>
-                <i className='fa-solid fa-circle-check'></i>
-                Online
-              </p>
-            </div>
           </div>
 
           {/* Quick Actions */}
@@ -133,9 +121,30 @@ export default function AdminDashboard() {
                 </div>
                 <div>
                   <h3 className='text-white font-semibold text-lg mb-1'>
-                    View All Records
+                    Attendance Records
                   </h3>
-                  <p className='text-navy-300 text-sm'>Full clock-in/out history</p>
+                  <p className='text-navy-300 text-sm'>
+                    Who clocked in and out of the building
+                  </p>
+                </div>
+              </div>
+            </Link>
+
+            <Link
+              href='/admin/room-records'
+              className='glass-panel border-navy-800 p-6 rounded-lg hover:border-orange-500/50 transition-colors group'
+            >
+              <div className='flex items-center gap-3'>
+                <div className='w-14 h-14 rounded-lg bg-orange-500/20 flex items-center justify-center group-hover:bg-orange-500/30 transition-colors'>
+                  <i className='fa-solid fa-door-open text-orange-400 text-2xl'></i>
+                </div>
+                <div>
+                  <h3 className='text-white font-semibold text-lg mb-1'>
+                    Room Visits
+                  </h3>
+                  <p className='text-navy-300 text-sm'>
+                    Who entered each room, and when
+                  </p>
                 </div>
               </div>
             </Link>
@@ -179,7 +188,7 @@ export default function AdminDashboard() {
                 href='/admin/records'
                 className='text-orange-400 hover:text-orange-300 text-sm font-semibold flex items-center gap-2 transition-colors'
               >
-                View All
+                View All Attendance
                 <i className='fa-solid fa-arrow-right'></i>
               </Link>
             </div>

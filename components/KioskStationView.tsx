@@ -3,10 +3,27 @@
 import { useClockInStore } from '@/store/clockInStore';
 import { useAuthStore } from '@/store/authStore';
 import { useRecordsStore } from '@/store/recordsStore';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import QRCode from 'react-qr-code';
-import { DESTINATION_ROUTES, type DestinationRoute } from '@/lib/wayfinding';
+import {
+  ATTENDANCE_QR_VALUE,
+  DESTINATION_ROUTES,
+} from '@/lib/wayfinding';
+import {
+  useRoomPresenceStore,
+  visitDuration,
+} from '@/store/roomPresenceStore';
+
+// Everything the print window needs, without dragging in the waypoint data.
+type PrintableCode = {
+  id: string;
+  label: string;
+  room: string;
+  /** Optional second line, e.g. the building a room is in. */
+  building?: string;
+  qrValue: string;
+};
 
 // Destination labels go into a generated print document, so escape them
 // rather than trusting the registry text.
@@ -23,18 +40,98 @@ export default function KioskStationView() {
   const { user } = useAuthStore();
   const { getActiveCount, getCompletedTodayCount, fetchTodayRecords } =
     useRecordsStore();
+  // Live per-room headcount for the posters below, so whoever is posting them
+  // can see at a glance which rooms already have people in them.
+  const { getOccupancyByRoom, fetchTodayPresence, presence } =
+    useRoomPresenceStore();
+
+  // Which room's records the drill-down is showing, or null when closed. The
+  // headcount badge is the way in.
+  const [openRoom, setOpenRoom] = useState<string | null>(null);
+
+  // Drives the clock below. Without this the time is frozen at whatever it was
+  // when the component rendered, and never advances.
+  const [now, setNow] = useState(() => new Date());
 
   // Load today's records so the active/on-break counts are live
   useEffect(() => {
     fetchTodayRecords();
-  }, [fetchTodayRecords]);
+    fetchTodayPresence();
+  }, [fetchTodayRecords, fetchTodayPresence]);
+
+  // Tick once a minute, aligned to the minute boundary so the displayed minute
+  // flips when it actually changes rather than up to a minute late.
+  useEffect(() => {
+    const tick = () => setNow(new Date());
+    const msToNextMinute = 60000 - (Date.now() % 60000);
+    const timeout = setTimeout(tick, msToNextMinute);
+    const interval = setInterval(tick, 60000);
+    return () => {
+      clearTimeout(timeout);
+      clearInterval(interval);
+    };
+  }, []);
+
+  // Escape closes the drill-down, matching the usual expectation for a dialog.
+  useEffect(() => {
+    if (!openRoom) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpenRoom(null);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [openRoom]);
+
+  // Stop the page behind the overlay from scrolling while it's open.
+  useEffect(() => {
+    if (!openRoom) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [openRoom]);
 
   const activeCount = getActiveCount();
   const onBreakCount = getCompletedTodayCount();
 
+  // Only one pass over the occupancy map, rather than rebuilding it per poster.
+  const roomCounts = (() => {
+    const byRoom = new Map(
+      getOccupancyByRoom().map((r) => [r.room, r.people.length])
+    );
+    return (room: string) => byRoom.get(room) ?? 0;
+  })();
+
+  // How many of the people inside have scanned a room door. This is what makes
+  // the occupancy card say more than "Checked In Now" already does: it splits
+  // the building count into tracked vs still unaccounted for.
+  const trackedCount = getOccupancyByRoom().reduce(
+    (sum, entry) => sum + entry.people.length,
+    0
+  );
+
+  // Visits for the open room, newest first. Split so people still inside sit at
+  // the top, which is what the person checking the room actually cares about.
+  const openRoomVisits = (() => {
+    if (!openRoom) return null;
+    const route = DESTINATION_ROUTES.find((r) => r.room === openRoom);
+    if (!route) return null;
+
+    const visits = presence
+      .filter((p) => p.room === openRoom)
+      .sort((a, b) => b.enteredAt.getTime() - a.enteredAt.getTime());
+
+    return {
+      route,
+      inside: visits.filter((v) => !v.exitedAt),
+      history: visits.filter((v) => v.exitedAt),
+    };
+  })();
+
   // Pulls the live SVG out of the panel so the print window can clone it as
   // vector markup - a rasterised screenshot would blur when printed.
-  const handlePrintQR = (route: DestinationRoute) => {
+  const handlePrintQR = (route: PrintableCode) => {
     const panel = document.querySelector(`[data-qr-panel="${route.id}"]`);
     const svg = panel?.querySelector('svg');
     if (!svg) return;
@@ -60,7 +157,7 @@ export default function KioskStationView() {
         escapeHtml(route.label) +
         '</h1>' +
         '<p>' +
-        escapeHtml(route.room + ' Ã‚Â· ' + route.building) +
+        escapeHtml(route.building ? route.room + ' · ' + route.building : route.room) +
         '</p>' +
         '<div class="code">' +
         svg.outerHTML +
@@ -75,56 +172,58 @@ export default function KioskStationView() {
   return (
     <div className='w-full min-h-full bg-navy-950 p-8'>
       <div className='max-w-7xl mx-auto'>
-        {/* Header */}
+        {/* Page title. No status badge here: it used to read "Station Active", but
+            nothing ever set it inactive, so it was decoration rather than
+            information. The live counts below carry the real status. */}
         <div className='mb-8'>
-          <div className='flex items-center justify-between mb-4'>
-            <div>
-              <h1 className='text-3xl font-bold text-white mb-2'>Attendance Station</h1>
-              <p className='text-navy-300'>Ground Floor Ã‚Â· Attendance Station</p>
-            </div>
-            <div className='flex items-center gap-3 px-4 py-3 rounded-lg bg-green-500/20 border border-green-500/30'>
-              <div className='w-3 h-3 rounded-full bg-green-400 animate-pulse'></div>
-              <span className='text-green-300 font-bold text-lg uppercase tracking-wider'>
-                Station Active
-              </span>
-            </div>
-          </div>
+          <h1 className='text-3xl font-bold text-white mb-2'>Attendance Station</h1>
+          <p className='text-navy-300'>
+            Print the attendance code for the ground floor, and a door code for
+            each room.
+          </p>
+        </div>
 
-          {/* Live Stats Bar */}
+          {/* Live stats. Each card states what it counts, since "Clock Out" next to a
+            coffee-cup icon was ambiguous about whether it meant the action or
+            the number of people who had already done it. */}
           <div className='grid grid-cols-1 md:grid-cols-3 gap-3'>
             <div className='glass-panel border-navy-800 p-6 rounded-lg'>
-              <div className='flex items-center gap-3'>
-                <div className='w-14 h-14 rounded-lg bg-orange-500/20 flex items-center justify-center'>
-                  <i className='fa-solid fa-users text-orange-400 text-2xl'></i>
+              <div className='flex items-center gap-4'>
+                <div className='w-14 h-14 rounded-lg bg-green-500/20 flex items-center justify-center flex-shrink-0'>
+                  <i className='fa-solid fa-user-check text-green-400 text-2xl'></i>
                 </div>
-                <div>
-                  <p className='text-navy-300 text-sm mb-1'>Active Users</p>
-                  <p className='text-white text-3xl font-bold'>{activeCount}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className='glass-panel border-navy-800 p-6 rounded-lg'>
-              <div className='flex items-center gap-3'>
-                <div className='w-14 h-14 rounded-lg bg-orange-500/20 flex items-center justify-center'>
-                  <i className='fa-solid fa-mug-hot text-orange-400 text-2xl'></i>
-                </div>
-                <div>
-                  <p className='text-navy-300 text-sm mb-1'>Clock Out</p>
-                  <p className='text-white text-3xl font-bold'>{onBreakCount}</p>
+                <div className='min-w-0'>
+                  <p className='text-navy-300 text-sm mb-1'>Checked In Now</p>
+                  <p className='text-white text-3xl font-bold leading-none'>
+                    {activeCount}
+                  </p>
                 </div>
               </div>
             </div>
 
             <div className='glass-panel border-navy-800 p-6 rounded-lg'>
-              <div className='flex items-center gap-3'>
-                <div className='w-14 h-14 rounded-lg bg-green-500/20 flex items-center justify-center'>
-                  <i className='fa-solid fa-clock text-green-400 text-2xl'></i>
+              <div className='flex items-center gap-4'>
+                <div className='w-14 h-14 rounded-lg bg-orange-500/20 flex items-center justify-center flex-shrink-0'>
+                  <i className='fa-solid fa-sign-out-alt text-orange-400 text-2xl'></i>
                 </div>
-                <div>
+                <div className='min-w-0'>
+                  <p className='text-navy-300 text-sm mb-1'>Checked Out Today</p>
+                  <p className='text-white text-3xl font-bold leading-none'>
+                    {onBreakCount}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className='glass-panel border-navy-800 p-6 rounded-lg'>
+              <div className='flex items-center gap-4'>
+                <div className='w-14 h-14 rounded-lg bg-navy-600/20 flex items-center justify-center flex-shrink-0'>
+                  <i className='fa-solid fa-clock text-navy-200 text-2xl'></i>
+                </div>
+                <div className='min-w-0'>
                   <p className='text-navy-300 text-sm mb-1'>Current Time</p>
-                  <p className='text-white text-3xl font-bold'>
-                    {new Date().toLocaleTimeString('en-US', {
+                  <p className='text-white text-3xl font-bold leading-none tabular-nums'>
+                    {now.toLocaleTimeString('en-US', {
                       hour: '2-digit',
                       minute: '2-digit',
                       hour12: true,
@@ -135,41 +234,131 @@ export default function KioskStationView() {
             </div>
           </div>
 
-          {/* Live occupancy moved to its own page. */}
-          <Link
-            href='/occupancy'
-            className='flex items-center justify-between gap-3 glass-panel border-navy-800 p-5 rounded-lg hover:border-orange-500/50 transition-colors mb-3'
-          >
-            <span className='flex items-center gap-3'>
-              <i className='fa-solid fa-door-open text-orange-400 text-xl'></i>
-              <span className='text-white font-bold'>Inside Right Now</span>
-            </span>
-            <span className='flex items-center gap-3'>
-              <span className='text-navy-300 text-sm'>
-                {activeCount} {activeCount === 1 ? 'person' : 'people'}
-              </span>
-              <i className='fa-solid fa-arrow-right text-navy-400'></i>
-            </span>
-          </Link>
-        </div>
+          {/* Occupancy. Deliberately NOT a fourth stat card: it was flush under
+            the Current Time card and read as part of that grid. It also answered
+            a different question - which room each person is in - so it gets its
+            own section with a heading. */}
+          <div className='mt-8'>
+            <h2 className='text-lg font-bold text-white mb-1'>Occupancy</h2>
+            <p className='text-navy-400 text-sm mb-4'>
+              Who is in the building, and which rooms they have scanned into.
+            </p>
 
-        {/* Check-in heading */}
+            <Link
+              href='/occupancy'
+              className='
+                flex items-center justify-between gap-4
+                glass-panel border-navy-800 p-6 rounded-lg
+                hover:border-orange-500/50 transition-colors
+              '
+            >
+              <span className='flex items-center gap-4 min-w-0'>
+                <span className='w-14 h-14 rounded-lg bg-orange-500/20 flex items-center justify-center flex-shrink-0'>
+                  <i className='fa-solid fa-door-open text-orange-400 text-2xl'></i>
+                </span>
+                <span className='min-w-0'>
+                  <span className='block text-navy-300 text-sm mb-1'>
+                    Inside Right Now
+                  </span>
+                  <span className='block text-white text-2xl font-bold leading-none'>
+                    {activeCount}{' '}
+                    <span className='text-base font-semibold text-navy-300'>
+                      {activeCount === 1 ? 'person' : 'people'}
+                    </span>
+                  </span>
+                </span>
+              </span>
+
+              <span className='flex items-center gap-3 flex-shrink-0'>
+                <span className='text-navy-400 text-sm text-right'>
+                  {trackedCount} of {activeCount} in a room
+                </span>
+                <i className='fa-solid fa-arrow-right text-navy-400'></i>
+              </span>
+            </Link>
+          </div>
+
+        {/* Attendance heading. There is exactly one attendance code and it is
+            the ground floor one, so it gets its own prominent panel rather than
+            sitting in the same grid as the room codes. */}
         <div className='text-center mb-6'>
-          <div className='inline-flex items-center gap-2 px-4 py-2 rounded-full bg-orange-500/10 border border-orange-500/30 mb-4'>
-            <i className='fa-solid fa-qrcode text-orange-400'></i>
-            <span className='text-orange-300 font-semibold text-sm uppercase tracking-wider'>
-              Check-In
+          <div className='inline-flex items-center gap-2 px-4 py-2 rounded-full bg-green-500/10 border border-green-500/30 mb-4'>
+            <i className='fa-solid fa-clipboard-check text-green-400'></i>
+            <span className='text-green-300 font-semibold text-sm uppercase tracking-wider'>
+              Ground Floor · Attendance
             </span>
           </div>
-          <h2 className='text-2xl font-bold text-white mb-2'>Scan to Clock In</h2>
+          <h2 className='text-2xl font-bold text-white mb-2'>
+            Scan to Clock In or Out
+          </h2>
           <p className='text-navy-300'>
-            Scan the QR code for the room you are headed to
+            This is the only code that records attendance. Post it at the ground
+            floor entrance.
           </p>
         </div>
 
-        {/* One panel per destination, so each code is a self-contained unit
-            that can be printed and posted on its own wall. Scanning one tells
-            the phone which route to draw. */}
+        {/* The single attendance code. Printed large because this is the one
+            people scan most, and separated from the room codes below so nobody
+            mistakes a door code for the check-in point. */}
+        <div className='max-w-md mx-auto mb-10'>
+          <div className='glass-panel border-green-500/30 rounded-lg p-6 flex flex-col items-center'>
+            <div className='flex justify-center w-full mb-4'>
+              <div
+                data-qr-panel='attendance'
+                className='bg-paper p-6 rounded-lg w-full max-w-[240px] shadow-lg'
+              >
+                <QRCode
+                  value={ATTENDANCE_QR_VALUE}
+                  size={208}
+                  style={{ height: 'auto', maxWidth: '100%', width: '100%' }}
+                  viewBox={`0 0 208 208`}
+                />
+              </div>
+            </div>
+            <p className='text-white font-bold text-sm text-center'>
+              Ground Floor Attendance
+            </p>
+            <p className='text-navy-400 text-xs text-center mt-1'>
+              Main entrance
+            </p>
+            <button
+              onClick={() => handlePrintQR({
+                id: 'attendance',
+                label: 'Ground Floor Attendance',
+                room: 'Main Entrance',
+                qrValue: ATTENDANCE_QR_VALUE,
+              })}
+              className='
+                mt-4 w-full px-4 py-2.5 rounded-lg font-semibold text-sm
+                bg-green-600 hover:bg-green-700 text-paper
+                transition-colors duration-150
+                flex items-center justify-center gap-2
+              '
+            >
+              <i className='fa-solid fa-print'></i>
+              Print Attendance QR
+            </button>
+          </div>
+        </div>
+
+        {/* Room codes. Clearly labelled as tracking-only so they are never
+            mistaken for a way to clock attendance. */}
+        <div className='text-center mb-6'>
+          <div className='inline-flex items-center gap-2 px-4 py-2 rounded-full bg-navy-700/50 border border-navy-700 mb-4'>
+            <i className='fa-solid fa-door-open text-navy-300'></i>
+            <span className='text-navy-200 font-semibold text-sm uppercase tracking-wider'>
+              Room Presence
+            </span>
+          </div>
+          <h2 className='text-2xl font-bold text-white mb-2'>Room Door Codes</h2>
+          <p className='text-navy-300'>
+            Post one on each room door. Scanning records who is inside that room
+            — it does not clock anyone in or out.
+          </p>
+        </div>
+
+        {/* One panel per room, so each code is a self-contained unit that can be
+            printed and posted on its own door. */}
         <div className='grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-4'>
           {DESTINATION_ROUTES.map((route) => (
             <div
@@ -198,8 +387,42 @@ export default function KioskStationView() {
                 {route.label}
               </p>
               <p className='text-navy-400 text-xs text-center mt-1'>
-                {route.room} Ã‚Â· {route.building}
+                {route.room} · {route.building}
               </p>
+
+              {/* Live headcount for this room. Clicking opens that room's records, so a
+                  count of 0 is still worth clicking - it shows who was in the
+                  room earlier today and when they left. Shown on screen only,
+                  never in the print window: a number on a printed poster would
+                  be stale the moment it went up. */}
+              <button
+                type='button'
+                onClick={() => setOpenRoom(route.room)}
+                aria-label={`View records for ${route.label}`}
+                className={`
+                  mt-3 w-full px-3 py-2 rounded-lg border text-center
+                  transition-colors duration-150 cursor-pointer
+                  focus:outline-none focus:ring-2 focus:ring-orange-500/60
+                  ${
+                    roomCounts(route.room) > 0
+                      ? 'bg-green-500/10 border-green-500/30 hover:bg-green-500/20'
+                      : 'bg-navy-900/50 border-navy-700 hover:border-navy-600 hover:bg-navy-800/50'
+                  }
+                `}
+              >
+                <span
+                  className={`text-xs font-semibold ${
+                    roomCounts(route.room) > 0
+                      ? 'text-green-300'
+                      : 'text-navy-400'
+                  }`}
+                >
+                  <i className='fa-solid fa-users mr-1'></i>
+                  {roomCounts(route.room)}{' '}
+                  {roomCounts(route.room) === 1 ? 'person' : 'people'} inside
+                  <i className='fa-solid fa-chevron-right ml-2 text-[10px] opacity-60'></i>
+                </span>
+              </button>
 
               <button
                 onClick={() => handlePrintQR(route)}
@@ -217,28 +440,193 @@ export default function KioskStationView() {
           ))}
         </div>
 
+        {/* Room records drill-down, opened from a poster's headcount badge.
+            An overlay rather than an inline expand, because the posters are a
+            grid and expanding one would reflow every card around it. */}
+        {openRoomVisits && (
+          <div
+            className='fixed inset-0 z-50 flex items-center justify-center p-4'
+            role='dialog'
+            aria-modal='true'
+            aria-label={`${openRoomVisits.route.label} records`}
+          >
+            {/* Clicking the backdrop closes it. */}
+            <div
+              className='absolute inset-0 bg-navy-950/80 backdrop-blur-sm'
+              onClick={() => setOpenRoom(null)}
+            />
+
+            <div className='relative w-full max-w-2xl max-h-[80vh] flex flex-col glass-panel border-navy-700 rounded-lg overflow-hidden'>
+              {/* Header */}
+              <div className='flex items-start justify-between gap-4 px-6 py-4 border-b border-navy-800 bg-navy-900/50 flex-shrink-0'>
+                <div>
+                  <h3 className='text-white font-bold text-lg flex items-center gap-2'>
+                    <i className='fa-solid fa-door-closed text-navy-400'></i>
+                    {openRoomVisits.route.label}
+                  </h3>
+                  <p className='text-navy-400 text-xs mt-0.5'>
+                    {openRoomVisits.route.room} · {openRoomVisits.route.building}
+                  </p>
+                </div>
+                <button
+                  type='button'
+                  onClick={() => setOpenRoom(null)}
+                  aria-label='Close'
+                  className='text-navy-400 hover:text-white transition-colors text-lg leading-none p-1'
+                >
+                  <i className='fa-solid fa-xmark'></i>
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className='px-6 py-4 overflow-y-auto flex-1'>
+                <div className='flex items-center gap-4 mb-4 text-sm'>
+                  <span className='text-navy-300'>
+                    <span className='text-white font-bold'>
+                      {openRoomVisits.inside.length}
+                    </span>{' '}
+                    inside now
+                  </span>
+                  <span className='text-navy-300'>
+                    <span className='text-white font-bold'>
+                      {openRoomVisits.history.length}
+                    </span>{' '}
+                    already left today
+                  </span>
+                </div>
+
+                {openRoomVisits.inside.length === 0 &&
+                openRoomVisits.history.length === 0 ? (
+                  <div className='text-center py-8'>
+                    <i className='fa-solid fa-inbox text-navy-600 text-4xl mb-3'></i>
+                    <p className='text-navy-300'>No visits recorded today</p>
+                    <p className='text-navy-500 text-xs mt-1'>
+                      Nobody has scanned this room&apos;s door code yet.
+                    </p>
+                  </div>
+                ) : (
+                  <div className='space-y-5'>{/* Still inside, listed first - that's the actionable group for
+                      whoever is checking the room. */}
+                    {openRoomVisits.inside.length > 0 && (
+                      <div>
+                        <h4 className='text-xs font-semibold text-green-400 uppercase tracking-wider mb-2'>
+                          Inside now
+                        </h4>
+                        <ul className='space-y-1.5'>
+                          {openRoomVisits.inside.map((visit) => (
+                            <li
+                              key={visit.id}
+                              className='flex items-center justify-between gap-3 rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-2'
+                            >
+                              <span className='flex items-center gap-2 text-white text-sm truncate'>
+                                <i className='fa-solid fa-user text-green-400 text-xs'></i>
+                                <span className='truncate'>
+                                  {visit.userName || 'Unknown user'}
+                                </span>
+                              </span>
+                              <span className='text-green-300 text-xs whitespace-nowrap'>
+                                since{' '}
+                                {visit.enteredAt.toLocaleTimeString('en-US', {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {openRoomVisits.history.length > 0 && (
+                      <div>
+                        <h4 className='text-xs font-semibold text-navy-400 uppercase tracking-wider mb-2'>
+                          Left today
+                        </h4>
+                        <ul className='space-y-1.5'>
+                          {openRoomVisits.history.map((visit) => (
+                            <li
+                              key={visit.id}
+                              className='flex items-center justify-between gap-3 rounded-lg border border-navy-700 bg-navy-900/40 px-3 py-2'
+                            >
+                              <span className='flex items-center gap-2 text-navy-200 text-sm truncate'>
+                                <i className='fa-solid fa-user text-navy-500 text-xs'></i>
+                                <span className='truncate'>
+                                  {visit.userName || 'Unknown user'}
+                                </span>
+                              </span>
+                              <span className='text-navy-400 text-xs whitespace-nowrap'>
+                                {visit.enteredAt.toLocaleTimeString('en-US', {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}{' '}
+                                –{' '}
+                                {visit.exitedAt?.toLocaleTimeString('en-US', {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}{' '}
+                                ·{' '}
+                                {visitDuration(visit.enteredAt, visit.exitedAt)}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}</div>
+                )}
+              </div>
+
+              {/* Footer - the full history lives on its own admin page. */}
+              <div className='px-6 py-3 border-t border-navy-800 bg-navy-900/50 flex-shrink-0'>
+                <Link
+                  href='/admin/room-records'
+                  className='text-orange-400 hover:text-orange-300 text-sm font-semibold flex items-center gap-2 transition-colors'
+                >
+                  View full room visit history
+                  <i className='fa-solid fa-arrow-right'></i>
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* How it works - its own panel */}
         <div className='glass-panel border-navy-800 p-6 rounded-lg'>
           <h3 className='text-white font-bold text-lg mb-4'>How it works</h3>
           <div className='space-y-3'>
             <div className='flex items-start gap-3 text-sm'>
-              <div className='w-6 h-6 rounded-full bg-orange-500/20 flex items-center justify-center flex-shrink-0 mt-0.5'>
-                <span className='text-orange-400 font-bold text-xs'>1</span>
-              </div>
-              <p className='text-navy-200'>Open the HYT-Wayfinder website</p>
-            </div>
-            <div className='flex items-start gap-3 text-sm'>
-              <div className='w-6 h-6 rounded-full bg-orange-500/20 flex items-center justify-center flex-shrink-0 mt-0.5'>
-                <span className='text-orange-400 font-bold text-xs'>2</span>
-              </div>
-              <p className='text-navy-200'>Position QR code within the scanner frame</p>
-            </div>
-            <div className='flex items-start gap-3 text-sm'>
-              <div className='w-6 h-6 rounded-full bg-orange-500/20 flex items-center justify-center flex-shrink-0 mt-0.5'>
-                <span className='text-orange-400 font-bold text-xs'>3</span>
+              <div className='w-6 h-6 rounded-full bg-green-500/20 flex items-center justify-center flex-shrink-0 mt-0.5'>
+                <span className='text-green-400 font-bold text-xs'>1</span>
               </div>
               <p className='text-navy-200'>
-                Receive your 3D route to your assigned room
+                On arrival, scan the{' '}
+                <span className='text-green-300 font-semibold'>
+                  ground floor attendance code
+                </span>{' '}
+                to clock in and receive your 3D route.
+              </p>
+            </div>
+            <div className='flex items-start gap-3 text-sm'>
+              <div className='w-6 h-6 rounded-full bg-navy-700 flex items-center justify-center flex-shrink-0 mt-0.5'>
+                <span className='text-navy-200 font-bold text-xs'>2</span>
+              </div>
+              <p className='text-navy-200'>
+                Scan the{' '}
+                <span className='text-navy-100 font-semibold'>
+                  code on your room door
+                </span>{' '}
+                to let the system know you are inside. Attendance is unaffected.
+              </p>
+            </div>
+            <div className='flex items-start gap-3 text-sm'>
+              <div className='w-6 h-6 rounded-full bg-green-500/20 flex items-center justify-center flex-shrink-0 mt-0.5'>
+                <span className='text-green-400 font-bold text-xs'>3</span>
+              </div>
+              <p className='text-navy-200'>
+                When you leave, scan the{' '}
+                <span className='text-green-300 font-semibold'>
+                  ground floor code again
+                </span>{' '}
+                to clock out.
               </p>
             </div>
           </div>
@@ -246,7 +634,7 @@ export default function KioskStationView() {
 
         {/* Footer Info */}
         <div className='mt-8 text-center text-navy-500 text-sm'>
-          <p>HYT Global Institute Ã‚Â· Visitor Management System v2.0</p>
+          <p>HYT Global Institute · Visitor Management System v2.0</p>
           <p className='mt-1'>For assistance, contact Security Desk: Ext. 1100</p>
         </div>
       </div>

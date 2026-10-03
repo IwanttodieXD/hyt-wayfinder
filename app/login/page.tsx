@@ -154,28 +154,6 @@ export default function LoginPage() {
               </button>
             </form>
 
-            {/* Demo Credentials */}
-            <div className='mt-6 p-4 rounded-lg bg-orange-500/10 border border-orange-500/30'>
-              <p className='text-orange-300 text-sm font-semibold mb-2'>
-                <i className='fa-solid fa-info-circle mr-2'></i>
-                Demo Credentials
-              </p>
-              <div className='space-y-1 text-xs text-orange-200'>
-                <p>
-                  <strong className='text-orange-400'>Admin:</strong> admin@hyt.com /
-                  admin123
-                </p>
-                <p>
-                  <strong className='text-orange-400'>Trainer:</strong> trainer@hyt.com /
-                  trainer123
-                </p>
-                <p>
-                  <strong className='text-orange-400'>Visitor:</strong> visitor@hyt.com /
-                  visitor123
-                </p>
-              </div>
-            </div>
-
             {/* Register Link */}
             <div className='mt-6 text-center text-sm text-navy-300'>
               Don&apos;t have an account?{' '}

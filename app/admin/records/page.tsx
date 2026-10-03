@@ -136,7 +136,7 @@ export default function RecordsPage() {
       : `${MONTH_NAMES[Number(selectedMonth) - 1]} ${selectedDay}, ${selectedYear}`;
 
   const exportFileName = (ext: string) =>
-    'clock-in-records-' + selectedYear + '-' + selectedMonth + '-' + selectedDay + '.' + ext;
+    'attendance-records-' + selectedYear + '-' + selectedMonth + '-' + selectedDay + '.' + ext;
 
   const downloadBlob = (blob: Blob, filename: string) => {
     const url = URL.createObjectURL(blob);
@@ -215,7 +215,7 @@ export default function RecordsPage() {
       .join('');
 
     printWindow.document.write(
-      '<!doctype html><html><head><title>Clock-In Records</title>' +
+      '<!doctype html><html><head><title>Attendance Records</title>' +
         '<meta charset="utf-8" />' +
         '<style>' +
         'body { font-family: Arial, Helvetica, sans-serif; padding: 24px; color: #111; }' +
@@ -225,7 +225,7 @@ export default function RecordsPage() {
         'th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }' +
         'th { background: #f3f4f6; text-transform: uppercase; letter-spacing: 0.03em; }' +
         '</style></head><body>' +
-        '<h1>Clock-In Records</h1>' +
+        '<h1>Attendance Records</h1>' +
         `<p>${filteredRecords.length} record(s) &middot; ${escapeHtml(periodLabel)}</p>` +
         `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>` +
         '</body></html>'
@@ -252,7 +252,7 @@ export default function RecordsPage() {
                 </div>
                 <div>
                   <h1 className='text-white font-bold text-lg leading-none'>
-                    Clock-In Records
+                    Attendance Records
                   </h1>
                   <p className='text-navy-300 text-xs mt-0.5'>
                     All check-in/check-out logs

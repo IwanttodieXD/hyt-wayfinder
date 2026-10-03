@@ -1,14 +1,21 @@
 /**
  * Wayfinding route registry.
  *
- * Each destination has its own check-in QR code and its own set of 3D
- * waypoints, so the station can print one QR per room and the phone can draw
- * the matching route after scanning it.
+ * There are two kinds of QR code in this system, and they are deliberately
+ * different things:
  *
- * A QR value is always `HYT-KIOSK-<station>:ROUTE_ID`. The station id is the
- * physical terminal; the route id selects which route to draw. Both the kiosk
- * and the phone scanner derive everything from this list, so adding a room is a
- * matter of adding one entry here.
+ * 1. ATTENDANCE - exactly one code, printed at the ground floor station.
+ *    Scanning it is the only way to clock in or out. It carries no room, so
+ *    which route to draw comes from the person's assigned destination instead.
+ *
+ * 2. ROOM PRESENCE - one code per room, posted on that room's door. Scanning
+ *    one only records that the person is inside that room right now. It never
+ *    touches attendance, so a visitor cannot clock themselves out by scanning
+ *    the wrong poster.
+ *
+ * Attendance codes are `HYT-KIOSK-<station>` and room codes are
+ * `HYT-ROOM-<room>:<ROOM_ID>`. The prefixes are what `parseQrValue` keys off,
+ * so the two can never be mistaken for one another.
  */
 
 export interface RouteWaypoint {
@@ -23,12 +30,22 @@ export interface DestinationRoute {
   label: string;
   building: string;
   room: string;
-  /** Encoded into the printed QR code. */
+  /** Encoded into the printed room-presence QR code for this room. */
   qrValue: string;
   waypoints: RouteWaypoint[];
 }
 
-const QR_PREFIX = 'HYT-KIOSK-01-CHECKIN-STATION';
+/** Prefix for the ground floor attendance code. */
+const ATTENDANCE_PREFIX = 'HYT-KIOSK-';
+
+/** Prefix for the per-room presence codes posted on room doors. */
+const ROOM_PREFIX = 'HYT-ROOM-01-';
+
+/**
+ * The single ground floor attendance code. Scanning this is the only thing that
+ * clocks someone in or out.
+ */
+export const ATTENDANCE_QR_VALUE = `${ATTENDANCE_PREFIX}CHECKIN-STATION`;
 
 export const DESTINATION_ROUTES: DestinationRoute[] = [
   {
@@ -36,7 +53,7 @@ export const DESTINATION_ROUTES: DestinationRoute[] = [
     label: 'TESDA Electronics Lab',
     building: 'HYT-Business Center',
     room: 'Room 304',
-    qrValue: `${QR_PREFIX}:ELECTRONICS-LAB`,
+    qrValue: `${ROOM_PREFIX}:ELECTRONICS-LAB`,
     waypoints: [
       { position: [0, 0, 0], label: 'Main Lobby', stage: 1, cameraOffset: [-3, 3, -3] },
       { position: [5, 0, 3], label: 'Hallway A', stage: 1, cameraOffset: [-2, 2, -2] },
@@ -51,7 +68,7 @@ export const DESTINATION_ROUTES: DestinationRoute[] = [
     label: 'Training Hall',
     building: 'HYT-Business Center',
     room: 'Room 204',
-    qrValue: `${QR_PREFIX}:TRAINING-HALL`,
+    qrValue: `${ROOM_PREFIX}:TRAINING-HALL`,
     waypoints: [
       { position: [0, 0, 0], label: 'Main Lobby', stage: 1, cameraOffset: [-3, 3, -3] },
       { position: [-5, 0, 4], label: 'Hallway B', stage: 1, cameraOffset: [-2, 2, -2] },
@@ -66,7 +83,7 @@ export const DESTINATION_ROUTES: DestinationRoute[] = [
     label: 'Computer Laboratory',
     building: 'HYT-Business Center',
     room: 'Room 303',
-    qrValue: `${QR_PREFIX}:COMPUTER-LAB`,
+    qrValue: `${ROOM_PREFIX}:COMPUTER-LAB`,
     waypoints: [
       { position: [0, 0, 0], label: 'Main Lobby', stage: 1, cameraOffset: [-3, 3, -3] },
       { position: [5, 0, 3], label: 'Hallway A', stage: 1, cameraOffset: [-2, 2, -2] },
@@ -81,7 +98,7 @@ export const DESTINATION_ROUTES: DestinationRoute[] = [
     label: 'Library',
     building: 'HYT-Business Center',
     room: 'Room 202',
-    qrValue: `${QR_PREFIX}:LIBRARY`,
+    qrValue: `${ROOM_PREFIX}:LIBRARY`,
     waypoints: [
       { position: [0, 0, 0], label: 'Main Lobby', stage: 1, cameraOffset: [-3, 3, -3] },
       { position: [-5, 0, 4], label: 'Hallway B', stage: 1, cameraOffset: [-2, 2, -2] },
@@ -96,7 +113,7 @@ export const DESTINATION_ROUTES: DestinationRoute[] = [
     label: 'Main Office',
     building: 'HYT-Business Center',
     room: 'Room 401',
-    qrValue: `${QR_PREFIX}:MAIN-OFFICE`,
+    qrValue: `${ROOM_PREFIX}:MAIN-OFFICE`,
     waypoints: [
       { position: [0, 0, 0], label: 'Main Lobby', stage: 1, cameraOffset: [-3, 3, -3] },
       { position: [5, 0, 3], label: 'Hallway A', stage: 1, cameraOffset: [-2, 2, -2] },
@@ -111,7 +128,7 @@ export const DESTINATION_ROUTES: DestinationRoute[] = [
     label: 'Conference Room A',
     building: 'HYT-Business Center',
     room: 'Room 402',
-    qrValue: `${QR_PREFIX}:CONFERENCE-ROOM-A`,
+    qrValue: `${ROOM_PREFIX}:CONFERENCE-ROOM-A`,
     waypoints: [
       { position: [0, 0, 0], label: 'Main Lobby', stage: 1, cameraOffset: [-3, 3, -3] },
       { position: [5, 0, 3], label: 'Hallway A', stage: 1, cameraOffset: [-2, 2, -2] },
@@ -129,16 +146,62 @@ export function getRoute(id: string | null | undefined): DestinationRoute {
   return DESTINATION_ROUTES.find((r) => r.id === id) ?? DESTINATION_ROUTES[0];
 }
 
-/** Reads the route id back out of a scanned QR value. */
-export function routeIdFromQr(value: string): string | null {
-  if (!value.startsWith('HYT-KIOSK-')) return null;
+export function getRouteByRoom(room: string): DestinationRoute | undefined {
+  return DESTINATION_ROUTES.find((r) => r.room === room);
+}
 
-  const id = value.split(':')[1]?.trim().toUpperCase();
-  if (!id) return DEFAULT_ROUTE_ID;
+/**
+ * What a scanned QR code turned out to be.
+ *
+ * `attendance` is the ground floor code and the only thing that clocks someone
+ * in or out. `room` is a door code and only records presence. `null` means the
+ * code isn't one of ours.
+ */
+export type ParsedQr =
+  | { kind: 'attendance' }
+  | { kind: 'room'; routeId: string; room: string }
+  | null;
 
+/** Strips the punctuation so 'electronics-lab' matches 'ELECTRONICS-LAB'. */
+function normalise(value: string): string {
+  return value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+/**
+ * Works out which of the two kinds of QR code was scanned.
+ *
+ * Returns null for anything unrecognised rather than guessing, because the
+ * difference between the two is what decides whether attendance is touched.
+ */
+export function parseQrValue(value: string): ParsedQr {
+  const trimmed = value.trim();
+
+  if (trimmed.startsWith(ROOM_PREFIX)) {
+    const id = trimmed.slice(ROOM_PREFIX.length + 1)?.trim();
+    if (!id) return null;
+
+    const match = DESTINATION_ROUTES.find((r) => normalise(r.id) === normalise(id));
+    // An unknown room id is still a room code, but we can't say which room, so
+    // treat it as unrecognised rather than guessing a destination.
+    return match ? { kind: 'room', routeId: match.id, room: match.room } : null;
+  }
+
+  if (trimmed.startsWith(ATTENDANCE_PREFIX)) return { kind: 'attendance' };
+
+  return null;
+}
+
+/**
+ * The route to draw for someone who just clocked in.
+ *
+ * The ground floor code carries no room, so this resolves from the person's
+ * assigned destination instead, falling back to the default route when they
+ * have not been assigned one.
+ */
+export function routeIdForDestination(destination?: string | null): string {
+  if (!destination) return DEFAULT_ROUTE_ID;
   const match = DESTINATION_ROUTES.find(
-    (r) => r.id.toUpperCase().replace(/-/g, '') === id.replace(/-/g, '')
+    (r) => normalise(r.label) === normalise(destination)
   );
-
   return match?.id ?? DEFAULT_ROUTE_ID;
 }
