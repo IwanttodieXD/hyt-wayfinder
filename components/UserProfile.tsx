@@ -105,12 +105,32 @@ const getRoleIcon = () => {
               <button
                 onClick={() => {
                   setIsOpen(false);
-                  router.push('/admin/records');
+                  router.push('/admin/room-records');
                 }}
                 className='w-full px-4 py-2.5 rounded-lg text-left text-navy-200 hover:bg-navy-800/50 hover:text-white transition-colors flex items-center gap-3'
               >
-                <i className='fa-solid fa-table w-5'></i>
-                <span>Records</span>
+                <i className='fa-solid fa-door-open w-5'></i>
+		<span>Room Visits Records</span>
+	      </button>
+	      <button
+		onClick={() => {
+		  setIsOpen(false);
+		  router.push('/admin/records');
+		}}
+		className='w-full px-4 py-2.5 rounded-lg text-left text-navy-200 hover:bg-navy-800/50 hover:text-white transition-colors flex items-center gap-3'
+	      >   
+	        <i className='fa-solid fa-table w-5'></i>
+                <span>Attendance Records</span>
+              </button>
+              <button
+                onClick={() => {
+                  setIsOpen(false);
+                  router.push('/admin/rooms');
+                }}
+                className='w-full px-4 py-2.5 rounded-lg text-left text-navy-200 hover:bg-navy-800/50 hover:text-white transition-colors flex items-center gap-3'
+              >
+                <i className='fa-solid fa-door-closed w-5'></i>
+                <span>Manage Room</span>
               </button>
               <button
                 onClick={() => {
@@ -130,7 +150,7 @@ const getRoleIcon = () => {
                 className='w-full px-4 py-2.5 rounded-lg text-left text-navy-200 hover:bg-navy-800/50 hover:text-white transition-colors flex items-center gap-3'
               >
                 <i className='fa-solid fa-door-open w-5'></i>
-                <span>Live Occupancy</span>
+                <span>Room Occupancy</span>
               </button>
               <button
                 onClick={() => {
@@ -139,8 +159,8 @@ const getRoleIcon = () => {
                 }}
                 className='w-full px-4 py-2.5 rounded-lg text-left text-navy-200 hover:bg-navy-800/50 hover:text-white transition-colors flex items-center gap-3'
               >
-                <i className='fa-solid fa-user-check w-5'></i>
-                <span>Attendance Station</span>
+                <i className='fa-solid fa-qrcode w-5'></i>
+                <span>QR Station</span>
               </button>
             </div>
           )}

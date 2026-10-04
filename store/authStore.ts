@@ -113,8 +113,17 @@ interface AuthState {
     // form writes (migration 004); an admin can correct any of them later.
     visitorTypeId?: string;
     company?: string;
-    hostName?: string;
     phone?: string;
+    /**
+     * When this pass stops working, as an ISO timestamp.
+     *
+     * The register form sets this to the end of the registering day, so a
+     * walk-in account cannot quietly stay valid for months. `isPassExpired`
+     * compares against the START of today, so an end-of-today value is valid for
+     * the whole day and expires the next morning. Admin-created users set their
+     * own date instead; leaving it undefined means the pass never expires.
+     */
+    validUntil?: string;
   }) => Promise<{
     success: boolean;
     error?: string;
@@ -361,8 +370,11 @@ export const useAuthStore = create<AuthState>()(
                   ? { visitor_type_id: data.visitorTypeId }
                   : {}),
                 ...(data.company ? { company: data.company } : {}),
-                ...(data.hostName ? { host_name: data.hostName } : {}),
                 ...(data.phone ? { phone: data.phone } : {}),
+                // Only written when supplied, so re-registering an account an admin
+                // had already given a long pass does not silently shorten it back to
+                // today. The register form always supplies one.
+                ...(data.validUntil ? { valid_until: data.validUntil } : {}),
               },
               { onConflict: 'id' }
             )

@@ -35,11 +35,9 @@ type FormState = {
   password: string;
   visitorTypeId: string;
   company: string;
-  hostName: string;
   phone: string;
   /** `yyyy-mm-dd`, the format an `<input type="date">` produces. */
   validUntil: string;
-  notes: string;
 };
 
 const EMPTY_FORM: FormState = {
@@ -48,10 +46,8 @@ const EMPTY_FORM: FormState = {
   password: '',
   visitorTypeId: '',
   company: '',
-  hostName: '',
   phone: '',
   validUntil: '',
-  notes: '',
 };
 
 /** `Date` -> `yyyy-mm-dd` for a date input, in local time (not UTC). */
@@ -169,10 +165,8 @@ export default function UsersPage() {
         ? (visitorTypes.find((t) => t.label === target.visitorType)?.id ?? '')
         : '',
       company: target.company ?? '',
-      hostName: target.hostName ?? '',
       phone: target.phone ?? '',
       validUntil: toDateInputValue(target.validUntil),
-      notes: target.notes ?? '',
     });
     setFormError(null);
     setIsModalOpen(true);
@@ -203,10 +197,8 @@ export default function UsersPage() {
 const profileFields = () => ({
   visitorTypeId: form.visitorTypeId,
   company: form.company,
-  hostName: form.hostName,
   phone: form.phone,
   validUntil: form.validUntil,
-  notes: form.notes,
 });
 
 if (editing) {
@@ -649,22 +641,11 @@ if (editing) {
                   this is here so you can count who came to the orientation.
                 </p>
               </div>
-              <div>
-                <label
-                  htmlFor='hostName'
-                  className='block text-sm font-medium text-navy-200 mb-2'
-                >
-                  Here to see
-                </label>
-                <input
-                  id='hostName'
-                  type='text'
-                  value={form.hostName}
-                  onChange={(e) => setForm({ ...form, hostName: e.target.value })}
-                  placeholder='e.g. TESDA Facilitator, Dr. Santos'
-                  className={INPUT}
-                />
-              </div>
+              {/* `host_name` and `notes` are deliberately not editable here any more, so this
+                  form matches what the register form collects: a visitor cannot
+                  supply either, so letting staff set them here only created a
+                  field one of two paths could fill. Both columns still exist and
+                  existing values are still shown in the list above. */}
               <div>
                 <label
                   htmlFor='company'
@@ -716,22 +697,7 @@ if (editing) {
                   flagged in the list but their history is kept.
                 </p>
               </div>
-              <div>
-                <label
-                  htmlFor='notes'
-                  className='block text-sm font-medium text-navy-200 mb-2'
-                >
-                  Notes
-                </label>
-                <textarea
-                  id='notes'
-                  rows={2}
-                  value={form.notes}
-                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                  placeholder='Anything the front desk should know'
-                  className={INPUT}
-                />
-              </div>
+              {/* See the note above: `notes` is not editable here. */}
               {/* There is no assigned-room field here any more. `users` has no
                   destination/building column on the new schema: the room belongs to
                   a visit, recorded on `clock_in_records.room_id` when the person

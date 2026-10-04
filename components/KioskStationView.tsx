@@ -185,8 +185,8 @@ export default function KioskStationView() {
 
           {/* Live stats. Each card states what it counts, since "Check Out" next to a
             coffee-cup icon was ambiguous about whether it meant the action or
-            the number of people who had already done it. */}
-          <div className='grid grid-cols-1 md:grid-cols-3 gap-3'>
+	    the number of people who had already done it. */}
+	  <div className='grid grid-cols-1 md:grid-cols-3 gap-3 mb-3'>
             <div className='glass-panel border-navy-800 p-6 rounded-lg'>
               <div className='flex items-center gap-4'>
                 <div className='w-14 h-14 rounded-lg bg-green-500/20 flex items-center justify-center flex-shrink-0'>
@@ -303,10 +303,10 @@ export default function KioskStationView() {
           <div className='inline-flex items-center gap-2 px-4 py-2 rounded-full bg-navy-700/50 border border-navy-700 mb-4'>
             <i className='fa-solid fa-door-open text-navy-300'></i>
             <span className='text-navy-200 font-semibold text-sm uppercase tracking-wider'>
-              Rooms Station
+              Rooms QR Codes
             </span>
           </div>
-          <h2 className='text-2xl font-bold text-white mb-2'>Room Door Codes</h2>
+          <h2 className='text-2xl font-bold text-white mb-2'>Scan to Record your visit</h2>
           <p className='text-navy-300'>
             Post one on each room door. Scanning records who is inside that room
             — it does not check anyone in or out.

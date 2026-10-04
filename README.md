@@ -9,21 +9,22 @@ occupancy and check-in record dashboards.
 > what the system does, how it's organised, what you can do with it, and known
 > gaps. This README is the setup and reference guide.
 >
-> Database design: [supabase/SCHEMA.md](./supabase/SCHEMA.md). Pending code
-> changes: [IMPLEMENTATION_PROMPT.md](./IMPLEMENTATION_PROMPT.md).
+> Database design: [supabase/SCHEMA.md](./supabase/SCHEMA.md).
 
 ## Features
 
 - Supabase email/password auth with a single admin account and a shared `visitor` role
 - Visitor profiles: classification (trainee / trainer / VIP / contractor), host, company, phone, pass expiry and notes
 - Real access revocation — archiving a visitor bans their login in Supabase Auth, and can be undone
-- Self-service registration with destination assignment
-- Lobby kiosk station that prints the ground floor attendance code and one room door code per destination
+- Self-service registration with purpose and destination assignment
+- Lobby kiosk station that prints the ground floor attendance code and one room door code per room
 - QR scanning on mobile (`html5-qrcode`): the ground floor code clocks in/out, room door codes track who is inside which room
+- **Option D scan flow** — nobody has to remember to check out of a room; scanning a different room is a move, and checking out of the building closes any open room visit
 - Animated 3D route visualization per destination (Three.js / React Three Fiber)
 - First-person 3D building exploration with collision detection
-- Room occupancy tracking and a kiosk status view
-- Admin dashboard, check-in records table, and user management CRUD
+- Live occupancy where every room is clickable and drops down who is inside it
+- Room management CRUD (`/admin/rooms`) — add, rename and deactivate rooms
+- Admin dashboard, attendance records, room visit history, and user management
 - Dark mode and responsive/mobile layouts
 
 ## Tech Stack
@@ -69,9 +70,32 @@ cp .env.example .env.local
 
 ### Database
 
-Run the SQL in the [Supabase setup guide](./SUPABASE_SETUP.md) in the Supabase
-SQL editor. It creates the `users` and `clock_in_records` tables, enables RLS,
-adds the timestamp triggers, and applies the admin user-management policies.
+The schema is five tables: `rooms`, `purposes`, `users`, `clock_in_records` and
+`room_visits`. It ships as ordered migrations — run them in the Supabase SQL
+editor, **in numeric order** (the later files depend on the earlier ones):
+
+1. `supabase/migrations/20260101000001_full_schema.sql` — tables, RLS, triggers
+2. `supabase/migrations/20260101000002_registration_fix.sql` — self-registration
+3. `supabase/migrations/20260101000003_retire_trainee_roles.sql` — folds the unused `trainer`/`trainee` roles into `visitor`
+4. `supabase/migrations/20260101000004_visitor_profiles.sql` — classification and profile columns
+5. `supabase/migrations/20260101000005_service_role_grants.sql` — grants for admin create/archive
+6. `supabase/migrations/20260101000006_default_pass_expiry.sql` — new accounts default to a pass that expires at end of today
+7. `supabase/seed.sql` — the 11 rooms and the visit purposes
+
+This is a **fresh** schema, not an upgrade path: it creates clean tables rather
+than `ALTER`ing the old ones, so there is no data migration to run.
+
+> ⚠️ **Any QR posters printed before this schema need reprinting.** The old codes
+> were `HYT-KIOSK-01-CHECKIN-STATION:<ROOM>` and still parse as *attendance*, so a
+> stale poster on a door would silently clock people in rather than record presence.
+
+Design notes in [supabase/SCHEMA.md](./supabase/SCHEMA.md) explain the ERD and
+three things that are easy to get wrong:
+
+- `duration_minutes` and `status` are **generated columns** — Postgres computes
+  them, and any INSERT or UPDATE that includes them fails. Never write them.
+- `room_visits` has no `room_label`; join `rooms` for the display name.
+- Rooms are referenced by **id**, never copied as text.
 
 ### Create the first admin
 
@@ -112,12 +136,16 @@ mixed-case path otherwise produces two module copies and
 | `/check-in` | Mobile QR scanner and check-in/out (visitor) |
 | `/station` | Lobby kiosk — prints the check-in QR code and each room's door code |
 | `/visitor` | Visitor view |
-| `/occupancy` | Live room occupancy |
+| `/occupancy` | Live room occupancy. Each room is a button that drops down who is inside (admin only) |
 | `/admin` | Admin dashboard |
 | `/admin/records` | Attendance records (check-in/out) |
 | `/admin/room-records` | Room visit history, grouped per room |
+| `/admin/rooms` | Room management: add, rename, deactivate (admin only) |
 | `/admin/users` | Visitor management: classify, set pass expiry, archive/restore (requires `SUPABASE_SERVICE_ROLE_KEY`) |
 | `/api/admin/users` | Server route for visitor create/edit/archive/restore |
+
+`/clock-in` permanently redirects to `/check-in`, so existing bookmarks and
+printed links keep working.
 
 ## QR codes
 
@@ -139,18 +167,48 @@ returns `null` for anything unrecognised rather than guessing.
 
 ### Attendance flow
 
-1. On arrival, scan the ground floor code. This opens a `clock_in_records` row
-   with `time_in` and shows the 3D route to your assigned destination.
-2. Scan your room's door code. This opens a `room_presence` row. Attendance is
-   unaffected.
-3. On leaving, scan the ground floor code again to set `time_out`.
+The goal is that **nobody has to remember to check out of a room**. The system
+already knows where they are, so it does not ask them to report it.
+
+1. **Arrive** — scan the ground floor code. Opens a `clock_in_records` row with
+   `time_in` and shows the 3D route to your assigned destination.
+2. **Enter a room** — scan that room's door code. Opens a `room_visits` row.
+   Attendance is untouched.
+3. **Leave the building** — scan the ground floor code again. Sets `time_out` and
+   closes any room visit still open.
+
+Three scans for a normal visit. The four rules the scanner enforces:
+
+- **R1** — a room scan without an active check-in is **refused**. Otherwise anyone
+  could put themselves in a room they never entered the building for.
+- **R2** — checking out while recorded inside a room **prompts first**, naming the
+  room, because that scan ends two things at once.
+- **R3** — if they confirm, both rows close together; if they cancel, they stay
+  checked in and in the room. The two tables can never disagree about where
+  someone is.
+- **R4** — scanning a *different* room is a move: the current room closes, the new
+  one opens. A partial unique index (`room_visits_one_open_per_user`) enforces
+  one open room per person; the client closes before inserting so it doesn't trip.
+
+There is no mode toggle. `parseQrValue()` decides which kind of code was scanned
+from its prefix, so the flow stays one-button. Instead the scanner shows the
+current state as a plain line — *"Checked in · In Room 304"*.
 
 ### Tables
 
 | Table | Written by | Answers |
 | --- | --- | --- |
 | `clock_in_records` | ground floor code only | Who is checked in, and since when |
-| `room_presence` | room door codes only | Who is in which room, and when they moved |
+| `room_visits` | room door codes only | Who is in which room, and when they moved |
+
+Keeping these apart is load-bearing. If one code did both jobs, a visitor standing
+at the wrong poster could clock themselves out, and "who is in Room 304 right now"
+would be a guess.
+
+Two invariants worth preserving: **attendance is only ever written by the entrance
+code**, and **presence is only ever written by room codes** (except closing an open
+row on clock-out, per R3). Never write `user_name` or `user_role` onto visit rows —
+join from `users`, because denormalising them is what caused drift before.
 
 The two are reported separately on purpose:
 
@@ -158,14 +216,19 @@ The two are reported separately on purpose:
 - **`/admin/room-records`** — presence. Per room, who entered and when, with
   search and date filters. Every visit is a row, so "who was in Room 304 at 3pm"
   is answerable after the fact.
+- **`/admin/rooms`** — the rooms themselves: add, rename, deactivate.
+- **`/occupancy`** — live. Every room is a button that drops down the people inside
+  it with their entry times. Several can be open at once so two rooms can be
+  compared. Rooms come from the `rooms` table, so empty ones still appear.
 - **`/station`** — each room poster shows a live headcount. Clicking it (at any
   count, including 0) opens that room's records: who is inside now, and who
   already left today with their times and duration. The count is screen-only and
   is deliberately left out of the print window, since a printed number would be
   stale the moment it went up.
 
-To add a room, add an entry to `lib/wayfinding.ts` and to the `DESTINATIONS`
-list in `store/authStore.ts`, which is shared by the register and admin forms.
+To add a room, add an entry to `lib/wayfinding.ts` for its waypoints and QR code.
+The admin form's room list is read from the `rooms` table, so it picks the new
+room up automatically.
 
 ## Controls
 
@@ -179,17 +242,19 @@ lock the pointer), `Space` to jump.
 ```
 app/
   page.tsx                  # Landing / role-based redirect
-  login, register/          # Auth pages
-  check-in/                # Mobile QR scan + check-in
+  login/, register/         # Auth pages
+  check-in/                 # Mobile QR scan + check-in
   station/                  # Attendance + room door QR codes
   visitor/, occupancy/
-  admin/                    # Dashboard, records, user management
+  admin/                    # Dashboard, records, room-records, rooms, users
   api/admin/users/route.ts  # Server-only user create/delete
 components/                 # 3D scene, camera, building, QR scanner, route
 hooks/                      # First-person + mobile controls, role guard, profile
 lib/                        # Supabase client, wayfinding registry, WebGL check
-store/                      # Zustand stores: auth, users, records, roomPresence, clockIn, theme
+store/                      # Zustand: auth, users, records, roomPresence, rooms, clockIn, theme
 scripts/                    # next-with-canonical-path.js (Windows casing fix)
+supabase/migrations/        # Ordered SQL migrations
+supabase/seed.sql           # The 11 rooms + purposes
 public/                     # Static assets
 ```
 
@@ -202,9 +267,17 @@ npm start       # serve the production build
 npm run lint    # ESLint
 ```
 
+There is no test runner configured. The QR parser (`parseQrValue` in
+`lib/wayfinding.ts`) is pure and would be the natural first target.
+
 ## Security notes
 
-- Row Level Security is enabled on `public.users` and `public.clock_in_records`.
+- Row Level Security is enabled on every table: `rooms`, `purposes`, `users`,
+  `clock_in_records`, `room_visits`, and `visitor_types`.
+- `rooms`, `purposes` and `visitor_types` are lookup data — labels with no user
+  information — so they are readable by anyone. That is deliberate: the register
+  form runs before anyone has signed in, and its pickers would otherwise be
+  empty for a brand-new visitor.
 - The `anon` key is embedded in the client bundle by design; RLS, not the key,
   is what protects the data.
 - `SUPABASE_SERVICE_ROLE_KEY` is only read inside
@@ -212,6 +285,54 @@ npm run lint    # ESLint
   and delete return `501` and read/update keep working.
 - The admin route verifies the caller is an admin using their own access token;
   the service key is never sent back to the browser.
+- **Exactly one admin exists**, enforced by a partial unique index rather than by
+  the UI, and it is hidden from `/admin/users`. A second admin is a liability:
+  anyone who can edit users could otherwise grant themselves the keys.
+- **Public registration can only ever create a `visitor`.** The `handle_new_user`
+  trigger hardcodes the role and ignores whatever the client sends.
+- Attendance history is never deleted — `users` uses `archived_at`, and the
+  foreign keys are `ON DELETE RESTRICT`.
+
+### Pass expiry
+
+`users.valid_until` decides whether a pass still works. `NULL` means it never expires,
+and `isPassExpired` compares against the **start** of today rather than the current
+instant — so a pass set to expire "on the 10th" is valid for the whole of the 10th.
+Comparing against the raw timestamp would lock someone out at midnight the night
+before the event they came for.
+
+The two creation paths differ on purpose:
+
+- **Self-registration** — no date is asked. The form sends the end of the registering
+  day, and `20260101000006_default_pass_expiry.sql` sets the same value as a column
+  DEFAULT, so even a writer that forgets the field still gets a one-day pass rather
+  than one that never expires.
+- **Admin** — the "Pass valid until" date input is manual, and an explicit `NULL`
+  bypasses the DEFAULT. Staff know whether someone is on site for a week; a blanket
+  one-day rule would lock them out with no self-service fix.
+
+An expired pass is refused at sign-in and at check-in, and is flagged red in the admin
+user list. **Their attendance history is kept** — expiry closes the door, it does not
+erase the record. Existing rows are untouched by that migration.
+
+### Roles vs visitor types
+
+These are different things and the distinction is deliberate:
+
+- `role` answers **"what may this person do"** — and there are only two values,
+  `admin` and `visitor`.
+- The visitor profile answers **"who is this person"** — many values: trainee,
+  trainer, VIP, contractor, plus company, host, phone, pass expiry and notes.
+  These live in the `visitor_types` lookup table, joined from `users.visitor_type_id`.
+
+The `trainer` and `trainee` *roles* were removed: no RLS policy ever distinguished
+them from `visitor`, and `/trainer` was a byte-identical copy of `/visitor`. The
+enum labels still exist in Postgres, which cannot drop them — see
+`20260101000003_retire_trainee_roles.sql`.
+
+At an event the people arriving are trainees, trainers and VIPs, but none of them
+need different *permissions*. Putting them on `role` is what created the dead roles
+in the first place.
 
 ## Deployment
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRecordsStore } from '@/store/recordsStore';
 import { useRoomPresenceStore } from '@/store/roomPresenceStore';
 import { useRoomsStore } from '@/store/roomsStore';
@@ -19,17 +19,38 @@ import { useRoomsStore } from '@/store/roomsStore';
  * obvious at a glance which rooms are free. A presence row whose room is no
  * longer active is still shown rather than dropped, so scanned-but-retired rooms
  * stay visible instead of silently disappearing.
+ *
+ * Every room is a button that drops down the people inside it. Several can be
+ * open at once - comparing two rooms is the main reason to want this, so forcing
+ * one open at a time would work against it. Empty rooms stay clickable rather
+ * than being disabled, so "this room is empty" is something you confirm rather
+ * than something you infer from a control that refuses to respond.
  */
 export default function RoomOccupancy() {
   const { getActiveCount, fetchTodayRecords } = useRecordsStore();
   const { getOccupancyByRoom, fetchTodayPresence } = useRoomPresenceStore();
   const { getActiveRooms, getAllRooms, fetchRooms } = useRoomsStore();
 
+  // Room ids the visitor has opened. A Set rather than a single id so opening one
+  // room never closes another.
+  const [expandedRooms, setExpandedRooms] = useState<Set<string>>(new Set());
+
   useEffect(() => {
     fetchTodayRecords();
     fetchTodayPresence();
     fetchRooms();
   }, [fetchTodayRecords, fetchTodayPresence, fetchRooms]);
+
+  const toggleRoom = (roomId: string) =>
+    setExpandedRooms((prev) => {
+      const next = new Set(prev);
+      if (next.has(roomId)) {
+        next.delete(roomId);
+      } else {
+        next.add(roomId);
+      }
+      return next;
+    });
 
   // Everyone checked in, regardless of whether they've scanned a door yet.
   const insideCount = getActiveCount();
@@ -75,60 +96,83 @@ export default function RoomOccupancy() {
       </div>
 
       <p className='text-navy-400 text-xs mb-4'>
-        {trackedCount} of {insideCount}{' '}
+        Tap a room to see who is inside it. {trackedCount} of {insideCount}{' '}
         {insideCount === 1 ? 'person has' : 'people have'} scanned a room door
         code. Anyone in the building without a room is in a corridor or the lobby.
       </p>
 
-      <div className='grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3'>
-        {occupancy.map(({ id, label, room, people }) => (
-          <div
-            key={id}
-            className='rounded-lg border border-navy-700 bg-navy-900/40 p-4'
-          >
-            <div className='flex items-center justify-between mb-2'>
-              <div>
-                <p className='text-white font-semibold text-sm'>{label}</p>
-                <p className='text-navy-400 text-xs'>{room}</p>
-              </div>
-              <span
-                className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-                  people.length > 0
-                    ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                    : 'bg-navy-700/40 text-navy-400 border border-navy-700'
-                }`}
-              >
-                {people.length}
-              </span>
-            </div>
+      <div className='grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 items-start'>
+        {occupancy.map(({ id, label, room, people }) => {
+          const isExpanded = expandedRooms.has(id);
 
-            {people.length > 0 ? (
-              <ul className='space-y-1.5 mt-2'>
-                {people.map((person) => (
-                  <li
-                    key={person.id}
-                    className='flex items-center justify-between gap-2 text-sm'
+          return (
+            <div
+              key={id}
+              className='rounded-lg border border-navy-700 bg-navy-900/40 overflow-hidden'
+            >
+              {/* The whole header is the button, so the hit area covers the room
+                  name, the number and the count badge - not just the chevron. */}
+              <button
+                type='button'
+                onClick={() => toggleRoom(id)}
+                aria-expanded={isExpanded}
+                className='w-full text-left p-4 flex items-center justify-between gap-3 hover:bg-navy-800/40 transition-colors'
+              >
+                <div className='min-w-0'>
+                  <p className='text-white font-semibold text-sm truncate'>{label}</p>
+                  <p className='text-navy-400 text-xs'>{room}</p>
+                </div>
+
+                <div className='flex items-center gap-2 flex-shrink-0'>
+                  <span
+                    className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                      people.length > 0
+                        ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                        : 'bg-navy-700/40 text-navy-400 border border-navy-700'
+                    }`}
                   >
-                    <span className='flex items-center gap-2 text-navy-200 truncate'>
-                      <i className='fa-solid fa-user text-navy-500 text-xs'></i>
-                      <span className='truncate'>
-                        {person.userName || 'Unknown user'}
-                      </span>
-                    </span>
-                    <span className='text-navy-500 text-xs whitespace-nowrap'>
-                      {person.enteredAt.toLocaleTimeString('en-US', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className='text-navy-600 text-xs mt-2'>Empty</p>
-            )}
-          </div>
-        ))}
+                    {people.length}
+                  </span>
+                  <i
+                    className={`fa-solid fa-chevron-down text-navy-300 text-xs transition-transform ${
+                      isExpanded ? 'rotate-180' : ''
+                    }`}
+                  ></i>
+                </div>
+              </button>
+
+              {isExpanded && (
+                <div className='px-4 pb-4 border-t border-navy-800'>
+                  {people.length > 0 ? (
+                    <ul className='space-y-1.5 pt-3'>
+                      {people.map((person) => (
+                        <li
+                          key={person.id}
+                          className='flex items-center justify-between gap-2 text-sm'
+                        >
+                          <span className='flex items-center gap-2 text-navy-200 min-w-0'>
+                            <i className='fa-solid fa-user text-navy-500 text-xs'></i>
+                            <span className='truncate'>
+                              {person.userName || 'Unknown user'}
+                            </span>
+                          </span>
+                          <span className='text-navy-500 text-xs whitespace-nowrap'>
+                            {person.enteredAt.toLocaleTimeString('en-US', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className='text-navy-500 text-xs pt-3'>Nobody is in this room.</p>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

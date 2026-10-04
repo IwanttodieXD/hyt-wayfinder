@@ -234,7 +234,7 @@ export default function AdminDashboard() {
                 href='/occupancy'
                 className='text-orange-400 hover:text-orange-300 text-sm font-semibold flex items-center gap-2 transition-colors'
               >
-                Full View
+                View All Occupancy
                 <i className='fa-solid fa-arrow-right'></i>
               </Link>
             </div>

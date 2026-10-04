@@ -24,9 +24,13 @@ export default function RegisterPage() {
     // Visitor profile. Asked here so the front desk has it before the person
     // reaches the desk, and so an orientation attendee is classified once
     // instead of being tidied up afterwards. All optional.
+    //
+    // Deliberately NOT asked here: `host_name` and `notes`. A visitor cannot
+    // meaningfully supply either - they do not know who they are meeting by
+    // name, and there is nothing they could put in a front-desk note. Both
+    // remain on the admin form, which is written by staff who do know.
     visitorTypeId: '',
     company: '',
-    hostName: '',
     phone: '',
   });
   const [error, setError] = useState('');
@@ -62,6 +66,19 @@ export default function RegisterPage() {
 
     setLoading(true);
 
+    // A self-registered visitor gets a pass that expires at the end of today.
+    //
+    // Public registration is for walk-ins: someone who has come to the building
+    // now. Making the pass day-scoped means a forgotten account cannot quietly
+    // stay valid for months. `isPassExpired` compares against the START of today,
+    // so an end-of-today timestamp stays valid for the whole day they registered
+    // and locks them out tomorrow - which is the intended "one day".
+    //
+    // Staff creating someone who is staying longer set `valid_until` explicitly
+    // on the admin form instead, which overrides this.
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 59, 999);
+
     const result = await register({
       name: formData.name,
       email: formData.email,
@@ -70,8 +87,8 @@ export default function RegisterPage() {
       purpose: formData.purpose || undefined,
       visitorTypeId: formData.visitorTypeId || undefined,
       company: formData.company.trim() || undefined,
-      hostName: formData.hostName.trim() || undefined,
       phone: formData.phone.trim() || undefined,
+      validUntil: endOfToday.toISOString(),
     });
 
     // The account exists but the address is not confirmed yet, so there is no
@@ -216,7 +233,7 @@ export default function RegisterPage() {
                       focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500
                       transition-colors
                       '
-                    placeholder='John Doe'
+                    placeholder='Juan C. Dela Cruz'
                   />
                 </div>
               </div>
@@ -394,35 +411,8 @@ export default function RegisterPage() {
                   </div>
                 </div>
 
-                <div>
-                  <label
-                    htmlFor='hostName'
-                    className='block text-sm font-medium text-orange-200 mb-2'
-                  >
-                    Who are you here to see?
-                  </label>
-                  <div className='relative'>
-                    <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
-                      <i className='fa-solid fa-user-check text-orange-400'></i>
-                    </div>
-                    <input
-                      type='text'
-                      id='hostName'
-                      value={formData.hostName}
-                      onChange={(e) =>
-                        setFormData({ ...formData, hostName: e.target.value })
-                      }
-                      placeholder='Name of the person hosting you'
-                      className='
-                        w-full pl-12 pr-4 py-3 rounded-lg
-                        bg-navy-900/80 border-2 border-orange-500/30
-                        text-white placeholder-navy-500
-                        focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500
-                        transition-colors
-                      '
-                    />
-                  </div>
-                </div>
+                {/* `host_name` is not asked here: a visitor cannot name the person they are
+                    meeting. Staff set it on /admin/users. */}
                 {/* Two-up on wider screens, stacked on a phone. */}
                 <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
                   <div>
