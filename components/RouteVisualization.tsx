@@ -485,6 +485,36 @@ export default function RouteVisualization() {
               className={`fa-solid ${cameraMode === 'follow' ? 'fa-video' : 'fa-hand'} text-sm`}
             ></i>
           </button>
+
+          {/* Escape hatch from the 3D view.
+              The Return button in the controls below does the same thing, but
+              those sit under the canvas and were being clipped on short phones,
+              which left people stuck in the route. Icon-only here so the compact
+              HUD bar does not overflow on a narrow screen; `title` and
+              `aria-label` carry the wording for anyone who cannot see the icon. */}
+          <button
+            onClick={resetRoute}
+            className='pointer-events-auto flex-shrink-0 w-9 h-9 rounded-lg bg-orange-500 hover:bg-orange-600 text-paper flex items-center justify-center transition-colors'
+            title='Back to scanner'
+            aria-label='Back to scanner'
+          >
+            <i className='fa-solid fa-arrow-left text-sm'></i>
+          </button>
+        </div>
+
+        {/* Work-in-progress notice. The floor plan is still being matched to the
+            real building, so the route is indicative rather than authoritative -
+            someone should not be sent down these corridors as gospel. Deliberately
+            visible rather than hidden behind a tap. */}
+        <div className='absolute top-16 left-3 right-3 pointer-events-none'>
+          <p className='inline-flex items-start gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-2.5 py-1.5 text-amber-200 text-[10px] leading-snug max-w-full'>
+            <i className='fa-solid fa-triangle-exclamation mt-0.5 flex-shrink-0'></i>
+            <span>
+              <span className='font-semibold'>Preview:</span> this 3D route is
+              still a work in progress and may not match the real building. Follow
+              the signs and staff directions.
+            </span>
+          </p>
         </div>
       </div>
 

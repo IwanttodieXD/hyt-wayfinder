@@ -152,16 +152,18 @@ body {
 /* ---------------------------------------------------------------------------
    Animated app background.
 
-   Two things share the same up-and-right 45-degree flow:
+   A checkerboard of angled squares with a faint starfield over it, all flowing
+   up-and-right at 45 degrees.
 
-   - `.animated-bg__stars`: a tiled field of faint stars. The layer is oversized
-     and the drift distance (280px) is a multiple of the tile size, so its loop
-     is seamless.
-   - `.animated-bg__box`: a scatter of individual black squares. Each one is
-     rotated 45 degrees (so it reads as an angled diamond), and each one slowly
-     shrinks and returns to its original size on its own schedule. They drift
-     up-and-right together and fade at the ends of the run, so the loop never
-     pops.
+   - `.animated-bg__checker`: a big board centred on the viewport. Every other
+     cell holds a black square rotated 45 degrees into a diamond. The board
+     drifts up-and-right by exactly one cell, which lands the checkerboard back
+     on itself, so the loop has no seam.
+   - `.animated-bg__diamond`: each square slowly shrinks and returns to its
+     original size. Timing is keyed off the square's diagonal (see the
+     component), which is what keeps the loop seamless.
+   - `.animated-bg__stars`: a tiled field of faint stars drifting on the same
+     45-degree path.
 
    It is a fixed layer at z-index -1: above the body colour, below all content.
    Page wrappers are transparent so it shows through, while panels and cards
@@ -174,6 +176,50 @@ body {
   overflow: hidden;
   pointer-events: none;
   background-color: rgb(var(--navy-950));
+}
+
+/* The board: a big square centred on the viewport so it always covers it. */
+.animated-bg__checker {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 180vmax;
+  height: 180vmax;
+  margin: -90vmax 0 0 -90vmax;
+  will-change: transform;
+  animation: checker-drift 60s linear infinite;
+}
+
+@keyframes checker-drift {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    /* One cell (100% / 12 of the board), up-and-right at 45 degrees. */
+    transform: translate3d(8.3333%, -8.3333%, 0);
+  }
+}
+
+/* The angled black square. It is positioned on its cell centre, rotated 45
+   degrees, and slowly shrinks then returns to its original size. */
+.animated-bg__diamond {
+  position: absolute;
+  width: 7.5%;
+  height: 7.5%;
+  border-radius: 12%;
+  background-color: rgba(0, 0, 0, 0.7);
+  animation: diamond-pulse var(--pulse-dur, 6s) ease-in-out infinite;
+  animation-delay: var(--pulse-delay, 0s);
+}
+
+@keyframes diamond-pulse {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) rotate(45deg) scale(1);
+  }
+  50% {
+    transform: translate(-50%, -50%) rotate(45deg) scale(0.55);
+  }
 }
 
 /* Stars: oversized so the drift never exposes an edge. */
@@ -206,56 +252,6 @@ body {
   }
 }
 
-/* One square: the outer element carries it up-and-right, the inner one is the
-   black shape that rotates and breathes. Splitting them keeps the two
-   `transform` animations from fighting each other. */
-.animated-bg__box {
-  position: absolute;
-  will-change: transform, opacity;
-  animation: box-drift var(--box-drift-dur, 60s) linear infinite;
-  animation-delay: var(--box-drift-delay, 0s);
-}
-
-.animated-bg__box-inner {
-  display: block;
-  width: var(--box-size, 28px);
-  height: var(--box-size, 28px);
-  border-radius: 2px;
-  background-color: rgba(0, 0, 0, 0.65);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
-  animation: box-pulse var(--box-pulse-dur, 6s) ease-in-out infinite;
-  animation-delay: var(--box-pulse-delay, 0s);
-}
-
-@keyframes box-drift {
-  0% {
-    transform: translate3d(0, 0, 0);
-    opacity: 0;
-  }
-  12% {
-    opacity: 1;
-  }
-  82% {
-    opacity: 1;
-  }
-  100% {
-    /* 45 degrees up-and-right. */
-    transform: translate3d(360px, -360px, 0);
-    opacity: 0;
-  }
-}
-
-/* Slowly shrink, then slowly return to the original size. */
-@keyframes box-pulse {
-  0%,
-  100% {
-    transform: rotate(45deg) scale(1);
-  }
-  50% {
-    transform: rotate(45deg) scale(0.55);
-  }
-}
-
 /* A dark-theme flourish: in light mode it would fight the near-white palette. */
 html.light .animated-bg {
   display: none;
@@ -263,13 +259,13 @@ html.light .animated-bg {
 
 /* Respect the OS setting - keep the shapes, drop the motion. */
 @media (prefers-reduced-motion: reduce) {
-  .animated-bg__drift,
-  .animated-bg__box,
-  .animated-bg__box-inner {
+  .animated-bg__checker,
+  .animated-bg__diamond,
+  .animated-bg__drift {
     animation: none;
   }
-  .animated-bg__box-inner {
-    transform: rotate(45deg);
+  .animated-bg__diamond {
+    transform: translate(-50%, -50%) rotate(45deg);
   }
 }
 
