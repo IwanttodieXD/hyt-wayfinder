@@ -43,9 +43,6 @@ export default function QRScanner() {
   // Set when someone scans the door of the room they are already recorded in.
   // Nothing is written; the dialog just explains why nothing changed.
   const [alreadyInRoom, setAlreadyInRoom] = useState<string | null>(null);
-  // Why they are in the building today. Written to the attendance row, not the
-  // user, because it is per visit rather than per person.
-  const [purposeId, setPurposeId] = useState<string>('');
   const scannerRef = useRef<Html5Qrcode | null>(null);
 const handledRef = useRef(false);
   // The viewfinder element, so the scan box can be sized to what's actually
@@ -276,12 +273,9 @@ const handledRef = useRef(false);
         // The assigned room is now a room_id, resolved from `rooms`.
         const assigned = getRoomByNumber(user.destination);
 
-        // The purpose chosen at check-in wins. Otherwise fall back to the one
-        // held pending from registration, so a visitor who told us why they
-        // came doesn't have to answer again on their first visit.
-        const purpose =
-          activePurposes.find((p) => p.id === purposeId) ??
-          activePurposes.find((p) => p.label === user.purpose);
+        // The reason for the visit is the one captured at registration, so the
+        // visitor does not have to answer again on their first visit.
+        const purpose = activePurposes.find((p) => p.label === user.purpose);
 
         // Guard against writing a `fallback-*` placeholder id into a UUID
         // column, which would fail the insert and lose the whole check-in.
@@ -314,7 +308,6 @@ const handledRef = useRef(false);
       getRoomByNumber,
       setActiveRoute,
       performClockOut,
-      purposeId,
       activePurposes,
     ]
   );
@@ -661,30 +654,6 @@ const handledRef = useRef(false);
               return current ? `In ${current.roomLabel}` : 'In the lobby';
             })()}
           </p>
-        )}
-
-        {/* Why this visit is happening. Optional, and only asked before
-            check-in, because purpose is recorded per visit rather than per
-            person. */}
-        {status === 'not-clocked-in' && activePurposes.length > 0 && (
-          <label className='flex flex-col gap-1 mb-3 w-full max-w-xs'>
-            <span className='text-navy-400 text-xs'>Reason for your visit</span>
-            <select
-              value={purposeId}
-              onChange={(e) => setPurposeId(e.target.value)}
-              className='
-                bg-navy-800 border border-navy-700 text-navy-100 text-sm
-                rounded-lg px-3 py-2
-              '
-            >
-              <option value=''>Select a reason</option>
-              {activePurposes.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
-          </label>
         )}
 
         {/* Confirms the last door scan actually registered. */}

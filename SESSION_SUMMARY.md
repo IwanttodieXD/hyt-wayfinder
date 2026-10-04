@@ -639,6 +639,13 @@ band. Filling it is a seed/migration change, not a graphics one; flagged to the 
 
 Verified: `tsc` 0, 22/22 tests, build 16/16, lint clean. Committed and pushed (`f9777a4`).
 
+**3D route: WIP preview banner added**, and the top-right **Back to scanner** exit was
+**restored**. The earlier exit button had been lost when the HUD was compacted into a single
+bar, leaving only the `Return` in the controls below the canvas — the exact control that was
+being clipped on short phones. It is icon-only (with `title` + `aria-label`) so the compact
+bar does not overflow on narrow screens. Amber banner sits under the HUD inside the canvas's
+`relative` container, so it can never be clipped.
+
 ---
 
 ## 6. Recently done
