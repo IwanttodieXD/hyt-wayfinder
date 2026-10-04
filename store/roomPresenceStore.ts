@@ -45,7 +45,16 @@ interface RoomPresenceState {
     roomId: string;
     /** Links the visit to the open attendance row so history stays per-visit. */
     clockInId?: string | null;
-  }) => Promise<{ success: boolean; error?: string; presenceId?: string }>;
+  }) => Promise<{
+    success: boolean;
+    error?: string;
+    presenceId?: string;
+    /**
+     * True when the scan named the room they are already recorded in. Nothing
+     * was written; the caller shows a notice instead of a new visit.
+     */
+    alreadyInRoom?: boolean;
+  }>;
 
   /** Closes the user's currently open row, if any. */
   leaveRoom: (userId: string) => Promise<{ success: boolean; error?: string }>;
@@ -135,11 +144,24 @@ export const useRoomPresenceStore = create<RoomPresenceState>((set, get) => ({
       // stale row stays open and shows up in occupancy until it's fixed.
       const { data: openRows, error: openError } = await supabase
         .from('room_visits')
-        .select('id')
+        .select('id, room_id')
         .eq('user_id', userId)
         .is('exited_at', null);
 
       if (!openError && openRows && openRows.length > 0) {
+        // Already recorded in this exact room. Scanning the same door again is a
+        // no-op rather than a new visit: closing and reopening would inflate the
+        // visit count and reset the "inside since" time for no reason. The
+        // caller shows a "you're already here" notice instead.
+        const sameRoom = openRows.find((r) => r.room_id === roomId);
+        if (sameRoom) {
+          return {
+            success: false,
+            alreadyInRoom: true,
+            error: 'You are already inside this room.',
+          };
+        }
+
         await supabase
           .from('room_visits')
           .update({ exited_at: new Date().toISOString() })

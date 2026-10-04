@@ -27,7 +27,8 @@ export default function RecordsPage() {
   // Keep the table live. It used to fetch once on mount, so a new check-in
   // never appeared until the page was reloaded.
   useLiveData({
-    allRecords: true,
+    records: 'all',
+    presence: 'none',
     enabled: isAuthenticated && user?.role === 'admin',
   });
 

@@ -9,7 +9,7 @@ import ThreeErrorBoundary from './ThreeErrorBoundary';
 
 export default function StudentMobileView() {
   const { status, student, clockInTime } = useClockInStore();
-  const { user } = useAuthStore();
+  const { user, passExpired } = useAuthStore();
   const { getActiveRooms } = useRoomsStore();
 
   // A destination only counts as assigned when the profile actually set one; the
@@ -50,6 +50,19 @@ export default function StudentMobileView() {
         {/* App Header. One row of identity + one status pill, rather than the
             previous stack, so the destination card below gets the space. */}
         <div className='bg-navy-900 px-4 py-3 border-b border-navy-800/50'>
+          {/* Expired pass. Shown instead of silently doing nothing, so the
+              one-day rule is explained rather than enforced invisibly. The person
+              stays signed in - they are a valid account, the day just ended. */}
+          {passExpired && (
+            <div className='mb-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2'>
+              <p className='text-amber-200 text-xs leading-snug'>
+                <i className='fa-solid fa-clock mr-1'></i>
+                Your visitor pass has run out, so you can&apos;t scan in again.
+                Ask reception to renew it - your account and history are still here.
+              </p>
+            </div>
+          )}
+
           <div className='flex items-center justify-between gap-3'>
             <div className='min-w-0'>
               <h2 className='text-white font-bold text-base leading-tight truncate'>

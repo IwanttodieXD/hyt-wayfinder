@@ -12,6 +12,7 @@ import { useRoomsStore } from '@/store/roomsStore';
 import { formatDurationMinutes } from '@/store/recordsStore';
 import UserProfile from '@/components/UserProfile';
 import { useRoleGuard } from '@/hooks/useRoleGuard';
+import { useLiveData } from '@/hooks/useLiveData';
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -33,7 +34,7 @@ export default function RoomRecordsPage() {
   const { user } = useAuthStore();
   const isAllowed = useRoleGuard(['admin'], '/admin');
 
-  const { presence, fetchAllPresence } = useRoomPresenceStore();
+  const { presence } = useRoomPresenceStore();
   const { getAllRooms, fetchRooms } = useRoomsStore();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -49,10 +50,12 @@ const exportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (isAllowed) {
-      fetchAllPresence();
       fetchRooms();
     }
-  }, [isAllowed, fetchAllPresence, fetchRooms]);
+  }, [isAllowed, fetchRooms]);
+
+  // Keep the visit counts live: the page used to fetch once on mount.
+  useLiveData({ records: 'none', presence: 'all', enabled: isAllowed });
 
   // Close the export menu when clicking outside of it.
   useEffect(() => {

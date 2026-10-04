@@ -15,6 +15,7 @@ import {
 } from '@/store/roomPresenceStore';
 import { useRoomsStore } from '@/store/roomsStore';
 import { useLiveData } from '@/hooks/useLiveData';
+import LiveBadge from '@/components/LiveBadge';
 
 // Everything the print window needs, without dragging in the waypoint data.
 type PrintableCode = {
@@ -65,7 +66,10 @@ export default function KioskStationView() {
 
   // Live counts: the "Checked In Now" / "Checked Out Today" cards and the
   // per-room headcounts used to be a snapshot from page load.
-  useLiveData();
+  const { lastRefreshed } = useLiveData({
+    records: 'today',
+    presence: 'today',
+  });
 
   // Tick once a minute, aligned to the minute boundary so the displayed minute
   // flips when it actually changes rather than up to a minute late.
@@ -176,12 +180,15 @@ export default function KioskStationView() {
         {/* Page title. No status badge here: it used to read "Station Active", but
             nothing ever set it inactive, so it was decoration rather than
             information. The live counts below carry the real status. */}
-        <div className='mb-8'>
-          <h1 className='text-3xl font-bold text-white mb-2'>QR Station</h1>
-          <p className='text-navy-300'>
-            Print the attendance code for the ground floor, and a door code for
-            each room.
-          </p>
+        <div className='mb-8 flex items-start justify-between gap-4'>
+          <div>
+            <h1 className='text-3xl font-bold text-white mb-2'>QR Station</h1>
+            <p className='text-navy-300'>
+              Print the attendance code for the ground floor, and a door code for
+              each room.
+            </p>
+          </div>
+          <LiveBadge lastRefreshed={lastRefreshed} />
         </div>
 
           {/* Live stats. Each card states what it counts, since "Check Out" next to a

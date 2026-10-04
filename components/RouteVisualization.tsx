@@ -1,7 +1,7 @@
 'use client';
 
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { OrbitControls, Line, PerspectiveCamera } from '@react-three/drei';
+import { OrbitControls, Line } from '@react-three/drei';
 import { useClockInStore } from '@/store/clockInStore';
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
@@ -132,7 +132,7 @@ function AnimatedPath({ waypoints }: { waypoints: Waypoints }) {
       );
       setAnimatedPoints(allPoints);
     }
-  }, [isRouteAnimating, currentWaypoint]);
+  }, [isRouteAnimating, currentWaypoint, waypoints]);
 
   if (animatedPoints.length < 2) return null;
 
@@ -348,7 +348,13 @@ export default function RouteVisualization() {
       }, 2000);
       return () => clearTimeout(timer);
     }
-  }, [isRouteAnimating, currentWaypoint, setCurrentWaypoint, setRouteAnimating]);
+  }, [
+    isRouteAnimating,
+    currentWaypoint,
+    waypoints.length,
+    setCurrentWaypoint,
+    setRouteAnimating,
+  ]);
 
   const handlePlayPause = () => {
     if (!isRouteAnimating && currentWaypoint >= waypoints.length - 1) {
@@ -393,21 +399,17 @@ export default function RouteVisualization() {
 
   return (
     <div className='theme-fixed-light w-full h-full flex flex-col relative'>
-      {/* Width-driven square viewport. No `max-h-full` here on purpose: it
-          clamped the height to whatever was left over after the header and
-          controls, which collapsed the square back into a short wide
-          rectangle. Driving purely from `w-full` guarantees a true 1:1 box
-          that spans edge to edge. The parent clips, and StudentMobileView
-          gives the route view a taller frame so the square has room. */}
-      <div className='flex-1 min-h-0 flex items-center justify-center mb-3 overflow-hidden'>
-        <div className='relative w-full aspect-square'>
-          {/* 3D Canvas */}
-          <Canvas
-            camera={{ position: [-10, 15, 20], fov: 60 }}
-            className='h-full w-full bg-[#eef2f7]'
-            shadows
-          >
-        <color attach='background' args={['#eef2f7']} />
+      {/* The canvas fills whatever space is left between the frame header and the
+          controls below, rather than forcing a width-driven square. On a phone
+          the square was taller than the space available, so the bottom of the 3D
+          view was clipped and the whole screen felt cramped. Filling the box
+          means the route always fits, on any screen. */}
+      <div className='flex-1 min-h-0 relative overflow-hidden'>
+        <Canvas
+          camera={{ position: [-10, 15, 20], fov: 60 }}
+          className='h-full w-full bg-[#eef2f7]'
+          shadows
+        >
           <color attach='background' args={['#eef2f7']} />
           <fog attach='fog' args={['#eef2f7', 15, 60]} />
 
@@ -436,134 +438,103 @@ export default function RouteVisualization() {
           {/* Scene elements */}
           <FloorGrid />
           <BuildingStructure />
-            <AnimatedPath waypoints={waypoints} />
-            <RouteMarkers waypoints={waypoints} />
-            <WalkingAvatar waypoints={waypoints} />
-            <AnimatedCamera enabled={cameraMode === 'follow'} waypoints={waypoints} />
+          <AnimatedPath waypoints={waypoints} />
+          <RouteMarkers waypoints={waypoints} />
+          <WalkingAvatar waypoints={waypoints} />
+          <AnimatedCamera enabled={cameraMode === 'follow'} waypoints={waypoints} />
 
+          {/* OrbitControls and the follow camera both drive the same camera. Left
+              enabled during follow, the two fought every frame and the view
+              jittered - which is what made the route look chaotic. Only the free
+              camera orbits; the follow camera owns the view on its own. */}
           <OrbitControls
-            enableZoom={true}
-            enablePan={true}
+            enabled={cameraMode === 'free'}
+            enableZoom={cameraMode === 'free'}
+            enablePan={cameraMode === 'free'}
             minDistance={5}
             maxDistance={50}
             maxPolarAngle={Math.PI / 2.1}
           />
         </Canvas>
 
-        {/* HUD Controls Overlay */}
-        <div className='absolute inset-0 pointer-events-none'>
-          {/* Top HUD - row stays click-through so the canvas remains draggable;
-              the panels themselves re-enable pointer events. */}
-          <div className='absolute top-4 left-4 right-4 flex items-start justify-between pointer-events-none gap-3'>
-            {/* Stage Indicator */}
-            <div className='glass-panel border-navy-700 px-4 py-3 rounded-lg pointer-events-auto'>
-              <div className='flex items-center gap-3'>
-                <div className='w-10 h-10 rounded-lg bg-orange-500/20 flex items-center justify-center'>
-                  <i className='fa-solid fa-route text-orange-400'></i>
-                </div>
-                <div>
-                  <p className='text-navy-300 text-xs mb-0.5'>Destination</p>
-                  <p className='text-white font-bold text-sm'>{route.label}</p>
-                  <p className='text-navy-400 text-xs'>
-                    {route.room} · {route.building}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Progress */}
-            <div className='glass-panel border-navy-700 px-4 py-3 rounded-lg flex items-center gap-3 pointer-events-auto'>
-              <div className='text-right'>
-                <p className='text-navy-300 text-xs mb-0.5'>Progress</p>
-                <p className='text-white font-bold text-sm'>
-                  {currentWaypoint + 1} / {waypoints.length}
-                </p>
-              </div>
-              <div className='h-8 w-px bg-navy-700'></div>
-              <button
-                onClick={toggleCameraMode}
-                className='px-3 py-1.5 rounded-lg bg-navy-700 hover:bg-navy-600 transition-colors text-xs font-semibold text-navy-200'
-                title={
-                  cameraMode === 'follow'
-                    ? 'Switch to Free Camera'
-                    : 'Switch to Follow Camera'
-                }
-              >
-                <i
-                  className={`fa-solid ${cameraMode === 'follow' ? 'fa-video' : 'fa-hand'}`}
-                ></i>
-              </button>
+        {/* HUD. One compact bar across the top, instead of two panels that both
+            claimed the top-right corner and overlapped on a narrow phone. */}
+        <div className='absolute top-3 left-3 right-3 flex items-center justify-between gap-2 pointer-events-none'>
+          <div className='glass-panel border-navy-700 px-3 py-2 rounded-lg pointer-events-auto flex items-center gap-2 min-w-0'>
+            <i className='fa-solid fa-route text-orange-400 text-sm flex-shrink-0'></i>
+            <div className='min-w-0'>
+              <p className='text-white font-semibold text-xs leading-tight truncate'>
+                {route.label}
+              </p>
+              <p className='text-navy-400 text-[10px] leading-tight truncate'>
+                {route.room} · Step {currentWaypoint + 1}/{waypoints.length}
+              </p>
             </div>
           </div>
 
-          {/* Escape hatch from the 3D view, top-right.
-              The controls at the bottom also offer a Return, but they sit BELOW
-              the square canvas: on a short phone the frame clips them, which left
-              someone stuck in the route with no way back to the scanner. This is
-              in the overlay so it is always reachable. */}
-          <div className='absolute top-4 right-4 flex flex-col items-end gap-2 pointer-events-none'>
-            <button
-              onClick={resetRoute}
-              className='pointer-events-auto px-4 py-2.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-paper text-sm font-semibold shadow-lg shadow-black/40 flex items-center gap-2 transition-colors'
-            >
-              <i className='fa-solid fa-arrow-left'></i>
-              Back to scanner
-            </button>
-          </div>
-
-        {/* Waypoint Steps - REMOVED */}
-          </div>
+          <button
+            onClick={toggleCameraMode}
+            className='pointer-events-auto flex-shrink-0 w-9 h-9 rounded-lg bg-navy-700/90 hover:bg-navy-600 text-navy-100 flex items-center justify-center transition-colors'
+            title={
+              cameraMode === 'follow'
+                ? 'Switch to free camera'
+                : 'Switch to follow camera'
+            }
+          >
+            <i
+              className={`fa-solid ${cameraMode === 'follow' ? 'fa-video' : 'fa-hand'} text-sm`}
+            ></i>
+          </button>
         </div>
       </div>
 
-      {/* Controls sit BELOW the canvas so they never cover the 3D view. */}
-      <div className='flex-shrink-0 px-3 pb-3 flex flex-col gap-2'>
-        <div className='glass-panel border-navy-700 p-3 rounded-lg'>
-          <div className='flex items-center gap-3'>
-            <button
-              onClick={handlePlayPause}
-              className='
-                flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-semibold
-                bg-orange-500 text-paper hover:bg-orange-600 transition-colors
-                '
-            >
-              <i className={`fa-solid ${isRouteAnimating ? 'fa-pause' : 'fa-play'}`}></i>
-              {isRouteAnimating
-                ? 'Pause'
-                : currentWaypoint >= waypoints.length - 1
-                  ? 'Replay'
-                  : 'Play'}{' '}
-              Route
-            </button>
+      {/* Controls sit BELOW the canvas and are stacked, so on a phone nothing is
+          clipped and the destination picker gets a full-width row. */}
+      <div className='flex-shrink-0 px-3 pt-3 pb-3 flex flex-col gap-2'>
+        <button
+          onClick={handlePlayPause}
+          className='
+            w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-semibold
+            bg-orange-500 text-paper hover:bg-orange-600 transition-colors
+          '
+        >
+          <i className={`fa-solid ${isRouteAnimating ? 'fa-pause' : 'fa-play'}`}></i>
+          {isRouteAnimating
+            ? 'Pause'
+            : currentWaypoint >= waypoints.length - 1
+              ? 'Replay'
+              : 'Play'}{' '}
+          Route
+        </button>
 
-            {/* Destination picker. Lets you jump between rooms without
-                rescanning; the station QR normally sets this automatically. */}
-            <select
-              value={route.id}
-              onChange={(e) => setActiveRoute(e.target.value)}
-              aria-label='Choose destination'
-              className='
-                px-3 py-3 rounded-lg font-semibold text-sm cursor-pointer
-                bg-navy-700 text-navy-100 hover:bg-navy-600 transition-colors
-                '
-            >
-              {DESTINATION_ROUTES.map((r) => (
-                <option key={r.id} value={r.id} className='bg-navy-900'>
-                  {r.label} ({r.room})
-                </option>
-              ))}
-            </select>
+        <div className='glass-panel border-navy-700 p-2.5 rounded-lg flex items-center gap-2'>
+          {/* Destination picker. Lets you jump between rooms without rescanning;
+              the station QR normally sets this automatically. */}
+          <select
+            value={route.id}
+            onChange={(e) => setActiveRoute(e.target.value)}
+            aria-label='Choose destination'
+            className='
+              flex-1 min-w-0 px-3 py-2.5 rounded-lg font-semibold text-sm cursor-pointer
+              bg-navy-700 text-navy-100 hover:bg-navy-600 transition-colors
+            '
+          >
+            {DESTINATION_ROUTES.map((r) => (
+              <option key={r.id} value={r.id} className='bg-navy-900'>
+                {r.label} ({r.room})
+              </option>
+            ))}
+          </select>
 
-            <button
-              onClick={resetRoute}
-              className='
-                px-5 py-3 rounded-lg font-semibold text-sm
-                bg-navy-700 text-navy-200 hover:bg-navy-600 transition-colors
-                '
-            >
-              Return
-            </button>
-          </div>
+          <button
+            onClick={resetRoute}
+            className='
+              px-4 py-2.5 rounded-lg font-semibold text-sm flex-shrink-0
+              bg-navy-700 text-navy-200 hover:bg-navy-600 transition-colors
+            '
+          >
+            Return
+          </button>
         </div>
       </div>
     </div>

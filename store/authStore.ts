@@ -127,6 +127,20 @@ interface AuthState {
    */
   authResolved: boolean;
 
+  /**
+   * The visitor's pass has run out.
+   *
+   * Deliberately NOT the same as `isAuthenticated: false`. A pass expiring is a
+   * per-visit business rule, not an authentication failure: the person is still a
+   * real, valid account and must stay signed in. Treating expiry as a sign-out
+   * threw every self-registered visitor back to /login the morning after they
+   * registered, which looked exactly like the session had expired.
+   *
+   * The UI surfaces this so the day-pass rule is explained rather than silently
+   * enforced.
+   */
+  passExpired: boolean;
+
   // Actions
   login: (
     email: string,
@@ -235,6 +249,7 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       isLoading: false,
       authResolved: false,
+      passExpired: false,
 
       login: async (email: string, password: string) => {
         set({ isLoading: true });
@@ -283,19 +298,11 @@ export const useAuthStore = create<AuthState>()(
             };
           }
 
-          // An event pass that has run out. Sign out rather than refuse, so the
-          // person is not left with a session that half-works: they get a clear
-          // reason and their history stays intact, and an admin can extend
-          // `valid_until` to let them back in.
-          if (isPassExpired(userData.valid_until)) {
-            await supabase.auth.signOut();
-            set({ user: null, isAuthenticated: false, isLoading: false });
-            return {
-              success: false,
-              error:
-                'Your visitor pass has expired. Please contact reception to renew it.',
-            };
-          }
+          // An expired pass no longer refuses the login. Refusing here sent the person
+          // to a dead end: the login page offers no renewal, and the only way
+          // back in was to have an admin extend `valid_until`. They now sign in
+          // normally and the visitor page explains that their pass has run out.
+          // The account is still valid; only the day is over.
 
           // Resolve any pending room/purpose BEFORE building the user, so the
           // assigned room is present the first time the scanner reads it. Both
@@ -316,7 +323,14 @@ export const useAuthStore = create<AuthState>()(
             createdAt: new Date(userData.created_at),
           };
 
-          set({ user, isAuthenticated: true, isLoading: false });
+          set({
+            user,
+            isAuthenticated: true,
+            isLoading: false,
+            // Computed here rather than assumed false, so a returning visitor
+            // with an expired day-pass still lands signed in with the reason shown.
+            passExpired: isPassExpired(userData.valid_until),
+          });
           return { success: true };
         } catch (error) {
           set({ isLoading: false });
@@ -483,7 +497,14 @@ export const useAuthStore = create<AuthState>()(
             createdAt: new Date(userData.created_at),
           };
 
-          set({ user, isAuthenticated: true, isLoading: false });
+          set({
+            user,
+            isAuthenticated: true,
+            isLoading: false,
+            // Computed here rather than assumed false, so a returning visitor
+            // with an expired day-pass still lands signed in with the reason shown.
+            passExpired: isPassExpired(userData.valid_until),
+          });
           return { success: true };
         } catch (error: any) {
           console.error('Registration error:', error);
@@ -543,9 +564,9 @@ export const useAuthStore = create<AuthState>()(
             return;
           }
 
-          // Archived accounts have no valid session, same as on login, and an expired
-          // event pass is treated the same way.
-          if (userData.archived_at || isPassExpired(userData.valid_until)) {
+          // An ARCHIVED account is genuinely retired: revoke the Supabase login so the
+          // credentials stop working even if they are still remembered.
+          if (userData.archived_at) {
             await supabase.auth.signOut();
             set({
               user: null,
@@ -555,6 +576,20 @@ export const useAuthStore = create<AuthState>()(
             });
             return;
           }
+
+          // An EXPIRED pass is a business rule, not an authentication failure, so
+          // the session is deliberately left intact.
+          //
+          // This used to `signOut()` here, which meant that with the one-day
+          // pass added in migration 006, every self-registered visitor was thrown
+          // back to /login the morning after registering - indistinguishable from
+          // the session having expired. They were still a valid account; their
+          // day simply ended. Signing them out also destroyed the only way back
+          // in, since the login page offers no renewal.
+          //
+          // The pass being expired is surfaced on the visitor pages instead, and
+          // an admin can extend `valid_until` to let them in again without the
+          // person having to re-register.
 
           // Resolve any pending room/purpose BEFORE building the user, so the
           // assigned room is present the first time the scanner reads it. Both
@@ -580,6 +615,7 @@ export const useAuthStore = create<AuthState>()(
             isAuthenticated: true,
             isLoading: false,
             authResolved: true,
+            passExpired: isPassExpired(userData.valid_until),
           });
         } catch (error) {
           // A thrown error (a network drop mid-check) must not wipe a session

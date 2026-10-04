@@ -6,6 +6,7 @@ import { useAuthStore } from '@/store/authStore';
 import { useRecordsStore } from '@/store/recordsStore';
 import { useRoomPresenceStore } from '@/store/roomPresenceStore';
 import { useLiveData } from '@/hooks/useLiveData';
+import LiveBadge from '@/components/LiveBadge';
 import Link from 'next/link';
 import UserProfile from '@/components/UserProfile';
 
@@ -21,7 +22,11 @@ export default function AdminDashboard() {
 
   // Keep the dashboard numbers live. They used to be a snapshot taken whenever
   // the page loaded, so a check-in at the kiosk never appeared without a reload.
-  useLiveData({ enabled: isAuthenticated && user?.role === 'admin' });
+  const { lastRefreshed } = useLiveData({
+    records: 'today',
+    presence: 'today',
+    enabled: isAuthenticated && user?.role === 'admin',
+  });
 
   useEffect(() => {
     if (!isAuthenticated || user?.role !== 'admin') {
@@ -74,13 +79,16 @@ export default function AdminDashboard() {
         {/* Main Content */}
         <main className='max-w-7xl mx-auto px-4 py-5'>
           {/* Welcome Section */}
-          <div className='mb-8'>
-            <h2 className='text-3xl font-bold text-white mb-2'>
-              Welcome back, {user.name}
-            </h2>
-            <p className='text-navy-300'>
-              Here&apos;s what&apos;s happening with the Visitor Management System today
-            </p>
+          <div className='mb-8 flex items-start justify-between gap-4'>
+            <div>
+              <h2 className='text-3xl font-bold text-white mb-2'>
+                Welcome back, {user.name}
+              </h2>
+              <p className='text-navy-300'>
+                Here&apos;s what&apos;s happening with the Visitor Management System today
+              </p>
+            </div>
+            <LiveBadge lastRefreshed={lastRefreshed} />
           </div>
 
           {/* Live Metrics. Total users deliberately lives on /admin/users rather than

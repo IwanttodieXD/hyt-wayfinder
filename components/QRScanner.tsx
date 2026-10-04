@@ -20,7 +20,8 @@ export default function QRScanner() {
     setActiveRoute,
   } = useClockInStore();
   const { addRecord, clockOutRecord } = useRecordsStore();
-  const { enterRoom, leaveRoom, getCurrentRoom } = useRoomPresenceStore();
+  const { enterRoom, leaveRoom, getCurrentRoom, fetchTodayPresence } =
+    useRoomPresenceStore();
   const { fetchRooms, fetchPurposes, getRoomByQr, getRoomByNumber, getActivePurposes } =
     useRoomsStore();
   const activePurposes = getActivePurposes();
@@ -39,6 +40,9 @@ export default function QRScanner() {
     roomLabel: string;
     recordId: string;
   } | null>(null);
+  // Set when someone scans the door of the room they are already recorded in.
+  // Nothing is written; the dialog just explains why nothing changed.
+  const [alreadyInRoom, setAlreadyInRoom] = useState<string | null>(null);
   // Why they are in the building today. Written to the attendance row, not the
   // user, because it is per visit rather than per person.
   const [purposeId, setPurposeId] = useState<string>('');
@@ -137,7 +141,11 @@ const handledRef = useRef(false);
   useEffect(() => {
     fetchRooms();
     fetchPurposes();
-  }, [fetchRooms, fetchPurposes]);
+    // Load presence so `getCurrentRoom` knows where this person already is.
+    // Both the "you're already here" check and the check-out confirmation
+    // depend on it, and without it the store was empty so both were skipped.
+    fetchTodayPresence();
+  }, [fetchRooms, fetchPurposes, fetchTodayPresence]);
 
   const handleScanSuccess = useCallback(
     async (decodedText: string) => {
@@ -202,7 +210,15 @@ const handledRef = useRef(false);
         });
 
         if (!result.success) {
-          setScanError(result.error || 'Could not record your room. Please try again.');
+          if (result.alreadyInRoom) {
+            // Not an error - they are exactly where they already were. Say so
+            // with a dialog instead of the red error overlay.
+            setAlreadyInRoom(room.name || room.roomNumber);
+          } else {
+            setScanError(
+              result.error || 'Could not record your room. Please try again.'
+            );
+          }
         } else {
           setLastRoom(room.roomNumber);
         }
@@ -728,6 +744,35 @@ const handledRef = useRef(false);
                 Check out anyway
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Already-in-room notice. A dialog rather than the red error overlay,
+          because nothing went wrong - the scan was simply redundant. */}
+      {alreadyInRoom && (
+        <div className='fixed inset-0 z-50 bg-navy-950/80 flex items-center justify-center p-4'>
+          <div className='glass-panel border-navy-700 rounded-lg p-6 max-w-sm w-full text-center'>
+            <div className='w-14 h-14 rounded-full bg-orange-500/20 flex items-center justify-center mx-auto mb-3'>
+              <i className='fa-solid fa-location-dot text-orange-400 text-2xl'></i>
+            </div>
+            <h3 className='text-white font-bold text-lg mb-2'>
+              You&apos;re already inside this room
+            </h3>
+            <p className='text-navy-300 text-sm mb-6'>
+              You&apos;re already recorded in {alreadyInRoom}. No need to scan
+              again.
+            </p>
+            <button
+              onClick={() => setAlreadyInRoom(null)}
+              className='
+                w-full px-4 py-3 rounded-lg font-semibold text-sm
+                bg-orange-500 hover:bg-orange-600 text-paper
+                transition-colors duration-150
+              '
+            >
+              Got it
+            </button>
           </div>
         </div>
       )}
