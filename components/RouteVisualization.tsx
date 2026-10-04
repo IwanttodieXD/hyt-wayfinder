@@ -496,6 +496,21 @@ export default function RouteVisualization() {
             </div>
           </div>
 
+          {/* Escape hatch from the 3D view, top-right.
+              The controls at the bottom also offer a Return, but they sit BELOW
+              the square canvas: on a short phone the frame clips them, which left
+              someone stuck in the route with no way back to the scanner. This is
+              in the overlay so it is always reachable. */}
+          <div className='absolute top-4 right-4 flex flex-col items-end gap-2 pointer-events-none'>
+            <button
+              onClick={resetRoute}
+              className='pointer-events-auto px-4 py-2.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-paper text-sm font-semibold shadow-lg shadow-black/40 flex items-center gap-2 transition-colors'
+            >
+              <i className='fa-solid fa-arrow-left'></i>
+              Back to scanner
+            </button>
+          </div>
+
         {/* Waypoint Steps - REMOVED */}
           </div>
         </div>

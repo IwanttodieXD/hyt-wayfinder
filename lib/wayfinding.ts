@@ -59,20 +59,20 @@ const ROOM_PREFIX = 'HYT-ROOM-01';
 const ROOM_PREFIX_RE = /^HYT-ROOM-01[:-]/i;
 
 /**
- * The RETIRED room code format: `HYT-KIOSK-01-CHECKIN-STATION:ROOM-304`.
+ * The LEGACY room code format: `HYT-KIOSK-01-CHECKIN-STATION:ROOM-304`.
  *
  * Room codes used to be minted under the attendance prefix, with the room number
- * after it. Because the value still begins `HYT-KIOSK-`, `parseQrValue` used to
- * read these as ATTENDANCE - so a visitor scanning an old poster on a room door
- * was silently checked into the building and the room was never recorded. No
- * error, wrong data.
+ * after it. Posters in that format are still on doors, and the value begins
+ * `HYT-KIOSK-`, so a parser that only checked the prefix read a room poster as
+ * ATTENDANCE - silently toggling the visitor's check-in/check-out instead of
+ * recording the room.
  *
- * That is precisely the failure the two prefixes exist to prevent, so it is
- * detected explicitly and refused. A bare `HYT-KIOSK-CHECKIN-STATION` does NOT
- * match this (there is no room suffix), which is what keeps ordinary check-in
- * working.
+ * The suffix (`ROOM-304`, `ROOFDECK`) is what makes it unambiguously a room, so
+ * it is captured and resolved to that room here, BEFORE the attendance branch.
+ * A bare `HYT-KIOSK-CHECKIN-STATION` has no room suffix and does NOT match,
+ * which is what keeps ordinary check-in/check-out working.
  */
-const LEGACY_ROOM_CODE_RE = /^HYT-KIOSK-[^:]*[:-](?:ROOM|ROOFDECK)/i;
+const LEGACY_ROOM_CODE_RE = /^HYT-KIOSK-.*[:-](ROOM|ROOFDECK)[- ]?([0-9]+)?/i;
 
 /** Single building. Kept as a constant so routes and the DB default agree. */
 const BUILDING = 'HYT-Business Center';
@@ -175,7 +175,6 @@ export function getRouteByRoom(room: string): DestinationRoute | undefined {
 export type ParsedQr =
   | { kind: 'attendance' }
   | { kind: 'room'; roomNumber: string; routeId: string }
-  | { kind: 'retired-room-code' }
   | null;
 
 /** Strips the punctuation so 'room 304' matches 'ROOM-304'. */
@@ -200,12 +199,27 @@ function roomCodeValue(qrValue: string): string {
 export function parseQrValue(value: string): ParsedQr {
   const trimmed = value.trim();
 
-  // Checked BEFORE the attendance branch. This value starts with the attendance
-  // prefix, so without this it would be read as a check-in - silently checking a
-  // visitor into the building when they meant to record a room. The room suffix
-  // is what makes it unambiguously a retired room poster.
-  if (LEGACY_ROOM_CODE_RE.test(trimmed)) {
-    return { kind: 'retired-room-code' };
+  // Checked BEFORE the attendance branch. These values start with the attendance
+  // prefix, so without this they would toggle check-in/out instead of recording
+  // the room. The room suffix is what makes them unambiguously room posters.
+  const legacy = trimmed.match(LEGACY_ROOM_CODE_RE);
+  if (legacy) {
+    const [, suffix, digits] = legacy;
+    const roomNumber =
+      suffix.toUpperCase() === 'ROOFDECK'
+        ? 'Roofdeck'
+        : digits
+          ? `Room ${digits}`
+          : null;
+    // A room suffix we cannot turn into a room number is not ours to guess.
+    if (!roomNumber) return null;
+
+    const match = DESTINATION_ROUTES.find(
+      (r) => normalise(r.room) === normalise(roomNumber)
+    );
+    // routeId is only a hint; the scanner resolves the room from the `rooms`
+    // table by number, which is what covers rooms not in DESTINATION_ROUTES.
+    return { kind: 'room', roomNumber, routeId: match?.id ?? DEFAULT_ROUTE_ID };
   }
 
   if (ROOM_PREFIX_RE.test(trimmed)) {

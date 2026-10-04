@@ -82,14 +82,16 @@ editor, **in numeric order** (the later files depend on the earlier ones):
 6. `supabase/migrations/20260101000006_default_pass_expiry.sql` — new accounts default to a pass that expires at end of today
 7. `supabase/migrations/20260101000007_pending_visit_intent.sql` — `pending_room_id` / `pending_purpose_id`, so an admin-assigned room and purpose survive until check-in
 8. `supabase/migrations/20260101000008_integrity_and_least_privilege.sql` — one open attendance row per user, and column-scoped `UPDATE` so a visit's timestamps and room cannot be rewritten after the fact
-9. `supabase/seed.sql` — the 11 rooms and the visit purposes
+9. `supabase/migrations/20260101000009_rooms_readable_by_anyone.sql` — lets the register form's room picker load before sign-in
+10. `supabase/seed.sql` — the 11 rooms and the visit purposes
 
 This is a **fresh** schema, not an upgrade path: it creates clean tables rather
 than `ALTER`ing the old ones, so there is no data migration to run.
 
-> ⚠️ **Any QR posters printed before this schema need reprinting.** The old codes
-> were `HYT-KIOSK-01-CHECKIN-STATION:<ROOM>` and still parse as *attendance*, so a
-> stale poster on a door would silently clock people in rather than record presence.
+> **Old-format room posters still work.** Codes printed as
+> `HYT-KIOSK-01-CHECKIN-STATION:<ROOM>` are read as the room they name, so a door
+> scan records presence and never touches attendance. Reprinting them in the
+> `HYT-ROOM-01:<ROOM>` format is worth doing when convenient, but is not required.
 
 Design notes in [supabase/SCHEMA.md](./supabase/SCHEMA.md) explain the ERD and
 three things that are easy to get wrong:

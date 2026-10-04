@@ -130,7 +130,7 @@ Fresh database, in this order:
 
 1. `supabase/migrations/20260101000001_full_schema.sql` — tables, indexes, triggers, RLS
 2. `supabase/migrations/20260101000002_registration_fix.sql` … through
-   `20260101000008_integrity_and_least_privilege.sql`, in numeric order
+   `20260101000009_rooms_readable_by_anyone.sql`, in numeric order
 3. `supabase/seed.sql` — the 11 rooms
 
 The full annotated list is in [../README.md](../README.md) under Database.

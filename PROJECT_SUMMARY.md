@@ -214,10 +214,10 @@ Worth knowing before you rely on this:
   in `supabase/migrations/20260101000001_full_schema.sql` (see
   [supabase/SCHEMA.md](./supabase/SCHEMA.md)) but the code has not been updated
   to match yet — see `IMPLEMENTATION_PROMPT.md`.
-- **Any room codes already printed need reprinting.** The old codes were
-  `HYT-KIOSK-01-CHECKIN-STATION:<ROOM>` and still parse as *attendance*, so a
-  stale poster on a door would silently clock people in rather than record
-  presence.
+- **Old-format room posters still work.** Codes printed as
+  `HYT-KIOSK-01-CHECKIN-STATION:<ROOM>` resolve to the room they name, so a door
+  scan records presence and never touches attendance. Reprinting in the
+  `HYT-ROOM-01:<ROOM>` format is optional.
 - **Account create/delete returns `501`** until `SUPABASE_SERVICE_ROLE_KEY` is
   set. Read and update still work.
 - **No automated tests.** The QR parser and presence logic have been tested

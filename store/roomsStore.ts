@@ -106,7 +106,18 @@ interface RoomsState {
   rooms: Room[];
   purposes: Purpose[];
   visitorTypes: VisitorType[];
-  isLoading: boolean;
+  /**
+   * In-flight guards, one per resource.
+   *
+   * These used to be a single shared `isLoading` flag, which made the fetches
+   * block each other: whichever ran second saw the flag set and returned
+   * without fetching. On /admin/users the effect calls fetchRooms() before
+   * fetchPurposes(), so the purposes list was silently dropped and its picker
+   * rendered empty while the room picker worked.
+   */
+  roomsLoading: boolean;
+  purposesLoading: boolean;
+  visitorTypesLoading: boolean;
   /** Guards against refetching on every mount of every consumer. */
   hasFetched: boolean;
 
@@ -163,14 +174,16 @@ export const useRoomsStore = create<RoomsState>((set, get) => ({
   rooms: [],
   purposes: [],
   visitorTypes: [],
-  isLoading: false,
+  roomsLoading: false,
+  purposesLoading: false,
+  visitorTypesLoading: false,
   hasFetched: false,
 
   fetchRooms: async (force = false) => {
-    if (get().isLoading) return;
+    if (get().roomsLoading) return;
     if (!force && get().hasFetched) return;
 
-    set({ isLoading: true });
+    set({ roomsLoading: true });
 
     try {
       const { data, error } = await supabase
@@ -180,25 +193,27 @@ export const useRoomsStore = create<RoomsState>((set, get) => ({
 
       if (error) {
         console.error('Error fetching rooms:', error);
-        set({ isLoading: false });
+        set({ roomsLoading: false });
         return;
       }
 
       const rooms = (data ?? []).map(mapRoom).sort(compareRooms);
-      set({ rooms, isLoading: false, hasFetched: true });
+      set({ rooms, roomsLoading: false, hasFetched: true });
     } catch (error) {
       console.error('Error fetching rooms:', error);
-      set({ isLoading: false });
+      set({ roomsLoading: false });
     }
   },
 
   fetchPurposes: async (force = false) => {
-    if (get().isLoading) return;
+    if (get().purposesLoading) return;
     // Only skip the fetch if real rows are already loaded. A previous fallback
     // must not block a retry, otherwise applying the fix migration would not
     // take effect until a hard reload.
     const hasRealRows = get().purposes.some((p) => !p.id.startsWith('fallback-'));
     if (!force && hasRealRows) return;
+
+    set({ purposesLoading: true });
 
     try {
       const { data, error } = await supabase
@@ -215,7 +230,7 @@ export const useRoomsStore = create<RoomsState>((set, get) => ({
             'Apply supabase/migrations/20260101000002_registration_fix.sql to fix this.',
           error
         );
-        set({ purposes: FALLBACK_PURPOSES });
+        set({ purposes: FALLBACK_PURPOSES, purposesLoading: false });
         return;
       }
 
@@ -225,20 +240,24 @@ export const useRoomsStore = create<RoomsState>((set, get) => ({
           label: row.label,
           isActive: row.is_active,
         })),
+        purposesLoading: false,
       });
     } catch (error) {
       console.warn('Could not load purposes; using the built-in list.', error);
-      set({ purposes: FALLBACK_PURPOSES });
+      set({ purposes: FALLBACK_PURPOSES, purposesLoading: false });
     }
   },
 
   fetchVisitorTypes: async (force = false) => {
+    if (get().visitorTypesLoading) return;
     // Same rule as purposes: only a real row count blocks the refetch, so
     // applying migration 004 takes effect without a hard reload.
     const hasRealRows = get().visitorTypes.some(
       (t) => !t.id.startsWith('fallback-')
     );
     if (!force && hasRealRows) return;
+
+    set({ visitorTypesLoading: true });
 
     try {
       const { data, error } = await supabase
@@ -259,7 +278,7 @@ export const useRoomsStore = create<RoomsState>((set, get) => ({
             'visitor types are not persisted, and edits to type/company/host/' +
             'phone/expiry will fail to save.'
         );
-        set({ visitorTypes: FALLBACK_VISITOR_TYPES });
+        set({ visitorTypes: FALLBACK_VISITOR_TYPES, visitorTypesLoading: false });
         return;
       }
 
@@ -270,10 +289,11 @@ export const useRoomsStore = create<RoomsState>((set, get) => ({
           isPrimary: row.is_primary,
           isActive: row.is_active,
         })),
+        visitorTypesLoading: false,
       });
     } catch (error) {
       console.warn('Could not load visitor types; using the built-in list.', error);
-      set({ visitorTypes: FALLBACK_VISITOR_TYPES });
+      set({ visitorTypes: FALLBACK_VISITOR_TYPES, visitorTypesLoading: false });
     }
   },
 

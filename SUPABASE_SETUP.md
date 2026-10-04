@@ -16,6 +16,8 @@
 > 7. `20260101000007_pending_visit_intent.sql` — `pending_room_id` / `pending_purpose_id`
 > 8. `20260101000008_integrity_and_least_privilege.sql` — one open attendance row
 >    per user, and column-scoped `UPDATE` on the two visit tables
+> 9. `20260101000009_rooms_readable_by_anyone.sql` — required, or the register
+>    form's room picker is empty before sign-in
 >
 > Only `admin` and `visitor` roles are used by the app, and there is exactly one
 > admin account. Where this guide mentions `trainer` or `trainee` accounts, read

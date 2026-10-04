@@ -58,6 +58,18 @@ interface RecordsState {
   getRecordsByDate: (date: Date) => ClockInRecord[];
   fetchRecords: () => Promise<void>;
   fetchTodayRecords: () => Promise<void>;
+  /**
+   * The caller's currently open attendance record, if any, regardless of which
+   * day it started.
+   *
+   * Deliberately not `fetchTodayRecords`: a visitor who checked in yesterday and
+   * never scanned out is still inside, and a today-only lookup misses that row -
+   * so the scanner would think they are not checked in and try to check them in
+   * again (which the one-open-row index then rejects).
+   */
+  fetchOpenRecord: (
+    userId: string
+  ) => Promise<{ id: string; timeIn: Date } | null>;
 }
 
 /**
@@ -335,6 +347,31 @@ export const useRecordsStore = create<RecordsState>((set, get) => ({
     } catch (error) {
       console.error('Error fetching today records:', error);
       set({ isLoading: false });
+    }
+  },
+
+  fetchOpenRecord: async (userId) => {
+    try {
+      const { data, error } = await supabase
+        .from('clock_in_records')
+        .select('id, time_in')
+        .eq('user_id', userId)
+        .is('time_out', null)
+        .order('time_in', { ascending: false })
+        .limit(1);
+
+      if (error) {
+        console.error('Error fetching open attendance record:', error);
+        return null;
+      }
+
+      const row = data?.[0];
+      return row
+        ? { id: row.id as string, timeIn: new Date(row.time_in as string) }
+        : null;
+    } catch (error) {
+      console.error('Error fetching open attendance record:', error);
+      return null;
     }
   },
 }));

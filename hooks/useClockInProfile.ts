@@ -60,7 +60,7 @@ export function useClockInProfile() {
  * or an archive by an admin, without the visitor having to reload.
  */
 export function useAttendanceStatus(userId: string | undefined) {
-  const { fetchTodayRecords, getActiveRecords } = useRecordsStore();
+  const { fetchOpenRecord } = useRecordsStore();
   const { syncFromServer } = useClockInStore();
 
   const inFlight = useRef(false);
@@ -74,19 +74,15 @@ export function useAttendanceStatus(userId: string | undefined) {
     inFlight.current = true;
 
     try {
-      await fetchTodayRecords();
-
-      // `getActiveRecords` reads the store the fetch just wrote, so this sees
-      // fresh data without a second round trip.
-      const mine = getActiveRecords().find((r) => r.userId === userId);
-
-      syncFromServer(
-        mine ? { id: mine.id, timeIn: mine.timeIn } : null
-      );
+      // The user's open record, whatever day it started. A today-only lookup
+      // missed an overnight check-in, so the scanner disagreed with the
+      // database and tried to check the person in again.
+      const open = await fetchOpenRecord(userId);
+      syncFromServer(open);
     } finally {
       inFlight.current = false;
     }
-  }, [userId, fetchTodayRecords, getActiveRecords, syncFromServer]);
+  }, [userId, fetchOpenRecord, syncFromServer]);
 
   // Immediate sync on mount, so a refresh is correct before the first paint of
   // state-dependent UI.

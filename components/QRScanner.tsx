@@ -152,21 +152,6 @@ const handledRef = useRef(false);
         return;
       }
 
-      // A room poster printed before the codes were split. These look like
-      // attendance codes, so without this they would check the visitor into the
-      // building and silently lose the room. Refused with an actionable message
-      // instead - the poster needs reprinting, not re-scanning.
-      if (parsed.kind === 'retired-room-code') {
-        setScanError(
-          'This is an old room poster and can no longer be used. Please ask reception to reprint it.'
-        );
-        handledRef.current = false;
-        await stopScanner();
-        setScannerActive(false);
-        setTimeout(() => setScanning(false), 3000);
-        return;
-      }
-
       // Stop the camera
       await stopScanner();
 
@@ -581,15 +566,15 @@ const handledRef = useRef(false);
             <i className='fa-solid fa-camera text-sm'></i>
             {status === 'not-clocked-in'
               ? 'Start camera to scan'
-              : 'Scan again to check out'}
+              : 'Open camera to scan'}
           </button>
         ) : (
           <div className='inline-flex items-center gap-2 px-4 py-2 rounded-full bg-orange-500/10 border border-orange-500/30 mb-4'>
             <i className='fa-solid fa-camera text-orange-400 text-sm'></i>
             <span className='text-orange-300 text-sm font-medium'>
               {status === 'not-clocked-in'
-                ? 'Point at the ground floor check-in code'
-                : 'Checked in — scan again to check out'}
+                ? 'Point at the entrance code to check in'
+                : 'Point at any room door or the entrance'}
             </span>
           </div>
         )}
@@ -599,7 +584,7 @@ const handledRef = useRef(false);
             ? 'Present your personal QR code to the check-in scanner to check in.'
             : status === 'not-clocked-in'
               ? 'Scan the entrance code to check in and receive your route.'
-              : 'Scan the entrance code again when you leave to check out.'}
+              : 'You are checked in. Scan a room door to record where you are, or the entrance code to check out.'}
         </p>
 
         {/* A legend for the three different codes in the building. Each does a
@@ -619,6 +604,15 @@ const handledRef = useRef(false);
             <p className='text-navy-300 text-[11px] leading-snug'>
               <span className='text-white font-semibold'>Room door poster</span> —
               records which room you are in. Never checks you in or out.
+              {/* Called out while checked in, because that is the action a visitor
+                  actually has available in the building and the scanner gave no
+                  hint of it otherwise. */}
+              {status !== 'not-clocked-in' && (
+                <span className='block mt-1 text-orange-300'>
+                  <i className='fa-solid fa-circle-check text-[10px] mr-1'></i>
+                  You can scan these now.
+                </span>
+              )}
             </p>
           </div>
           <div className='flex items-start gap-2 px-3 py-2 text-left'>

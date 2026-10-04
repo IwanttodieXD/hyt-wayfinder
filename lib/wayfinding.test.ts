@@ -82,25 +82,33 @@ describe('parseQrValue - room presence', () => {
   });
 });
 
-describe('parseQrValue - retired room codes', () => {
-  test('flags a room code minted under the old attendance prefix', () => {
+describe('parseQrValue - legacy room codes', () => {
+  test('reads an old-format room poster as its room, not as attendance', () => {
+    // These start with the attendance prefix, so they must resolve to a room
+    // BEFORE the attendance branch or a door scan would toggle check-in/out.
     assert.deepEqual(parseQrValue('HYT-KIOSK-01-CHECKIN-STATION:ROOM-304'), {
-      kind: 'retired-room-code',
+      kind: 'room',
+      roomNumber: 'Room 304',
+      routeId: 'room-304',
     });
     assert.deepEqual(parseQrValue('HYT-KIOSK-01-CHECKIN-STATION-ROOM-304'), {
-      kind: 'retired-room-code',
+      kind: 'room',
+      roomNumber: 'Room 304',
+      routeId: 'room-304',
     });
   });
 
-  test('flags a retired roofdeck code too', () => {
+  test('handles the legacy roofdeck code', () => {
     assert.deepEqual(parseQrValue('HYT-KIOSK-01-CHECKIN-STATION:ROOFDECK'), {
-      kind: 'retired-room-code',
+      kind: 'room',
+      roomNumber: 'Roofdeck',
+      routeId: 'roofdeck',
     });
   });
 
-  test('never reads a retired room code as attendance', () => {
-    // The whole point of the guard: this value starts with HYT-KIOSK-, so
-    // without it a stale door poster would check the person into the building.
+  test('a legacy room code is never attendance', () => {
+    // The value starts with HYT-KIOSK-, so without the room resolution a door
+    // scan would check the person out of the building.
     const parsed = parseQrValue('HYT-KIOSK-01-CHECKIN-STATION:ROOM-304');
     assert.notEqual(parsed?.kind, 'attendance');
   });

@@ -114,7 +114,7 @@ export default function StudentMobileView() {
             {isCheckedIn
               ? showingRoute
                 ? 'Scan the QR code on your next room door to record where you are.'
-                : 'Scan the entrance QR code again to check out when you leave.'
+                : 'Scan a room door code to record where you are, or the entrance code again to check out.'
               : 'Scan the QR code at the entrance to check in and see your route.'}
           </p>
         </div>

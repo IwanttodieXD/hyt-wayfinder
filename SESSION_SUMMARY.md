@@ -571,6 +571,29 @@ imports `'./wayfinding.ts'` because `node --test` needs the explicit extension, 
 bundler resolution rejects. Added `**/*.test.ts` to `tsconfig.json` `exclude` with a
 comment explaining why. `npm test` → **22 pass, 0 fail**; `tsc --noEmit` clean again.
 
+**Route view: added an always-visible "Back to scanner"** (`components/RouteVisualization.tsx`).
+There WAS already a `resetRoute` button, but it sits in the control panel **below** the
+square canvas — on a short phone the frame's `overflow-hidden` clips it, so the only way out
+of the 3D view was unreachable. New button is in the top-right HUD overlay, which cannot be
+clipped. The bottom Return stays.
+
+**Room scanning is now discoverable while checked in.** Every prompt previously framed the
+scanner as check-in/check-out only, so a visitor already inside had no signal that room
+codes were usable:
+- idle button: `Scan again to check out` → `Open camera to scan`
+- live pill: `Checked in — scan again to check out` → `Point at any room door or the entrance`
+- instructions: `Scan the entrance code again when you leave to check out.` → `You are
+  checked in. Scan a room door to record where you are, or the entrance code to check out.`
+- Same fix in `StudentMobileView`'s header line.
+- The legend's **Room door poster** row now shows a "✓ You can scan these now" line whenever
+  `status !== 'not-clocked-in'`, so the capability is flagged at the moment it becomes true.
+
+Root cause of both reports: not a logic bug — the actions existed. The exit was hidden by
+layout, and the capability was never surfaced.
+
+Verified: `tsc` 0, 22/22 tests pass, build 16/16, lint clean apart from the two
+pre-existing `exhaustive-deps` warnings in RouteVisualization.
+
 ---
 
 ## 6. Recently done
