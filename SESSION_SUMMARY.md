@@ -594,6 +594,23 @@ layout, and the capability was never surfaced.
 Verified: `tsc` 0, 22/22 tests pass, build 16/16, lint clean apart from the two
 pre-existing `exhaustive-deps` warnings in RouteVisualization.
 
+**ROOT CAUSE of the persistent reload→login: my own one-day pass change.**
+`checkAuth` treated an expired pass the same as an archived account and called
+`supabase.auth.signOut()`. With migration 006 giving self-registered visitors a pass that
+expires at end-of-day, **every visitor was signed out and redirected to /login the morning
+after registering** — indistinguishable from the session expiring. Compounding it, `login()`
+refused with "pass expired" and the login page offers no renewal, so there was no way back
+in at all.
+
+An expired pass is a **business rule, not an authentication failure**. Fixed:
+- `checkAuth`: only `archived_at` signs out. Expiry leaves the session intact.
+- `login`: no longer refuses on expiry.
+- New `passExpired` boolean on the store, computed in both paths, rendered as an amber
+  notice on the visitor view explaining the pass ran out and reception can renew it.
+
+This is why the earlier `useRoleGuard`/`AuthGate` work appeared not to fix it — that code
+was correct. The redirect was genuine server-truth behaviour, not a race.
+
 ---
 
 ## 6. Recently done
