@@ -1,9 +1,11 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRecordsStore } from '@/store/recordsStore';
 import { useRoomPresenceStore } from '@/store/roomPresenceStore';
 import { useRoomsStore } from '@/store/roomsStore';
+import { useLiveData } from '@/hooks/useLiveData';
+import LiveBadge from '@/components/LiveBadge';
 
 /**
  * Live room-by-room occupancy: who is inside which room right now.
@@ -63,69 +65,25 @@ function floorLabel(floor: string): string {
 }
 
 export default function RoomOccupancy() {
-  const { getActiveCount, fetchTodayRecords } = useRecordsStore();
-  const { getOccupancyByRoom, fetchTodayPresence } = useRoomPresenceStore();
+  const { getActiveCount } = useRecordsStore();
+  const { getOccupancyByRoom } = useRoomPresenceStore();
   const { getActiveRooms, getAllRooms, fetchRooms } = useRoomsStore();
 
   // Room ids the visitor has opened. A Set rather than a single id so opening one
   // room never closes another.
   const [expandedRooms, setExpandedRooms] = useState<Set<string>>(new Set());
 
-  // When the numbers on screen were last fetched. Ticks every 10s purely to
-  // re-render the "updated Ns ago" label below; it does not trigger a fetch.
-  const [lastRefreshed, setLastRefreshed] = useState(() => Date.now());
-  const [, setTick] = useState(0);
-
-  // True while a poll is in flight, so overlapping requests cannot race.
-  // A ref, not state: changing it must not trigger a render.
-  const refreshingRef = useRef(false);
-
+  // Rooms are fetched once - they change rarely. The live figures come from
+  // useLiveData below, so this page polls attendance and presence on the same
+  // cadence as every other admin view instead of its own separate loop.
   useEffect(() => {
-    fetchTodayRecords();
-    fetchTodayPresence();
     fetchRooms();
-    setLastRefreshed(Date.now());
-  }, [fetchTodayRecords, fetchTodayPresence, fetchRooms]);
+  }, [fetchRooms]);
 
-  // The page is titled "Live Occupancy", so it has to actually keep itself
-  // current - without this the headcounts froze at whatever they were when the
-  // page loaded, which is actively misleading to someone deciding where to send
-  // a visitor. 30s is frequent enough to feel live and cheap enough to leave
-  // open on a wall display all day.
-  //
-  // Skipped while the tab is hidden: a background tab polling every 30s wastes
-  // requests and nobody is looking at the result. `visibilitychange` refetches
-  // on return, so the numbers are never stale when the page becomes visible.
-  useEffect(() => {
-    const refresh = () => {
-      // Guard against overlap. A 30s interval is shorter than a slow connection
-      // can take on a bad mobile connection, so without this two requests race
-      // and the slower one can land last, leaving the screen showing older data
-      // than the newer response. Skipping while one is in flight is the same
-      // pattern `fetchRooms` uses.
-      if (refreshingRef.current) return;
-      refreshingRef.current = true;
-
-      Promise.all([fetchTodayRecords(), fetchTodayPresence()]).finally(() => {
-        refreshingRef.current = false;
-        setLastRefreshed(Date.now());
-      });
-    };
-
-    const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') refresh();
-    }, 30000);
-
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') refresh();
-    };
-    document.addEventListener('visibilitychange', onVisible);
-
-    return () => {
-      clearInterval(interval);
-      document.removeEventListener('visibilitychange', onVisible);
-    };
-  }, [fetchTodayRecords, fetchTodayPresence]);
+  const { lastRefreshed } = useLiveData({
+    records: 'today',
+    presence: 'today',
+  });
 
   const toggleRoom = (roomId: string) =>
     setExpandedRooms((prev) => {
@@ -137,16 +95,6 @@ export default function RoomOccupancy() {
       }
       return next;
     });
-
-  // Repaints the "updated Ns ago" label without any network traffic. 10s is
-  // enough resolution for a countdown that only ever reads "just now" up to
-  // "30s ago", and costs nothing while the tab sits idle.
-  useEffect(() => {
-    const id = setInterval(() => setTick((n) => n + 1), 10000);
-    return () => clearInterval(id);
-  }, []);
-
-  const secondsSinceRefresh = Math.floor((Date.now() - lastRefreshed) / 1000);
 
   // Everyone checked in, regardless of whether they've scanned a door yet.
   const insideCount = getActiveCount();
@@ -222,11 +170,8 @@ export default function RoomOccupancy() {
           {/* Says out loud that these numbers refresh themselves. Someone deciding
               where to send a visitor should not have to guess how old the figures
               are, and "just now" is also the cheapest proof the polling is alive. */}
-          <span className='block text-navy-500 text-xs mt-0.5'>
-            <i className='fa-solid fa-rotate text-[10px] mr-1'></i>
-            {secondsSinceRefresh < 5
-              ? 'just now'
-              : `updated ${secondsSinceRefresh}s ago`}
+          <span className='block mt-1'>
+            <LiveBadge lastRefreshed={lastRefreshed} />
           </span>
         </div>
       </div>

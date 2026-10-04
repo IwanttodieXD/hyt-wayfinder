@@ -94,12 +94,76 @@ export const ROOM_PREFIX_FACTORY = (encodedRoomNumber: string): string =>
 export const ATTENDANCE_QR_VALUE = `${ATTENDANCE_PREFIX}CHECKIN-STATION`;
 
 /**
- * Floor layout used to generate waypoints.
+ * Building geometry, shared by the 3D scene and the route waypoints.
  *
- * Floor height is 5 units per storey, matching the existing hand-authored
- * routes. The roof sits one storey above the 4th.
+ * The two MUST agree: `Building.tsx` draws these walls and `DESTINATION_ROUTES`
+ * places its waypoints on this same grid, so a visitor following the route walks
+ * through the walls rather than the corridors if they drift apart.
+ *
+ * Plan, per floor:
+ *
+ *            FRONT - four rooms
+ *   +--------------------------------------+
+ *   |  [ 301 ] [ 302 ] [ 303 ] [ 304 ]     |  z = -15..-3
+ *   +--------------------------------------+
+ *   |            H A L L W A Y             |  z = -3..3
+ *   |              [stairs]                |  stairs at the centre, x = 0
+ *   +--------------------------------------+
+ *   |              [ 305 ]                 |  z = 3..15, one room at the back
+ *   +--------------------------------------+
+ *            x = -20..20
+ *
+ * The hallway runs left-to-right so that "front" and "back" are the two halves
+ * either side of it. Stairs sit in the middle of it, which is both what the
+ * institute described and where a real stairwell would be.
+ *
+ * There is no elevator. The building has stairs only.
  */
-const FLOOR_HEIGHT = 5;
+export const BUILDING_LAYOUT = {
+  width: 40,
+  depth: 30,
+  wallHeight: 4,
+  /** Floor-to-floor spacing. Must match `Building.tsx`'s `floorHeight`. */
+  floorHeight: 4,
+  /** Slab thickness, so routes stand ON the floor rather than inside it. */
+  slabThickness: 0.3,
+  /** The hallway runs this far either side of z = 0. */
+  hallwayHalfDepth: 3,
+  /** Centres of the four front rooms, left to right. */
+  frontSlotsX: [-15, -5, 5, 15],
+  /** Depth of the front and back room bands. */
+  frontRoomZ: -9,
+  backRoomZ: 9,
+  /** The single back room is centred. */
+  backSlotX: 0,
+  /** Stairs sit at the centre of the hallway. */
+  stairX: 0,
+  stairZ: 0,
+} as const;
+
+/** The slab surface a visitor stands on for a given floor (1-based). */
+export function floorLevelY(floor: number): number {
+  // The roof is a slab above the top storey rather than another storey, so it
+  // does not follow the (floor - 1) progression.
+  if (floor >= 5) return 20.75;
+  return (floor - 1) * BUILDING_LAYOUT.floorHeight + 0.35;
+}
+
+/**
+ /** '2' -> '2nd'. Only 1st-4th exist today, but the rule is written out in full. */
+function ordinal(n: number): string {
+  const suffix =
+    n % 100 >= 11 && n % 100 <= 13
+      ? 'th'
+      : n % 10 === 1
+        ? 'st'
+        : n % 10 === 2
+          ? 'nd'
+          : n % 10 === 3
+            ? 'rd'
+            : 'th';
+  return `${n}${suffix}`;
+}
 
 /**
  * Every room in the building, in building order.
@@ -128,11 +192,18 @@ export const DESTINATION_ROUTES: DestinationRoute[] = [
 
   { room: 'Roofdeck', label: 'Roofdeck', floor: 5, index: 0 },
 ].map(({ room, label, floor, index }) => {
-  // Rooms on the same floor fan out along X so their corridors don't overlap on
-  // screen; the roof deck sits alone above the 4th floor.
-  const y = (floor - 1) * FLOOR_HEIGHT;
-  const x = 10 + index * 4;
-  const z = 5 + (index % 2) * 3;
+  const L = BUILDING_LAYOUT;
+  const y = floorLevelY(floor);
+
+  // Rooms fill the four front slots first, then the single back slot. A floor
+  // with fewer rooms than slots simply leaves the rest empty, which is the real
+  // situation on floor 2 (two rooms) and on the roof (one).
+  const isBackSlot = index >= L.frontSlotsX.length;
+  const slotIndex = isBackSlot ? 0 : index;
+  const x = isBackSlot ? L.backSlotX : L.frontSlotsX[slotIndex];
+  const z = isBackSlot ? L.backRoomZ : L.frontRoomZ;
+
+  const where = isBackSlot ? 'back of the floor' : 'front of the floor';
 
   return {
     id: room.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
@@ -145,12 +216,13 @@ export const DESTINATION_ROUTES: DestinationRoute[] = [
       room.toUpperCase().replace(/[^A-Z0-9]+/g, '-')
     ),
     waypoints: [
-      { position: [0, 0, 0], label: 'Main Lobby', stage: 1, cameraOffset: [-3, 3, -3] },
-      { position: [5, 0, 3], label: 'Hallway A', stage: 1, cameraOffset: [-2, 2, -2] },
-      { position: [8, 0, 4], label: floor <= 2 ? 'Stairwell 2F' : `Elevator ${floor}F`, stage: 2, cameraOffset: [-1, 2, -2] },
-      { position: [8, y, 4], label: `${floor === 5 ? 'Roof' : floor + 'th'} Floor Landing`, stage: 2, cameraOffset: [-1, 2, -2] },
-      { position: [x, y, z], label: `Corridor ${String.fromCharCode(65 + index)}`, stage: 3, cameraOffset: [-2, 2, -1] },
-      { position: [x + 2, y, z + 2], label: room, stage: 3, cameraOffset: [-3, 3, -2] },
+      { position: [0, 0.35, 0], label: 'Main Lobby', stage: 1, cameraOffset: [-3, 3, -3] },
+      { position: [-8, 0.35, 0], label: 'Ground Floor Hallway', stage: 1, cameraOffset: [-2, 2, -2] },
+      // Stairs, always. The building has no lift, so naming one here would send
+      // someone looking for doors that do not exist.
+      { position: [L.stairX, 0.35, L.stairZ], label: 'Main Staircase', stage: 2, cameraOffset: [-2, 2, -2] },
+      { position: [L.stairX, y, L.stairZ], label: `${floor === 5 ? 'Roof' : ordinal(floor) + ' Floor'} Hallway`, stage: 2, cameraOffset: [-2, 2, -2] },
+      { position: [x, y, z], label: `${label} (${where})`, stage: 3, cameraOffset: [-2, 2, -1] },
     ],
   } satisfies DestinationRoute;
 });
