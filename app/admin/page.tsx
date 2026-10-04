@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import { useRecordsStore } from '@/store/recordsStore';
+import { useRoomPresenceStore } from '@/store/roomPresenceStore';
 import Link from 'next/link';
 import UserProfile from '@/components/UserProfile';
 
@@ -12,6 +13,11 @@ export default function AdminDashboard() {
   const { user, isAuthenticated } = useAuthStore();
   const { records, getActiveCount, getCompletedTodayCount, fetchTodayRecords } =
     useRecordsStore();
+  // Occupancy lives here rather than on /station. It is a live question about
+  // the building, and the station is a kiosk for printing QR codes - not a
+  // dashboard. Putting it here means the answer is one click from the admin
+  // landing page instead of buried in the print screen.
+  const { getOccupancyByRoom, fetchTodayPresence } = useRoomPresenceStore();
 
   useEffect(() => {
     if (!isAuthenticated || user?.role !== 'admin') {
@@ -19,8 +25,15 @@ export default function AdminDashboard() {
     } else {
       // Fetch today's records when component mounts
       fetchTodayRecords();
+      fetchTodayPresence();
     }
-  }, [isAuthenticated, user, router, fetchTodayRecords]);
+  }, [
+    isAuthenticated,
+    user,
+    router,
+    fetchTodayRecords,
+    fetchTodayPresence,
+  ]);
 
   if (!isAuthenticated || user?.role !== 'admin') {
     return null;
@@ -29,6 +42,12 @@ export default function AdminDashboard() {
   const activeCount = getActiveCount();
   const todayCount = getCompletedTodayCount();
   const recentRecords = records.slice(0, 5);
+
+  // "Inside right now" means checked in AND sitting in a room. Someone checked
+  // in but in the lobby has not scanned a door yet, so they are deliberately not
+  // counted here - that is the whole value of the number.
+  const occupancy = getOccupancyByRoom();
+  const inARoom = occupancy.reduce((sum, entry) => sum + entry.people.length, 0);
 
   return (
     <>
@@ -140,7 +159,7 @@ export default function AdminDashboard() {
                 </div>
                 <div>
                   <h3 className='text-white font-semibold text-lg mb-1'>
-                    Room Visits
+                    Room Visits Records
                   </h3>
                   <p className='text-navy-300 text-sm'>
                     Who entered each room, and when
@@ -159,7 +178,7 @@ export default function AdminDashboard() {
                 </div>
                 <div>
                   <h3 className='text-white font-semibold text-lg mb-1'>
-                    Rooms
+                    Manage Rooms
                   </h3>
                   <p className='text-navy-300 text-sm'>
                     Add, rename or retire rooms and their codes
@@ -177,8 +196,8 @@ export default function AdminDashboard() {
                   <i className='fa-solid fa-qrcode text-orange-400 text-2xl'></i>
                 </div>
                 <div>
-                  <h3 className='text-white font-semibold text-lg mb-1'>Station</h3>
-                  <p className='text-navy-300 text-sm'>Scan to check-in / check-out</p>
+                  <h3 className='text-white font-semibold text-lg mb-1'>QR Station</h3>
+                  <p className='text-navy-300 text-sm'>QR Codes for Attendance and Rooms</p>
                 </div>
               </div>
             </Link>
@@ -197,6 +216,89 @@ export default function AdminDashboard() {
                 </div>
               </div>
             </Link>
+          </div>
+
+          {/* Live Room Occupancy. Moved here from /station: it is a question about the
+              building right now, and the station is a kiosk for printing codes.
+              Per-room breakdown included, because a single total hides the thing
+              an admin actually needs - which room is filling up. */}
+          <div className='glass-panel border-navy-800 rounded-lg p-6 mb-8'>
+            <div className='flex items-center justify-between mb-6'>
+              <div>
+                <h3 className='text-xl font-bold text-white'>Room Occupancy</h3>
+                <p className='text-navy-300 text-sm mt-1'>
+                  Who is inside each room right now
+                </p>
+              </div>
+              <Link
+                href='/occupancy'
+                className='text-orange-400 hover:text-orange-300 text-sm font-semibold flex items-center gap-2 transition-colors'
+              >
+                Full View
+                <i className='fa-solid fa-arrow-right'></i>
+              </Link>
+            </div>
+
+            <div className='grid grid-cols-2 md:grid-cols-4 gap-3 mb-6'>
+              <div className='bg-navy-900/50 border border-navy-800 rounded-lg p-4'>
+                <p className='text-navy-300 text-xs mb-1'>Inside Right Now</p>
+                <p className='text-white text-3xl font-bold leading-none'>
+                  {inARoom}
+                </p>
+              </div>
+              <div className='bg-navy-900/50 border border-navy-800 rounded-lg p-4'>
+                <p className='text-navy-300 text-xs mb-1'>Rooms Occupied</p>
+                <p className='text-white text-3xl font-bold leading-none'>
+                  {occupancy.length}
+                </p>
+              </div>
+              <div className='bg-navy-900/50 border border-navy-800 rounded-lg p-4'>
+                <p className='text-navy-300 text-xs mb-1'>Checked In</p>
+                <p className='text-white text-3xl font-bold leading-none'>
+                  {activeCount}
+                </p>
+              </div>
+              {/* The gap the headline number above cannot show: people who are in
+                  the building but have not scanned a door yet. */}
+              <div className='bg-navy-900/50 border border-navy-800 rounded-lg p-4'>
+                <p className='text-navy-300 text-xs mb-1'>Not Yet in a Room</p>
+                <p className='text-white text-3xl font-bold leading-none'>
+                  {Math.max(activeCount - inARoom, 0)}
+                </p>
+              </div>
+            </div>
+
+            {occupancy.length > 0 && (
+              <div className='space-y-2'>
+                {occupancy.map((entry) => (
+                  <div
+                    key={entry.roomId}
+                    className='flex items-center justify-between p-3 rounded-lg bg-navy-900/50 border border-navy-800'
+                  >
+                    <div className='min-w-0'>
+                      <p className='text-white font-medium text-sm truncate'>
+                        {entry.roomLabel}
+                      </p>
+                      <p className='text-navy-500 text-xs'>{entry.room}</p>
+                    </div>
+                    <span className='px-3 py-1 rounded-full text-xs font-bold bg-green-500/20 text-green-300 border border-green-500/30 flex-shrink-0 ml-3'>
+                      {entry.people.length}{' '}
+                      {entry.people.length === 1 ? 'person' : 'people'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {occupancy.length === 0 && (
+              <div className='text-center py-8'>
+                <i className='fa-solid fa-door-closed text-navy-600 text-3xl mb-3'></i>
+                <p className='text-navy-300'>Nobody is in a room right now</p>
+                <p className='text-navy-500 text-sm mt-1'>
+                  People appear here once they scan a room door code
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Recent Activity */}

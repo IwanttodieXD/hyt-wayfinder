@@ -3,44 +3,96 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useAuthStore, type UserRole } from '@/store/authStore';
-import { useUsersStore, type ManagedUser } from '@/store/usersStore';
+import { useAuthStore } from '@/store/authStore';
+import { useRoomsStore } from '@/store/roomsStore';
+import {
+  useUsersStore,
+  isPassExpired,
+  type ManagedUser,
+} from '@/store/usersStore';
 import UserProfile from '@/components/UserProfile';
-
-const ROLES: UserRole[] = ['admin', 'trainer', 'trainee', 'visitor'];
-
-const ROLE_STYLES: Record<UserRole, string> = {
-  admin: 'bg-red-500/20 text-red-300 border-red-500/30',
-  trainer: 'bg-orange-500/20 text-orange-300 border-orange-500/30',
-  trainee: 'bg-green-500/20 text-green-300 border-green-500/30',
-  visitor: 'bg-navy-600/20 text-navy-300 border-navy-600/30',
-};
 
 const INPUT =
   'w-full px-4 py-2.5 rounded-lg bg-navy-950/60 border border-navy-700 text-white placeholder-navy-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors';
 
+/** Badge colours per visitor type. Unknown labels fall back to neutral. */
+const TYPE_STYLES: Record<string, string> = {
+  Trainee: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
+  Trainer: 'bg-orange-500/20 text-orange-300 border-orange-500/30',
+  VIP: 'bg-amber-400/20 text-amber-300 border-amber-400/30',
+  Guest: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
+  Contractor: 'bg-navy-600/20 text-navy-300 border-navy-600/30',
+  Intern: 'bg-teal-500/20 text-teal-300 border-teal-500/30',
+  Observer: 'bg-navy-600/20 text-navy-300 border-navy-600/30',
+};
+
+const typeStyle = (label: string | null) =>
+  (label && TYPE_STYLES[label]) || 'bg-navy-600/20 text-navy-300 border-navy-600/30';
+
 type FormState = {
   name: string;
   email: string;
-  role: UserRole;
   password: string;
+  visitorTypeId: string;
+  company: string;
+  hostName: string;
+  phone: string;
+  /** `yyyy-mm-dd`, the format an `<input type="date">` produces. */
+  validUntil: string;
+  notes: string;
 };
 
 const EMPTY_FORM: FormState = {
   name: '',
   email: '',
-  role: 'trainee',
   password: '',
+  visitorTypeId: '',
+  company: '',
+  hostName: '',
+  phone: '',
+  validUntil: '',
+  notes: '',
 };
+
+/** `Date` -> `yyyy-mm-dd` for a date input, in local time (not UTC). */
+function toDateInputValue(date: Date | null): string {
+  if (!date) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+/**
+ * "Joined" as a plain date. The previous relative format ("2 days ago") drifts
+ * out of date the moment the page sits open, which matters on a registration
+ * desk where the list is left up all day.
+ */
+const formatDate = (date: Date) =>
+  date.toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
 
 export default function UsersPage() {
   const router = useRouter();
   const { user: currentUser, isAuthenticated } = useAuthStore();
-  const { users, isLoading, fetchUsers, createUser, updateUser, archiveUser } =
-    useUsersStore();
+  const { fetchVisitorTypes, getActiveVisitorTypes } = useRoomsStore();
+  const {
+    users,
+    archivedUsers,
+    isLoading,
+    fetchUsers,
+    createUser,
+    updateUser,
+    archiveUser,
+    restoreUser,
+    getCountByVisitorType,
+    getExpiredCount,
+  } = useUsersStore();
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [roleFilter, setRoleFilter] = useState<'all' | UserRole>('all');
+  const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [showArchived, setShowArchived] = useState(false);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editing, setEditing] = useState<ManagedUser | null>(null);
@@ -53,13 +105,18 @@ export default function UsersPage() {
   } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
+  const visitorTypes = getActiveVisitorTypes();
+  const typeCounts = getCountByVisitorType();
+  const expiredCount = getExpiredCount();
+
   useEffect(() => {
     if (!isAuthenticated || currentUser?.role !== 'admin') {
       router.push('/login');
     } else {
       fetchUsers();
+      fetchVisitorTypes();
     }
-  }, [isAuthenticated, currentUser, router, fetchUsers]);
+  }, [isAuthenticated, currentUser, router, fetchUsers, fetchVisitorTypes]);
 
   useEffect(() => {
     if (!notice) return;
@@ -67,17 +124,28 @@ export default function UsersPage() {
     return () => clearTimeout(timer);
   }, [notice]);
 
+  // Archived rows are searched with the same filter as the active list so the
+  // two views cannot drift apart.
+  const source = showArchived ? archivedUsers : users;
+
   const filteredUsers = useMemo(
     () =>
-      users.filter((u) => {
+      source.filter((u) => {
         const term = searchTerm.trim().toLowerCase();
         const matchesSearch =
           !term ||
           u.name.toLowerCase().includes(term) ||
-          u.email.toLowerCase().includes(term);
-        return matchesSearch && (roleFilter === 'all' || u.role === roleFilter);
+          u.email.toLowerCase().includes(term) ||
+          (u.company ?? '').toLowerCase().includes(term) ||
+          (u.hostName ?? '').toLowerCase().includes(term);
+
+        const matchesType =
+          typeFilter === 'all' ||
+          (typeFilter === '__none' ? u.visitorType === null : u.visitorType === typeFilter);
+
+        return matchesSearch && matchesType;
       }),
-    [users, searchTerm, roleFilter]
+    [source, searchTerm, typeFilter]
   );
 
   if (!isAuthenticated || currentUser?.role !== 'admin') {
@@ -96,8 +164,15 @@ export default function UsersPage() {
     setForm({
       name: target.name,
       email: target.email,
-      role: target.role,
       password: '',
+      visitorTypeId: target.visitorType
+        ? (visitorTypes.find((t) => t.label === target.visitorType)?.id ?? '')
+        : '',
+      company: target.company ?? '',
+      hostName: target.hostName ?? '',
+      phone: target.phone ?? '',
+      validUntil: toDateInputValue(target.validUntil),
+      notes: target.notes ?? '',
     });
     setFormError(null);
     setIsModalOpen(true);
@@ -122,11 +197,23 @@ export default function UsersPage() {
 
     setIsSaving(true);
 
-    if (editing) {
+    // Shared between create and edit so the two paths cannot drift on which fields
+// are sent. Empty strings are meaningful: the server turns them into SQL NULL,
+// which is how a field gets cleared.
+const profileFields = () => ({
+  visitorTypeId: form.visitorTypeId,
+  company: form.company,
+  hostName: form.hostName,
+  phone: form.phone,
+  validUntil: form.validUntil,
+  notes: form.notes,
+});
+
+if (editing) {
       const { success, error } = await updateUser(editing.id, {
         name: form.name.trim(),
         email: form.email.trim(),
-        role: form.role,
+        ...profileFields(),
       });
       setIsSaving(false);
       if (!success) return setFormError(error || 'Could not save changes.');
@@ -138,8 +225,8 @@ export default function UsersPage() {
     const { success, error } = await createUser({
       name: form.name.trim(),
       email: form.email.trim(),
-      role: form.role,
       password: form.password,
+      ...profileFields(),
     });
     setIsSaving(false);
     if (!success) return setFormError(error || 'Could not create the user.');
@@ -154,8 +241,20 @@ export default function UsersPage() {
     setDeleteTarget(null);
     setNotice(
       success
-        ? { kind: 'success', text: `Archived ${name}. Their visit history is kept.` }
+        ? {
+            kind: 'success',
+            text: `Archived ${name}. Their login is revoked and their visit history is kept.`,
+          }
         : { kind: 'error', text: error || 'Could not archive the user.' }
+    );
+  };
+
+  const confirmRestore = async (target: ManagedUser) => {
+    const { success, error } = await restoreUser(target.id);
+    setNotice(
+      success
+        ? { kind: 'success', text: `Restored ${target.name}.` }
+        : { kind: 'error', text: error || 'Could not restore the user.' }
     );
   };
 
@@ -222,16 +321,31 @@ export default function UsersPage() {
             </div>
           </div>
 
-          {/* Role breakdown of the total above. */}
+          {/* Headline counts. Visitor types rather than roles, because that is the
+              question worth asking at an event: how many trainees, trainers and
+              VIPs are on the list. "Expired" is surfaced because an out-of-date
+              pass is the thing most likely to go unnoticed until it matters. */}
           <div className='grid grid-cols-2 md:grid-cols-4 gap-3 mb-6'>
-            {ROLES.map((role) => (
-              <div key={role} className='glass-panel border-navy-800 p-4 rounded-lg'>
-                <p className='text-navy-300 text-xs mb-1 capitalize'>{role}s</p>
-                <p className='text-white text-2xl font-bold'>
-                  {users.filter((u) => u.role === role).length}
-                </p>
+            <div className='glass-panel border-navy-800 p-4 rounded-lg'>
+              <p className='text-navy-300 text-xs mb-1'>Active visitors</p>
+              <p className='text-white text-2xl font-bold'>{users.length}</p>
+            </div>
+            {typeCounts.slice(0, 2).map(({ label, count }) => (
+              <div key={label} className='glass-panel border-navy-800 p-4 rounded-lg'>
+                <p className='text-navy-300 text-xs mb-1'>{label}s</p>
+                <p className='text-white text-2xl font-bold'>{count}</p>
               </div>
             ))}
+            <div className='glass-panel border-navy-800 p-4 rounded-lg'>
+              <p className='text-navy-300 text-xs mb-1'>Expired passes</p>
+              <p
+                className={`text-2xl font-bold ${
+                  expiredCount > 0 ? 'text-red-400' : 'text-white'
+                }`}
+              >
+                {expiredCount}
+              </p>
+            </div>
           </div>
 
           {notice && (
@@ -266,18 +380,43 @@ export default function UsersPage() {
               </div>
               <div>
                 <label className='block text-sm font-medium text-navy-200 mb-2'>
-                  Role
+                  Visitor type
                 </label>
                 <div className='flex flex-wrap gap-2'>
-                  {(['all', ...ROLES] as const).map((role) => (
+                  <button
+                    onClick={() => setTypeFilter('all')}
+                    className={`px-4 py-2.5 rounded-lg font-semibold text-sm capitalize transition-colors border-2 ${typeFilter === 'all' ? 'bg-orange-500/20 text-orange-300 border-orange-500' : 'bg-navy-900/50 text-navy-300 border-navy-700 hover:border-navy-600'}`}
+                  >
+                    All ({users.length})
+                  </button>
+                  {typeCounts.map(({ label, count }) => (
                     <button
-                      key={role}
-                      onClick={() => setRoleFilter(role)}
-                      className={`px-4 py-2.5 rounded-lg font-semibold text-sm capitalize transition-colors border-2 ${roleFilter === role ? 'bg-orange-500/20 text-orange-300 border-orange-500' : 'bg-navy-900/50 text-navy-300 border-navy-700 hover:border-navy-600'}`}
+                      key={label}
+                      onClick={() => setTypeFilter(label)}
+                      className={`px-4 py-2.5 rounded-lg font-semibold text-sm capitalize transition-colors border-2 ${typeFilter === label ? 'bg-orange-500/20 text-orange-300 border-orange-500' : 'bg-navy-900/50 text-navy-300 border-navy-700 hover:border-navy-600'}`}
                     >
-                      {role}
+                      {label} ({count})
                     </button>
                   ))}
+                </div>
+              </div>
+              <div>
+                <label className='block text-sm font-medium text-navy-200 mb-2'>
+                  Show
+                </label>
+                <div className='flex flex-wrap gap-2'>
+                  <button
+                    onClick={() => setShowArchived(false)}
+                    className={`px-4 py-2.5 rounded-lg font-semibold text-sm transition-colors border-2 ${!showArchived ? 'bg-orange-500/20 text-orange-300 border-orange-500' : 'bg-navy-900/50 text-navy-300 border-navy-700 hover:border-navy-600'}`}
+                  >
+                    Active ({users.length})
+                  </button>
+                  <button
+                    onClick={() => setShowArchived(true)}
+                    className={`px-4 py-2.5 rounded-lg font-semibold text-sm transition-colors border-2 ${showArchived ? 'bg-orange-500/20 text-orange-300 border-orange-500' : 'bg-navy-900/50 text-navy-300 border-navy-700 hover:border-navy-600'}`}
+                  >
+                    Archived ({archivedUsers.length})
+                  </button>
                 </div>
               </div>
             </div>
@@ -288,83 +427,111 @@ export default function UsersPage() {
               <table className='w-full'>
                 <thead className='bg-navy-900/50 border-b border-navy-800'>
                   <tr>
-                    {['User', 'Role', 'Joined', 'Actions'].map((heading) => (
-                      <th
-                        key={heading}
-                        className='px-4 py-3 text-left text-xs font-semibold text-navy-400 uppercase tracking-wider'
-                      >
-                        {heading}
-                      </th>
-                    ))}
+                    {['Visitor', 'Type', 'Host / Company', 'Pass', 'Joined', 'Actions'].map(
+                      (heading) => (
+                        <th
+                          key={heading}
+                          className='px-4 py-3 text-left text-xs font-semibold text-navy-400 uppercase tracking-wider'
+                        >
+                          {heading}
+                        </th>
+                      )
+                    )}
                   </tr>
                 </thead>
                 <tbody className='divide-y divide-navy-800'>
-                  {filteredUsers.map((u) => (
-                    <tr key={u.id} className='hover:bg-navy-900/30 transition-colors'>
-                      <td className='px-4 py-3'>
-                        <div className='flex items-center gap-3'>
-                          <div className='w-9 h-9 rounded-lg bg-orange-500/20 flex items-center justify-center flex-shrink-0'>
-                            <i className='fa-solid fa-user text-orange-400'></i>
-                          </div>
-                          <div className='min-w-0'>
-                            <p className='text-white font-semibold text-sm'>
-                              {u.name}
-                              {u.id === currentUser?.id && (
-                                <span className='ml-2 text-navy-400 font-normal text-xs'>
-                                  (you)
-                                </span>
+                  {filteredUsers.map((u) => {
+                    const expired = isPassExpired(u);
+                    return (
+                      <tr
+                        key={u.id}
+                        className={`hover:bg-navy-900/30 transition-colors ${expired ? 'opacity-60' : ''}`}
+                      >
+                        <td className='px-4 py-3'>
+                          <div className='flex items-center gap-3'>
+                            <div className='w-9 h-9 rounded-lg bg-orange-500/20 flex items-center justify-center flex-shrink-0'>
+                              <i className='fa-solid fa-user text-orange-400'></i>
+                            </div>
+                            <div className='min-w-0'>
+                              <p className='text-white font-semibold text-sm'>{u.name}</p>
+                              <p className='text-navy-500 text-xs truncate'>{u.email}</p>
+                              {u.phone && (
+                                <p className='text-navy-500 text-xs truncate'>{u.phone}</p>
                               )}
-                            </p>
-                            <p className='text-navy-500 text-xs truncate'>{u.email}</p>
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                      <td className='px-4 py-3'>
-                        <span
-                          className={`px-2.5 py-1 rounded-full text-xs font-semibold capitalize border ${ROLE_STYLES[u.role]}`}
-                        >
-                          {u.role}
-                        </span>
-                      </td>
-                      <td className='px-4 py-3 whitespace-nowrap text-navy-300 text-sm'>
-                        {u.createdAt.toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric',
-                        })}
-                      </td>
-                      <td className='px-4 py-3'>
-                        <div className='flex items-center gap-2'>
-                          <button
-                            onClick={() => openEdit(u)}
-                            className='px-3 py-1.5 rounded-lg bg-navy-800 border border-navy-700 text-navy-200 hover:bg-navy-700 hover:text-white text-xs font-semibold transition-colors'
+                        </td>
+                        <td className='px-4 py-3'>
+                          <span
+                            className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${typeStyle(u.visitorType)}`}
                           >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => setDeleteTarget(u)}
-                            disabled={u.id === currentUser?.id}
-                            title={
-                              u.id === currentUser?.id
-                                ? 'You cannot archive your own account'
-                                : 'Archive user'
-                            }
-                            className='px-3 py-1.5 rounded-lg bg-red-600 border border-red-500/30 text-paper hover:bg-red-700 text-xs font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
-                          >
-                            Archive
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                            {u.visitorType ?? 'Unclassified'}
+                          </span>
+                        </td>
+                        {/* Host first: who someone is here to see is the question a
+                            front desk actually asks. */}
+                        <td className='px-4 py-3 text-sm'>
+                          {u.hostName ? (
+                            <p className='text-white'>{u.hostName}</p>
+                          ) : (
+                            <p className='text-navy-500'>-</p>
+                          )}
+                          {u.company && (
+                            <p className='text-navy-400 text-xs'>{u.company}</p>
+                          )}
+                        </td>
+                        <td className='px-4 py-3 whitespace-nowrap text-sm'>
+                          {u.validUntil ? (
+                            <span className={expired ? 'text-red-400' : 'text-navy-300'}>
+                              {expired ? 'Expired ' : ''}
+                              {formatDate(u.validUntil)}
+                            </span>
+                          ) : (
+                            <span className='text-navy-500'>No expiry</span>
+                          )}
+                        </td>
+                        <td className='px-4 py-3 whitespace-nowrap text-navy-300 text-sm'>
+                          {formatDate(u.createdAt)}
+                        </td>
+                        <td className='px-4 py-3'>
+                          <div className='flex items-center gap-2'>
+                            <button
+                              onClick={() => openEdit(u)}
+                              className='px-3 py-1.5 rounded-lg bg-navy-800 border border-navy-700 text-navy-200 hover:bg-navy-700 hover:text-white text-xs font-semibold transition-colors'
+                            >
+                              Edit
+                            </button>
+                            {showArchived ? (
+                              <button
+                                onClick={() => confirmRestore(u)}
+                                className='px-3 py-1.5 rounded-lg bg-green-600 border border-green-500/30 text-paper hover:bg-green-700 text-xs font-semibold transition-colors'
+                              >
+                                Restore
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => setDeleteTarget(u)}
+                                title='Revoke access and archive this visitor'
+                                className='px-3 py-1.5 rounded-lg bg-red-600 border border-red-500/30 text-paper hover:bg-red-700 text-xs font-semibold transition-colors'
+                              >
+                                Archive
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
 
               {!isLoading && filteredUsers.length === 0 && (
                 <div className='text-center py-12'>
                   <i className='fa-solid fa-users text-navy-600 text-4xl mb-3'></i>
-                  <p className='text-navy-300'>No users found</p>
-                  {users.length === 0 && (
+                  <p className='text-navy-300'>
+                    {showArchived ? 'No archived users' : 'No users found'}
+                  </p>
+                  {!showArchived && users.length === 0 && (
                     <p className='text-navy-500 text-sm mt-1'>
                       Add your first user to get started
                     </p>
@@ -382,22 +549,30 @@ export default function UsersPage() {
           </div>
 
           <div className='mt-4 text-center text-navy-400 text-sm'>
-            Showing {filteredUsers.length} of {users.length} users
+            Showing {filteredUsers.length} of {source.length}{' '}
+            {showArchived ? 'archived' : 'active'} visitors
+            {expiredCount > 0 && !showArchived && ` · ${expiredCount} with an expired pass`}
           </div>
         </main>
       </div>
 
       {isModalOpen && (
-        <div className='fixed inset-0 z-50 flex items-center justify-center p-4'>
+        // `items-start` on small screens so a long form scrolls from the top
+        // instead of being vertically centred and clipped at both ends.
+        <div className='fixed inset-0 z-50 flex items-start sm:items-center justify-center p-0 sm:p-4 overflow-y-auto'>
           <div
-            className='absolute inset-0 bg-black/60'
+            className='fixed inset-0 bg-black/60'
             onClick={closeModal}
             aria-hidden='true'
           ></div>
-          <div className='relative w-full max-w-md bg-navy-900 border border-navy-700 rounded-lg'>
-            <div className='px-4 py-3 border-b border-navy-700 flex items-center justify-between'>
+          {/* max-h + internal scroll. The form grew from 3 fields to 10, which
+              no longer fits a viewport, and a modal that runs off the bottom of
+              the screen cannot be submitted from. `sm:my-8` gives the scroll
+              container breathing room once the modal is height-capped. */}
+          <div className='relative w-full sm:max-w-md bg-navy-900 border border-navy-700 sm:rounded-lg my-0 sm:my-8 max-h-[100dvh] sm:max-h-[calc(100dvh-4rem)] flex flex-col'>
+            <div className='px-4 py-3 border-b border-navy-700 flex items-center justify-between flex-shrink-0'>
               <h2 className='text-white font-bold'>
-                {editing ? 'Edit User' : 'Add User'}
+                {editing ? 'Edit Visitor' : 'Add Visitor'}
               </h2>
               <button
                 onClick={closeModal}
@@ -407,7 +582,14 @@ export default function UsersPage() {
                 <i className='fa-solid fa-xmark'></i>
               </button>
             </div>
-            <form onSubmit={handleSubmit} className='p-4 space-y-3'>
+            {/* The form is a flex column: a scrollable field region and a fixed footer.
+                Both need to be children of the form, and the footer must not be
+                inside the scroll container, or Cancel/Save scroll out of reach. */}
+            <form
+              onSubmit={handleSubmit}
+              className='flex flex-col min-h-0 flex-1'
+            >
+              <div className='p-4 space-y-3 overflow-y-auto flex-1 min-h-0 overscroll-contain'>
               {formError && (
                 <div className='p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-300 text-sm'>
                   {formError}
@@ -439,24 +621,116 @@ export default function UsersPage() {
               </div>
               <div>
                 <label className='block text-sm font-medium text-navy-200 mb-2'>
-                  Role
+                  Visitor type
                 </label>
                 <div className='relative'>
                   <select
-                    value={form.role}
+                    value={form.visitorTypeId}
                     onChange={(e) =>
-                      setForm({ ...form, role: e.target.value as UserRole })
+                      setForm({ ...form, visitorTypeId: e.target.value })
                     }
-                    className={`w-full px-4 py-2.5 rounded-lg appearance-none capitalize bg-navy-950/60 border border-navy-700 text-white focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors cursor-pointer`}
+                    className={`${INPUT} appearance-none cursor-pointer`}
                   >
-                    {ROLES.map((role) => (
-                      <option key={role} value={role} className='bg-navy-900'>
-                        {role}
+                    <option value='' className='bg-navy-900'>
+                      Unclassified
+                    </option>
+                    {visitorTypes.map((type) => (
+                      <option key={type.id} value={type.id} className='bg-navy-900'>
+                        {type.label}
                       </option>
                     ))}
                   </select>
                   <i className='fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-navy-400 text-xs pointer-events-none'></i>
                 </div>
+                {/* Reassurance that this changes nothing about permissions: the
+                    trainer/trainee *roles* were removed for exactly this reason. */}
+                <p className='text-navy-500 text-xs mt-1'>
+                  Descriptive only. Everyone here is a visitor with the same access -
+                  this is here so you can count who came to the orientation.
+                </p>
+              </div>
+              <div>
+                <label
+                  htmlFor='hostName'
+                  className='block text-sm font-medium text-navy-200 mb-2'
+                >
+                  Here to see
+                </label>
+                <input
+                  id='hostName'
+                  type='text'
+                  value={form.hostName}
+                  onChange={(e) => setForm({ ...form, hostName: e.target.value })}
+                  placeholder='e.g. TESDA Facilitator, Dr. Santos'
+                  className={INPUT}
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor='company'
+                  className='block text-sm font-medium text-navy-200 mb-2'
+                >
+                  Company / school
+                </label>
+                <input
+                  id='company'
+                  type='text'
+                  value={form.company}
+                  onChange={(e) => setForm({ ...form, company: e.target.value })}
+                  placeholder='e.g. ABC College'
+                  className={INPUT}
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor='phone'
+                  className='block text-sm font-medium text-navy-200 mb-2'
+                >
+                  Phone
+                </label>
+                <input
+                  id='phone'
+                  type='tel'
+                  value={form.phone}
+                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                  placeholder='For the front desk to call ahead'
+                  className={INPUT}
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor='validUntil'
+                  className='block text-sm font-medium text-navy-200 mb-2'
+                >
+                  Pass valid until
+                </label>
+                <input
+                  id='validUntil'
+                  type='date'
+                  value={form.validUntil}
+                  onChange={(e) => setForm({ ...form, validUntil: e.target.value })}
+                  className={INPUT}
+                />
+                <p className='text-navy-500 text-xs mt-1'>
+                  Leave empty for a pass that never expires. Expired passes are
+                  flagged in the list but their history is kept.
+                </p>
+              </div>
+              <div>
+                <label
+                  htmlFor='notes'
+                  className='block text-sm font-medium text-navy-200 mb-2'
+                >
+                  Notes
+                </label>
+                <textarea
+                  id='notes'
+                  rows={2}
+                  value={form.notes}
+                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                  placeholder='Anything the front desk should know'
+                  className={INPUT}
+                />
               </div>
               {/* There is no assigned-room field here any more. `users` has no
                   destination/building column on the new schema: the room belongs to
@@ -483,7 +757,12 @@ export default function UsersPage() {
                   />
                 </div>
               )}
-              <div className='flex gap-2 pt-1'>
+              </div>
+
+              {/* Submit controls sit outside the scroll region. Inside it they
+                  would scroll out of reach on a short screen, which means the
+                  form cannot be submitted without scrolling back to the bottom. */}
+              <div className='p-4 border-t border-navy-700 flex gap-2 flex-shrink-0 bg-navy-900'>
                 <button
                   type='button'
                   onClick={closeModal}
@@ -496,7 +775,7 @@ export default function UsersPage() {
                   disabled={isSaving}
                   className='flex-1 px-4 py-2.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-paper font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
                 >
-                  {isSaving ? 'Saving...' : editing ? 'Save Changes' : 'Create User'}
+                  {isSaving ? 'Saving...' : editing ? 'Save Changes' : 'Create Visitor'}
                 </button>
               </div>
             </form>

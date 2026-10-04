@@ -29,7 +29,7 @@ export default function LoginPage() {
       if (user?.role === 'admin') {
         router.push('/admin');
       } else {
-        // Trainer, trainee or visitor goes to the mobile check-in page
+        // Everyone else is a visitor and goes to the mobile check-in page
         router.push('/check-in');
       }
     } else {

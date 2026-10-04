@@ -17,7 +17,12 @@
 -- ----------------------------------------------------------------------------
 
 -- System permission level. Drives what a person may see and do.
--- 'admin' | 'trainer' | 'trainee' | 'visitor'
+--
+-- NOTE: this type still declares 'trainer' and 'trainee', but the application
+-- only uses 'admin' and 'visitor'. Those two roles were retired because no RLS
+-- policy ever treated them differently from 'visitor'. Postgres cannot drop an
+-- enum label, so they remain declared and unused; run
+-- 20260101000003_retire_trainee_roles.sql to normalise any existing rows.
 CREATE TYPE user_role AS ENUM ('admin', 'trainer', 'trainee', 'visitor');
 
 

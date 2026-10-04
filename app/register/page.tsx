@@ -1,29 +1,34 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuthStore, UserRole, DESTINATIONS } from '@/store/authStore';
+import { useAuthStore, DESTINATIONS } from '@/store/authStore';
 import { useRoomsStore } from '@/store/roomsStore';
 import Link from 'next/link';
 
 export default function RegisterPage() {
   const router = useRouter();
   const { register } = useAuthStore();
-  const fileInputRef = useRef<HTMLInputElement>(null);
   // Purposes come from the `purposes` lookup table, not a hardcoded list, so
   // adding a reason in the database makes it selectable here immediately.
-  const { fetchPurposes, getActivePurposes } = useRoomsStore();
+  const { fetchPurposes, getActivePurposes, fetchVisitorTypes, getActiveVisitorTypes } =
+    useRoomsStore();
 
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     password: '',
     confirmPassword: '',
-    role: 'visitor' as UserRole,
     destination: '',
     purpose: '',
+    // Visitor profile. Asked here so the front desk has it before the person
+    // reaches the desk, and so an orientation attendee is classified once
+    // instead of being tidied up afterwards. All optional.
+    visitorTypeId: '',
+    company: '',
+    hostName: '',
+    phone: '',
   });
-  const [profilePhoto, setProfilePhoto] = useState<string>('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   // Set once the account exists but the email still needs confirming. Drives the
@@ -33,61 +38,12 @@ export default function RegisterPage() {
   );
 
   const purposes = getActivePurposes();
+  const visitorTypes = getActiveVisitorTypes();
 
   useEffect(() => {
     fetchPurposes();
-  }, [fetchPurposes]);
-
-  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-      setError('Please select an image file');
-      return;
-    }
-
-    setError('');
-
-    // Load image into a canvas to compress + resize
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-
-      const maxSize = 256;
-      let { width, height } = img;
-
-      // Scale down to fit within maxSize x maxSize (square crop)
-      const scale = Math.min(maxSize / width, maxSize / height);
-      const drawW = Math.round(width * scale);
-      const drawH = Math.round(height * scale);
-
-      const canvas = document.createElement('canvas');
-      canvas.width = maxSize;
-      canvas.height = maxSize;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-
-      // Center the image on a square canvas (cover, not stretch)
-      const offsetX = (maxSize - drawW) / 2;
-      const offsetY = (maxSize - drawH) / 2;
-      ctx.drawImage(img, offsetX, offsetY, drawW, drawH);
-
-      // Compress to JPEG — much smaller than PNG for photos
-      const compressed = canvas.toDataURL('image/jpeg', 0.8);
-      setProfilePhoto(compressed);
-    };
-
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      setError('Failed to load image. Please try a different file.');
-    };
-
-    img.src = url;
-  };
+    fetchVisitorTypes();
+  }, [fetchPurposes, fetchVisitorTypes]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -110,10 +66,12 @@ export default function RegisterPage() {
       name: formData.name,
       email: formData.email,
       password: formData.password,
-      role: formData.role,
-      avatar: profilePhoto || undefined,
       destination: formData.destination || undefined,
       purpose: formData.purpose || undefined,
+      visitorTypeId: formData.visitorTypeId || undefined,
+      company: formData.company.trim() || undefined,
+      hostName: formData.hostName.trim() || undefined,
+      phone: formData.phone.trim() || undefined,
     });
 
     // The account exists but the address is not confirmed yet, so there is no
@@ -126,10 +84,9 @@ export default function RegisterPage() {
     }
 
     if (result.success) {
-        // Everyone who self-registers starts as a visitor, whatever role was
-        // picked on the form: the database only accepts role='visitor' from a
-        // self-insert, so an admin has to grant anything higher. Redirecting on
-        // the requested role would land them on a page they cannot use.
+        // Self-registration only ever produces a visitor: the database trigger
+        // hardcodes role='visitor' and ignores anything the client sends. Admins
+        // are provisioned by hand through /admin/users.
         router.push('/check-in');
       } else {
         setError(result.error || 'Registration failed');
@@ -187,24 +144,29 @@ export default function RegisterPage() {
       )}
 
       {!pendingConfirmation && (
-      <div className='min-h-screen bg-navy-900 flex items-center justify-center p-4'>
+        // items-start on small screens. Centring a tall form with flex centres
+        // the overflow too, so the top and bottom get clipped and become
+        // unreachable on a phone - including the Create Account button.
+        <div className='min-h-screen bg-navy-900 flex items-start sm:items-center justify-center p-4 sm:py-8'>
         {/* Register Card */}
         <div className='relative w-full max-w-md'>
-          {/* Logo */}
-          <div className='text-center mb-8'>
-            <div className='inline-block w-24 h-24 mb-4'>
+          {/* Logo. Smaller on phones so it does not push the form off screen. */}
+          <div className='text-center mb-6 sm:mb-8'>
+            <div className='inline-block w-16 h-16 sm:w-24 sm:h-24 mb-4'>
               <img
                 src='/hyt_logo.png'
                 alt='HYT Logo'
                 className='w-full h-full object-contain'
               />
             </div>
-            <h1 className='text-3xl font-bold text-white mb-2'>Create Account</h1>
+            <h1 className='text-2xl sm:text-3xl font-bold text-white mb-2'>
+              Create Account
+            </h1>
             <p className='text-orange-300'>Join HYT Wayfinder</p>
           </div>
 
           {/* Register Form */}
-          <div className='border border-orange-400/30 rounded-lg p-8 bg-navy-900/60'>
+          <div className='border border-orange-400/30 rounded-lg p-5 sm:p-8 bg-navy-900/60'>
             <form onSubmit={handleSubmit} className='space-y-5'>
               {/* Error Message */}
               {error && (
@@ -226,52 +188,6 @@ export default function RegisterPage() {
                       Go to sign in
                     </Link>
                   )}
-                </div>
-              )}
-
-              {/* Profile photo upload hidden. The uploader is left in place below, just
-                not rendered, so it can be restored without redoing the
-                canvas-compression logic. */}
-              {false && (
-                <div className='flex flex-col items-center'>
-                  <label className='block text-sm font-medium text-orange-200 mb-3'>
-                    Profile Photo
-                  </label>
-                  <div
-                    onClick={() => fileInputRef.current?.click()}
-                    className='relative w-32 h-32 rounded-lg border-2 border-orange-500/30 bg-navy-900/80 hover:border-orange-500 cursor-pointer transition-colors group overflow-hidden flex items-center justify-center'
-                  >
-                    {profilePhoto ? (
-                      <img
-                        src={profilePhoto}
-                        alt='Profile preview'
-                        className='w-full h-full object-cover'
-                      />
-                    ) : (
-                      <i className='fa-solid fa-camera text-3xl text-orange-400 group-hover:text-orange-400 transition-colors'></i>
-                    )}
-                    {/* Hover overlay */}
-                    <div className='absolute inset-0 bg-navy-900/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity'>
-                      <i className='fa-solid fa-camera text-2xl text-white'></i>
-                    </div>
-                  </div>
-                  <input
-                    ref={fileInputRef}
-                    type='file'
-                    accept='image/*'
-                    onChange={handlePhotoChange}
-                    className='hidden'
-                  />
-                  {profilePhoto && (
-                    <button
-                      type='button'
-                      onClick={() => setProfilePhoto('')}
-                      className='mt-2 text-xs text-red-400 hover:text-red-300 transition-colors'
-                    >
-                      Remove photo
-                    </button>
-                  )}
-                  <p className='mt-1 text-xs text-navy-500'>Optional</p>
                 </div>
               )}
 
@@ -335,105 +251,6 @@ export default function RegisterPage() {
                 </div>
               </div>
 
-              {/* Role Selection */}
-              <div>
-                <label className='block text-sm font-medium text-orange-200 mb-2'>
-                  Account Type
-                </label>
-                <div className='grid grid-cols-3 gap-3'>
-                  <button
-                    type='button'
-                    onClick={() => setFormData({ ...formData, role: 'trainer' })}
-                    className={`
-  p-4 rounded-lg border-2 transition-colors
-                      ${
-                        formData.role === 'trainer'
-                          ? 'border-orange-500 bg-orange-500/20'
-                          : 'border-orange-500/30 bg-navy-900/50 hover:border-orange-400/50'
-                      }
-                    `}
-                  >
-                    <span
-                      className={`text-2xl mb-2 block ${
-                        formData.role === 'trainer' ? 'text-orange-400' : 'text-navy-300'
-                      }`}
-                    >
-                      <i className='fa-solid fa-chalkboard-user'></i>
-                    </span>
-                    <p
-                      className={`font-semibold text-sm ${
-                        formData.role === 'trainer' ? 'text-orange-300' : 'text-navy-200'
-                      }`}
-                    >
-                      Trainer
-                    </p>
-                  </button>
-
-                  <button
-                    type='button'
-                    onClick={() => setFormData({ ...formData, role: 'trainee' })}
-                    className={`
-  p-4 rounded-lg border-2 transition-colors
-                      ${
-                        formData.role === 'trainee'
-                          ? 'border-orange-500 bg-orange-500/20'
-                          : 'border-orange-500/30 bg-navy-900/50 hover:border-orange-400/50'
-                      }
-                    `}
-                  >
-                    <span
-                      className={`text-2xl mb-2 block ${
-                        formData.role === 'trainee' ? 'text-orange-400' : 'text-navy-300'
-                      }`}
-                    >
-                      <i className='fa-solid fa-user-graduate'></i>
-                    </span>
-                    <p
-                      className={`font-semibold text-sm ${
-                        formData.role === 'trainee' ? 'text-orange-300' : 'text-navy-200'
-                      }`}
-                    >
-                      Trainee
-                    </p>
-                  </button>
-
-                  <button
-                    type='button'
-                    onClick={() => setFormData({ ...formData, role: 'visitor' })}
-                    className={`
-  p-4 rounded-lg border-2 transition-colors
-                      ${
-                        formData.role === 'visitor'
-                          ? 'border-orange-500 bg-orange-500/20'
-                          : 'border-orange-500/30 bg-navy-900/50 hover:border-orange-400/50'
-                      }
-                    `}
-                  >
-                    <span
-                      className={`text-2xl mb-2 block ${
-                        formData.role === 'visitor' ? 'text-orange-400' : 'text-navy-300'
-                      }`}
-                    >
-                      <i className='fa-solid fa-id-card'></i>
-                    </span>
-                    <p
-                      className={`font-semibold text-sm ${
-                        formData.role === 'visitor' ? 'text-orange-300' : 'text-navy-200'
-                      }`}
-                    >
-                      Visitor
-                    </p>
-                  </button>
-                </div>
-                {/* Roles are not self-granted. The database only accepts a
-                    self-insert with role='visitor', so picking trainer or trainee
-                    records a request that an admin still has to approve. */}
-                <p className='text-navy-400 text-xs mt-2'>
-                  Everyone starts as a visitor. An administrator can upgrade this
-                  role after you register.
-                </p>
-              </div>
-
               {/* Assigned room. Not saved to the account: the new schema has no
                 destination column on `users`. It is held for this session and
                 written to the visitor's first attendance record when they check
@@ -483,7 +300,7 @@ export default function RegisterPage() {
               </div>
 
               {/* Purpose picker. Also per visit, not per person: the schema puts
-                  purpose_id on clock_in_records so a trainee can attend a Meeting
+                  purpose_id on clock_in_records so a visitor can attend a Meeting
                   one day and an Orientation the next. This seeds the first visit. */}
               <div>
                 <label
@@ -527,6 +344,147 @@ export default function RegisterPage() {
                   Optional. Applied to your first check-in, and you can pick a
                   different reason on later visits.
                 </p>
+              </div>
+
+              {/* Visitor profile. Optional, and asked here so the front desk has it before the
+                  person reaches the desk. An admin can correct any of it later. */}
+              <div className='rounded-lg border border-navy-700 bg-navy-950/40 p-4 space-y-4'>
+                <p className='text-sm font-semibold text-orange-200'>
+                  About your visit
+                  <span className='ml-2 text-xs font-normal text-navy-400'>
+                    all optional
+                  </span>
+                </p>
+
+                <div>
+                  <label
+                    htmlFor='visitorTypeId'
+                    className='block text-sm font-medium text-orange-200 mb-2'
+                  >
+                    Visitor type
+                  </label>
+                  <div className='relative'>
+                    <select
+                      id='visitorTypeId'
+                      value={formData.visitorTypeId}
+                      onChange={(e) =>
+                        setFormData({ ...formData, visitorTypeId: e.target.value })
+                      }
+                      className='
+                        w-full pl-12 pr-4 py-3 rounded-lg appearance-none
+                        bg-navy-900/80 border-2 border-orange-500/30
+                        text-white placeholder-navy-500
+                        focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500
+                        transition-colors cursor-pointer
+                      '
+                    >
+                      <option value='' className='bg-navy-900'>
+                        Not sure
+                      </option>
+                      {visitorTypes.map((type) => (
+                        <option key={type.id} value={type.id} className='bg-navy-900'>
+                          {type.label}
+                        </option>
+                      ))}
+                    </select>
+                    <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
+                      <i className='fa-solid fa-id-card text-orange-400'></i>
+                    </div>
+                    <i className='fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-navy-400 text-xs pointer-events-none'></i>
+                  </div>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor='hostName'
+                    className='block text-sm font-medium text-orange-200 mb-2'
+                  >
+                    Who are you here to see?
+                  </label>
+                  <div className='relative'>
+                    <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
+                      <i className='fa-solid fa-user-check text-orange-400'></i>
+                    </div>
+                    <input
+                      type='text'
+                      id='hostName'
+                      value={formData.hostName}
+                      onChange={(e) =>
+                        setFormData({ ...formData, hostName: e.target.value })
+                      }
+                      placeholder='Name of the person hosting you'
+                      className='
+                        w-full pl-12 pr-4 py-3 rounded-lg
+                        bg-navy-900/80 border-2 border-orange-500/30
+                        text-white placeholder-navy-500
+                        focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500
+                        transition-colors
+                      '
+                    />
+                  </div>
+                </div>
+                {/* Two-up on wider screens, stacked on a phone. */}
+                <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
+                  <div>
+                    <label
+                      htmlFor='company'
+                      className='block text-sm font-medium text-orange-200 mb-2'
+                    >
+                      Company / school
+                    </label>
+                    <div className='relative'>
+                      <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
+                        <i className='fa-solid fa-building text-orange-400'></i>
+                      </div>
+                      <input
+                        type='text'
+                        id='company'
+                        value={formData.company}
+                        onChange={(e) =>
+                          setFormData({ ...formData, company: e.target.value })
+                        }
+                        placeholder='Optional'
+                        className='
+                          w-full pl-12 pr-4 py-3 rounded-lg
+                          bg-navy-900/80 border-2 border-orange-500/30
+                          text-white placeholder-navy-500
+                          focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500
+                          transition-colors
+                        '
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor='phone'
+                      className='block text-sm font-medium text-orange-200 mb-2'
+                    >
+                      Phone
+                    </label>
+                    <div className='relative'>
+                      <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
+                        <i className='fa-solid fa-phone text-orange-400'></i>
+                      </div>
+                      <input
+                        type='tel'
+                        id='phone'
+                        value={formData.phone}
+                        onChange={(e) =>
+                          setFormData({ ...formData, phone: e.target.value })
+                        }
+                        placeholder='Optional'
+                        className='
+                          w-full pl-12 pr-4 py-3 rounded-lg
+                          bg-navy-900/80 border-2 border-orange-500/30
+                          text-white placeholder-navy-500
+                          focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500
+                          transition-colors
+                        '
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {/* Password Field */}
@@ -596,17 +554,21 @@ export default function RegisterPage() {
                 </div>
               </div>
 
-              {/* Submit Button */}
+              {/* Submit Button. Sticky on a phone: the form is long and
+                  the page is centred, so a plain button can sit far below
+                  the fold and out of reach. */}
               <button
                 type='submit'
                 disabled={loading}
                 className='
+                  sticky bottom-4 z-10 sm:static sm:z-auto
                   w-full py-3 rounded-lg font-semibold text-paper
                   bg-orange-600 hover:bg-orange-700
                   transition-colors duration-150
                   disabled:opacity-50 disabled:cursor-not-allowed
                   flex items-center justify-center gap-2
                   border border-orange-500/50
+                  shadow-lg shadow-black/40 sm:static sm:shadow-none
                   '
               >
                 {loading ? (

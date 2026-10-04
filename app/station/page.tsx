@@ -6,7 +6,7 @@ import { useAuthStore } from '@/store/authStore';
 import { useRoleGuard } from '@/hooks/useRoleGuard';
 
 // The attendance station is an admin-only tool: it scans other people's QR
-// codes, so it must never be reachable by a visitor, trainee or trainer.
+// codes, so it must never be reachable by a visitor.
 export default function StationPage() {
   const { user, isAuthenticated } = useAuthStore();
 
@@ -33,10 +33,10 @@ export default function StationPage() {
               </div>
               <div>
                 <h1 className='text-white font-bold text-lg leading-none'>
-                  Attendance
+                  QR Station
                 </h1>
                 <p className='text-navy-300 text-xs mt-0.5'>
-                  {isAuthenticated && user ? `${user.name} - ` : ''}Attendance Station
+                  {isAuthenticated && user ? `${user.name} - ` : ''}QR Station
                 </p>
               </div>
             </div>

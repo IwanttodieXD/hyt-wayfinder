@@ -135,7 +135,6 @@ Preview: https://hyt-wayfinder-xxx.vercel.app (per commit)
 3. **Test Login**
    ```
    Admin: admin@hyt.com / admin123
-   Trainer: trainer@hyt.com / trainer123
    Visitor: visitor@hyt.com / visitor123
    ```
 

@@ -29,35 +29,26 @@ export default function UserProfile() {
     router.push('/login');
   };
 
-  const getRoleColor = () => {
-    switch (user.role) {
-      case 'admin':
-        return 'bg-red-500/20 text-red-300 border-red-500/30';
-      case 'trainer':
-        return 'bg-blue-500/20 text-blue-300 border-blue-500/30';
-      case 'trainee':
-        return 'bg-teal-500/20 text-teal-300 border-teal-500/30';
-      case 'visitor':
-        return 'bg-purple-500/20 text-purple-300 border-purple-500/30';
-      default:
-        return 'bg-navy-500/20 text-navy-200 border-navy-500/30';
-    }
-  };
+  // Only two roles exist, so these two helpers are exhaustive rather than a
+// lookup table. `default` is unreachable in practice but keeps the return type
+// total if a retired role ever resurfaces in an old database row.
+const getRoleColor = () => {
+  switch (user.role) {
+    case 'admin':
+      return 'bg-red-500/20 text-red-300 border-red-500/30';
+    default:
+      return 'bg-purple-500/20 text-purple-300 border-purple-500/30';
+  }
+};
 
-  const getRoleIcon = () => {
-    switch (user.role) {
-      case 'admin':
-        return 'fa-user-shield';
-      case 'trainer':
-        return 'fa-chalkboard-user';
-      case 'trainee':
-        return 'fa-user-graduate';
-      case 'visitor':
-        return 'fa-id-card';
-      default:
-        return 'fa-user';
-    }
-  };
+const getRoleIcon = () => {
+  switch (user.role) {
+    case 'admin':
+      return 'fa-user-shield';
+    default:
+      return 'fa-id-card';
+  }
+};
 
   return (
     <div className='relative' ref={dropdownRef}>

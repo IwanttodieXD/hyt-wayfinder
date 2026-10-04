@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { supabase } from '@/lib/supabase';
+import { useRoomsStore } from '@/store/roomsStore';
 import type { UserRole } from '@/store/authStore';
 
 export interface ManagedUser {
@@ -10,23 +11,63 @@ export interface ManagedUser {
   createdAt: Date;
   /** Set when the account was retired. History is kept; the row is not deleted. */
   archivedAt: Date | null;
+
+  // Descriptive visitor fields. None of these grant anything - they exist so a
+  // front desk can answer "who is in the building, who are they here to see,
+  // and is their pass still good". See migration 004.
+  /** Resolved label from `visitor_types`, not the raw id. Null when unclassified. */
+  visitorType: string | null;
+  company: string | null;
+  hostName: string | null;
+  phone: string | null;
+  /** Pass expiry. Null means the pass never expires. */
+  validUntil: Date | null;
+  notes: string | null;
+}
+
+/**
+ * True when a pass has expired.
+ *
+ * Compared against the start of today rather than the current instant, so a
+ * pass set to expire "on the 10th" is valid for the whole of the 10th. Using the
+ * raw timestamp would expire it at midnight and lock someone out of the very
+ * event they were registered for.
+ */
+export function isPassExpired(user: ManagedUser, now = new Date()): boolean {
+  if (!user.validUntil) return false;
+  const expiry = new Date(user.validUntil);
+  if (Number.isNaN(expiry.getTime())) return false;
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return expiry.getTime() < startOfToday.getTime();
 }
 
 export interface NewUserInput {
   email: string;
   name: string;
-  role: UserRole;
   password: string;
+  visitorTypeId?: string;
+  company?: string;
+  hostName?: string;
+  phone?: string;
+  validUntil?: string;
+  notes?: string;
 }
 
 export interface UpdateUserInput {
   name: string;
   email: string;
-  role: UserRole;
+  visitorTypeId?: string;
+  company?: string;
+  hostName?: string;
+  phone?: string;
+  validUntil?: string;
+  notes?: string;
 }
 
 interface UsersState {
   users: ManagedUser[];
+  /** Archived accounts, kept separate so the UI can offer a "restore" action. */
+  archivedUsers: ManagedUser[];
   isLoading: boolean;
   error: string | null;
 
@@ -38,11 +79,56 @@ interface UsersState {
   ) => Promise<{ success: boolean; error?: string }>;
   /** Retires the account by setting `archived_at`. Nothing is deleted. */
   archiveUser: (id: string) => Promise<{ success: boolean; error?: string }>;
+  /** Reverses an archive, including lifting the Supabase Auth ban. */
+  restoreUser: (id: string) => Promise<{ success: boolean; error?: string }>;
   getUserCount: () => number;
-  getUsersByRole: (role: UserRole) => number;
+  /** Active visitors grouped by `visitor_types` label. */
+  getCountByVisitorType: () => { label: string; count: number }[];
+  getExpiredCount: () => number;
 }
 
+/**
+ * Columns that exist on every database, from migration 001 onwards.
+ *
+ * Deliberately does NOT include the migration-004 columns. A database that has
+ * not had 004 applied yet rejects the whole query with
+ * `42703 column users.visitor_type_id does not exist` if any unknown column is
+ * named - so the fallback must be genuinely narrower, not just the same select
+ * without the embed. Selecting the new columns "as a fallback" fails for
+ * exactly the same reason as the primary query, which is a fallback that does
+ * not fall back.
+ */
+const SELECT_COLUMNS_BASE =
+  'id, email, name, role, created_at, archived_at';
+
+/**
+ * Base columns plus the visitor profile added in migration 004, and the embed
+ * that resolves `visitor_type_id` to a readable label.
+ *
+ * The embed means the table can show "Trainee" or "VIP" rather than a raw UUID,
+ * with no second round trip. `fetchUsers` retries with progressively narrower
+ * selects if this fails, so the admin page still works on a database where 004
+ * has not been applied yet.
+ *
+ * Note the admin row is NOT filtered here by column but by `.neq('role', 'admin')`
+ * in `fetchUsers` - see the comment there.
+ */
+const SELECT_COLUMNS_FULL = `
+  id, email, name, role, created_at, archived_at,
+  visitor_type_id, company, host_name, phone, valid_until, notes,
+  visitor_types ( label )
+`;
+const SELECT_COLUMNS_FALLBACK =
+  'id, email, name, role, created_at, archived_at, visitor_type_id, company, host_name, phone, valid_until, notes';
+
 function mapRow(row: any): ManagedUser {
+  // Supabase returns a relation as an object for a many-to-one embed, but as an
+  // array in some versions and query shapes. Normalise both so a missing or
+  // oddly-shaped embed cannot throw here.
+  const relation = Array.isArray(row.visitor_types)
+    ? row.visitor_types[0]
+    : row.visitor_types;
+
   return {
     id: row.id,
     email: row.email,
@@ -50,6 +136,12 @@ function mapRow(row: any): ManagedUser {
     role: row.role as UserRole,
     createdAt: new Date(row.created_at),
     archivedAt: row.archived_at ? new Date(row.archived_at) : null,
+    visitorType: relation?.label ?? null,
+    company: row.company ?? null,
+    hostName: row.host_name ?? null,
+    phone: row.phone ?? null,
+    validUntil: row.valid_until ? new Date(row.valid_until) : null,
+    notes: row.notes ?? null,
   };
 }
 
@@ -87,29 +179,98 @@ async function adminRequest(
   };
 }
 
+/**
+ * Resolves a `visitor_types` id to its label using the list the rooms store
+ * already fetched.
+ *
+ * `updateUser` mirrors the saved row into local state to avoid a refetch, but the
+ * update payload carries only the id. Looking the label up here keeps the table
+ * showing "VIP" rather than a UUID without a second network round trip. Returns
+ * null if the list has not loaded, which is better than showing a raw id.
+ */
+function lookupVisitorTypeLabel(id: string): string | null {
+  return useRoomsStore.getState().visitorTypes.find((t) => t.id === id)?.label ?? null;
+}
+
 export const useUsersStore = create<UsersState>()((set, get) => ({
   users: [],
+  archivedUsers: [],
   isLoading: false,
   error: null,
 
   fetchUsers: async () => {
     set({ isLoading: true, error: null });
 
+    // The admin row is excluded here, at the query rather than in the component.
+    // There is exactly one admin (a partial unique index in migration 004), it
+    // is neither created nor edited on this screen, and listing it alongside
+    // visitors would only invite someone to try archiving the one account that
+    // can delete the building's data. The signed-in admin still sees who they
+    // are in the header, from the auth store.
     try {
-      // Archived accounts are hidden by default: the admin list is about who is
-      // currently active. They are still readable for attendance history.
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .is('archived_at', null)
-        .order('created_at', { ascending: false });
+      // Resolved to a plain `{ data, error }` shape so the fallback path can
+      // stand in for the primary one without fighting the Postgrest response
+      // union's `success: true | false` discriminant.
+      const run = async (columns: string, active: boolean) => {
+        let query = supabase
+          .from('users')
+          .select(columns)
+          .neq('role', 'admin')
+          .order('created_at', { ascending: false });
 
-      if (error) {
-        set({ isLoading: false, error: error.message });
+        query = active ? query.is('archived_at', null) : query.not('archived_at', 'is', null);
+
+        const { data, error } = await query;
+        return { data, error };
+      };
+
+      // Try the widest select first, then narrow it. Each failure means the
+      // database predates migration 004, so the next select drops back to the
+      // columns that have always existed. The visitor profile columns then read
+      // as null (see mapRow) rather than the page showing nothing at all.
+      //
+      // Cascade rather than a single fallback: the embed and the new columns can
+      // fail independently (a missing table gives PGRST205, a missing column
+      // gives 42703), and one narrow retry covers both.
+      const attempts = [SELECT_COLUMNS_FULL, SELECT_COLUMNS_BASE];
+
+      let data: any[] | null = null;
+      let usedColumns = SELECT_COLUMNS_FULL;
+      let lastError: { message: string } | null = null;
+
+      for (const columns of attempts) {
+        const attempt = await run(columns, true);
+        if (!attempt.error) {
+          data = attempt.data;
+          usedColumns = columns;
+          break;
+        }
+        lastError = attempt.error;
+      }
+
+      if (data === null) {
+        set({
+          isLoading: false,
+          error: lastError?.message ?? 'Failed to load users',
+        });
         return;
       }
 
-      set({ users: (data ?? []).map(mapRow), isLoading: false });
+      // Archived rows use the same select that just worked, so a database
+      // missing the 004 columns does not fail again on the second query.
+      const archived = await run(usedColumns, false);
+
+      // A failure to read the archived list is not fatal: the active list is
+      // what the page is for, so surface it but do not block on it.
+      if (archived.error) {
+        console.warn('Could not load archived users:', archived.error.message);
+      }
+
+      set({
+        users: (data ?? []).map(mapRow),
+        archivedUsers: (archived.data ?? []).map(mapRow),
+        isLoading: false,
+      });
     } catch (err: any) {
       set({ isLoading: false, error: err?.message || 'Failed to load users' });
     }
@@ -157,18 +318,34 @@ export const useUsersStore = create<UsersState>()((set, get) => ({
         return { success: false, error: error || 'Failed to update user' };
       }
 
-      // Keep local state in sync without a full refetch.
+      // Keep local state in sync without a full refetch. Only the fields the
+      // caller actually sent are mirrored back, so this cannot blank a column
+      // that was left out of a partial update.
       set((state) => ({
-        users: state.users.map((u) =>
-          u.id === id
-            ? {
-                ...u,
-                name: updates.name,
-                email: updates.email,
-                role: updates.role,
-              }
-            : u
-        ),
+        users: state.users.map((u) => {
+          if (u.id !== id) return u;
+
+          const next: ManagedUser = { ...u, name: updates.name, email: updates.email };
+
+          if (updates.visitorTypeId !== undefined) {
+            // The label is not in the update payload, so look it up in the
+            // visitor type list the caller already fetched rather than
+            // refetching the user row just to resolve a display string.
+            next.visitorType =
+              updates.visitorTypeId === ''
+                ? null
+                : lookupVisitorTypeLabel(updates.visitorTypeId);
+          }
+          if (updates.company !== undefined) next.company = updates.company || null;
+          if (updates.hostName !== undefined) next.hostName = updates.hostName || null;
+          if (updates.phone !== undefined) next.phone = updates.phone || null;
+          if (updates.notes !== undefined) next.notes = updates.notes || null;
+          if (updates.validUntil !== undefined) {
+            next.validUntil = updates.validUntil ? new Date(updates.validUntil) : null;
+          }
+
+          return next;
+        }),
         isLoading: false,
       }));
 
@@ -183,6 +360,9 @@ export const useUsersStore = create<UsersState>()((set, get) => ({
   // Archiving, not deleting. The new schema forbids deleting a user outright:
   // `users` is referenced by attendance with ON DELETE RESTRICT and no DELETE
   // policy is granted, so history would be destroyed (or the delete rejected).
+  //
+  // The server also bans the Supabase Auth login, so this is a real revocation
+  // rather than a flag the app happens to check.
   archiveUser: async (id) => {
     set({ isLoading: true, error: null });
 
@@ -197,10 +377,21 @@ export const useUsersStore = create<UsersState>()((set, get) => ({
         return { success: false, error: error || 'Failed to archive user' };
       }
 
-      set((state) => ({
-        users: state.users.filter((u) => u.id !== id),
-        isLoading: false,
-      }));
+      // Move the row across rather than dropping it, so an archive can be
+      // undone without a refetch.
+      set((state) => {
+        const moved = state.users.find((u) => u.id === id);
+        if (!moved) return { isLoading: false };
+
+        return {
+          users: state.users.filter((u) => u.id !== id),
+          archivedUsers: [
+            { ...moved, archivedAt: new Date() },
+            ...state.archivedUsers,
+          ],
+          isLoading: false,
+        };
+      });
 
       return { success: true };
     } catch (err: any) {
@@ -210,7 +401,62 @@ export const useUsersStore = create<UsersState>()((set, get) => ({
     }
   },
 
+  // Undoes an archive, including lifting the Supabase Auth ban. Without the
+  // server-side half of this the person would be restored in the table but
+  // still unable to sign in.
+  restoreUser: async (id) => {
+    set({ isLoading: true, error: null });
+
+    try {
+      const { ok, error } = await adminRequest(
+        `/api/admin/users?id=${encodeURIComponent(id)}&restore=1`,
+        'DELETE'
+      );
+
+      if (!ok) {
+        set({ isLoading: false, error: error || 'Failed to restore user' });
+        return { success: false, error: error || 'Failed to restore user' };
+      }
+
+      set((state) => {
+        const restored = state.archivedUsers.find((u) => u.id === id);
+        if (!restored) return { isLoading: false };
+
+        return {
+          archivedUsers: state.archivedUsers.filter((u) => u.id !== id),
+          users: [{ ...restored, archivedAt: null }, ...state.users],
+          isLoading: false,
+        };
+      });
+
+      return { success: true };
+    } catch (err: any) {
+      const message = err?.message || 'Failed to restore user';
+      set({ isLoading: false, error: message });
+      return { success: false, error: message };
+    }
+  },
+
   getUserCount: () => get().users.length,
 
-  getUsersByRole: (role) => get().users.filter((u) => u.role === role).length,
+  // Drives the "who is coming to the orientation" tally. Unclassified visitors
+  // are grouped under "Unclassified" so the numbers always add up to the total
+  // rather than silently under-counting.
+  getCountByVisitorType: () => {
+    const counts = new Map<string, number>();
+
+    for (const user of get().users) {
+      const label = user.visitorType ?? 'Unclassified';
+      counts.set(label, (counts.get(label) ?? 0) + 1);
+    }
+
+    return [...counts.entries()]
+      .map(([label, count]) => ({ label, count }))
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+  },
+
+  getExpiredCount: () => {
+    const now = new Date();
+    return get().users.filter((u) => isPassExpired(u, now)).length;
+  },
 }));

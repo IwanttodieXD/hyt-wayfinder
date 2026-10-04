@@ -61,20 +61,66 @@ export const FALLBACK_PURPOSES: Purpose[] = [
   isActive: true,
 }));
 
+/**
+ * How a visitor relates to the building: Trainee, Trainer, VIP, Contractor.
+ *
+ * Descriptive only - nothing here grants a permission. That separation is the
+ * whole point: `role` says what someone may do (admin or visitor, two values),
+ * while this says who they are, which is what varies at an orientation. Keeping
+ * them apart is what let the trainer/trainee *roles* be removed without losing
+ * the ability to record that a trainer attended.
+ *
+ * Readable by anyone, because the register form runs before sign-in.
+ */
+export interface VisitorType {
+  id: string;
+  label: string;
+  /** Worth surfacing as a tile on the register form and the admin filter. */
+  isPrimary: boolean;
+  isActive: boolean;
+}
+
+/**
+ * Used before `visitor_types` loads, and as the fallback when the table is
+ * missing (i.e. migration 004 has not been applied yet).
+ *
+ * Mirrors the pattern used for `purposes`: a best-effort list so the picker
+ * renders instead of appearing empty, replaced by real rows once fetched.
+ */
+export const FALLBACK_VISITOR_TYPES: VisitorType[] = [
+  'Trainee',
+  'Trainer',
+  'VIP',
+  'Guest',
+  'Contractor',
+  'Intern',
+  'Observer',
+].map((label) => ({
+  id: `fallback-${label.toLowerCase()}`,
+  label,
+  isPrimary: ['Trainee', 'Trainer', 'VIP'].includes(label),
+  isActive: true,
+}));
+
 interface RoomsState {
   rooms: Room[];
   purposes: Purpose[];
+  visitorTypes: VisitorType[];
   isLoading: boolean;
   /** Guards against refetching on every mount of every consumer. */
   hasFetched: boolean;
 
   fetchRooms: (force?: boolean) => Promise<void>;
   fetchPurposes: (force?: boolean) => Promise<void>;
+  fetchVisitorTypes: (force?: boolean) => Promise<void>;
 
   /** Active rooms in building order: ground floor, then floors ascending, then roof. */
   getActiveRooms: () => Room[];
   getAllRooms: () => Room[];
   getActivePurposes: () => Purpose[];
+  getActiveVisitorTypes: () => VisitorType[];
+  /** The handful of types worth showing as tiles, in label order. */
+  getPrimaryVisitorTypes: () => VisitorType[];
   getRoomById: (id: string | null | undefined) => Room | undefined;
   getRoomByNumber: (roomNumber: string | null | undefined) => Room | undefined;
   /** Resolves a scanned door code back to its room. */
@@ -116,6 +162,7 @@ function mapRoom(row: any): Room {
 export const useRoomsStore = create<RoomsState>((set, get) => ({
   rooms: [],
   purposes: [],
+  visitorTypes: [],
   isLoading: false,
   hasFetched: false,
 
@@ -185,9 +232,61 @@ export const useRoomsStore = create<RoomsState>((set, get) => ({
     }
   },
 
+  fetchVisitorTypes: async (force = false) => {
+    // Same rule as purposes: only a real row count blocks the refetch, so
+    // applying migration 004 takes effect without a hard reload.
+    const hasRealRows = get().visitorTypes.some(
+      (t) => !t.id.startsWith('fallback-')
+    );
+    if (!force && hasRealRows) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('visitor_types')
+        .select('*')
+        .order('label');
+
+      if (error) {
+        // Loud on purpose. The fallback list keeps the picker usable, but
+        // nothing here warns that the real lookup is missing, so an admin
+        // could classify visitors against a hardcoded list and never realise
+        // migration 004 was never applied.
+        console.error(
+          'Could not load visitor_types from the database (' +
+            error.message +
+            '). Using the built-in list. Apply ' +
+            'supabase/migrations/20260101000004_visitor_profiles.sql — until then ' +
+            'visitor types are not persisted, and edits to type/company/host/' +
+            'phone/expiry will fail to save.'
+        );
+        set({ visitorTypes: FALLBACK_VISITOR_TYPES });
+        return;
+      }
+
+      set({
+        visitorTypes: (data ?? []).map((row: any) => ({
+          id: row.id,
+          label: row.label,
+          isPrimary: row.is_primary,
+          isActive: row.is_active,
+        })),
+      });
+    } catch (error) {
+      console.warn('Could not load visitor types; using the built-in list.', error);
+      set({ visitorTypes: FALLBACK_VISITOR_TYPES });
+    }
+  },
+
   getActiveRooms: () => get().rooms.filter((r) => r.isActive),
   getAllRooms: () => get().rooms,
   getActivePurposes: () => get().purposes.filter((p) => p.isActive),
+
+  getActiveVisitorTypes: () => get().visitorTypes.filter((t) => t.isActive),
+
+  getPrimaryVisitorTypes: () =>
+    get()
+      .visitorTypes.filter((t) => t.isActive && t.isPrimary)
+      .sort((a, b) => a.label.localeCompare(b.label)),
 
   getRoomById: (id) => (id ? get().rooms.find((r) => r.id === id) : undefined),
 

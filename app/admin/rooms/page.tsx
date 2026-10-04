@@ -218,37 +218,85 @@ export default function RoomsPage() {
     await loadRooms();
   };
   return (
-    <div className='min-h-screen bg-navy-950 text-white'>
-      <header className='border-b border-navy-800 bg-navy-900/50'>
-        <div className='max-w-7xl mx-auto px-6 py-4 flex items-center justify-between'>
+    <div className='min-h-screen bg-navy-950'>
+      {/* Header matches the other admin pages: sticky, logo lockup, px-4 py-3.
+          This page previously used a different bar (icon + text, px-6, not
+          sticky), which made it read as a separate app when navigating between
+          admin screens. */}
+      <header className='border-b border-navy-800 bg-navy-900/50 sticky top-0 z-50'>
+        <div className='max-w-7xl mx-auto px-4 py-3 flex items-center justify-between'>
           <Link href='/admin' className='flex items-center gap-3'>
-            <i className='fa-solid fa-door-open text-orange-400'></i>
-            <span className='font-bold'>HYT Wayfinder</span>
+            <div className='w-12 h-12 flex items-center justify-center overflow-hidden'>
+              <img
+                src='/hyt_logo.png'
+                alt='HYT Logo'
+                className='w-full h-full object-contain'
+              />
+            </div>
+            <div>
+              <h1 className='text-white font-bold text-lg leading-none'>
+                Manage Rooms
+              </h1>
+              <p className='text-navy-300 text-xs mt-0.5'>
+                Rooms and their door codes
+              </p>
+            </div>
           </Link>
           <UserProfile />
         </div>
       </header>
 
-      <main className='max-w-7xl mx-auto px-6 py-8'>
-        <div className='flex items-center justify-between mb-6'>
-          <div>
-            <h1 className='text-2xl font-bold flex items-center gap-3'>
-              <i className='fa-solid fa-door-closed text-orange-400'></i>
-              Rooms
-            </h1>
-            <p className='text-navy-300 text-sm mt-1'>
-              {rooms.length} rooms, {activeCount} active. Rooms are never deleted
-              &mdash; deactivating keeps their visit history.
-            </p>
-          </div>
+      <main className='max-w-7xl mx-auto px-4 py-5'>
+        {/* Back link on the left, primary action on the right - the same row
+            layout as /admin/records and /admin/users. */}
+        <div className='mb-6 flex items-center justify-between gap-4'>
+          <Link
+            href='/admin'
+            className='text-navy-300 hover:text-navy-200 flex items-center gap-2 transition-colors'
+          >
+            <i className='fa-solid fa-arrow-left'></i>
+            <span>Back to Dashboard</span>
+          </Link>
           <button
             onClick={openCreate}
-            className='px-5 py-3 rounded-lg bg-orange-500 hover:bg-orange-600 text-paper font-semibold text-sm transition-colors'
+            className='px-4 py-2 rounded-lg bg-orange-500/20 text-orange-300 border border-orange-500/30 hover:bg-orange-500/30 transition-colors flex items-center gap-2 font-semibold text-sm'
           >
-            <i className='fa-solid fa-plus mr-2'></i>
+            <i className='fa-solid fa-plus'></i>
             Add Room
           </button>
         </div>
+
+        {/* Summary tiles, matching the glass-panel stat cards used on the
+            dashboard and the room-visits page. */}
+        <div className='grid grid-cols-2 md:grid-cols-4 gap-3 mb-6'>
+          <div className='glass-panel border-navy-800 p-5 rounded-lg'>
+            <p className='text-navy-300 text-sm mb-1'>Total Rooms</p>
+            <p className='text-white text-3xl font-bold'>{rooms.length}</p>
+          </div>
+          <div className='glass-panel border-navy-800 p-5 rounded-lg'>
+            <p className='text-navy-300 text-sm mb-1'>Active</p>
+            <p className='text-green-400 text-3xl font-bold'>{activeCount}</p>
+          </div>
+          <div className='glass-panel border-navy-800 p-5 rounded-lg'>
+            <p className='text-navy-300 text-sm mb-1'>Inactive</p>
+            <p className='text-navy-300 text-3xl font-bold'>
+              {rooms.length - activeCount}
+            </p>
+          </div>
+          <div className='glass-panel border-navy-800 p-5 rounded-lg'>
+            <p className='text-navy-300 text-sm mb-1'>Floors In Use</p>
+            <p className='text-white text-3xl font-bold'>
+              {new Set(
+                rooms.filter((r) => r.isActive).map((r) => r.floor)
+              ).size}
+            </p>
+          </div>
+        </div>
+
+        <p className='text-navy-400 text-sm mb-4'>
+          Rooms are never deleted &mdash; deactivating one keeps its visit history
+          queryable.
+        </p>
 
         {notice && (
           <div
@@ -337,19 +385,21 @@ export default function RoomsPage() {
           )}
         </div>
       </main>
-      {/* Add / edit modal */}
+      {/* Add / edit modal. Scroll container + height cap, matching the Add Visitor
+          modal on /admin/users: on a phone a form this tall would otherwise run
+          past the bottom of the screen with no way to reach its buttons. */}
       {isModalOpen && (
         <div
-          className='fixed inset-0 z-50 bg-navy-950/80 flex items-center justify-center p-4'
+          className='fixed inset-0 z-50 bg-navy-950/80 flex items-start sm:items-center justify-center p-0 sm:p-4 overflow-y-auto'
           role='dialog'
           aria-modal='true'
         >
-          <div className='glass-panel border-navy-700 rounded-lg p-6 w-full max-w-lg'>
-            <h2 className='text-lg font-bold mb-4'>
+          <div className='glass-panel border-navy-700 sm:rounded-lg p-6 w-full sm:max-w-lg my-0 sm:my-8 max-h-[100dvh] sm:max-h-[calc(100dvh-4rem)] flex flex-col'>
+            <h2 className='text-lg font-bold mb-4 flex-shrink-0'>
               {editing ? `Edit ${editing.roomNumber}` : 'Add Room'}
             </h2>
 
-            <div className='space-y-4'>
+            <div className='space-y-4 overflow-y-auto flex-1 min-h-0 overscroll-contain pr-1'>
               <div className='grid grid-cols-2 gap-4'>
                 <div>
                   <label className='block text-sm font-medium text-navy-200 mb-2'>
@@ -446,11 +496,14 @@ export default function RoomsPage() {
                 />
                 Active
               </label>
+
+              {formError && <p className='text-red-400 text-sm'>{formError}</p>}
             </div>
 
-            {formError && <p className='mt-4 text-red-400 text-sm'>{formError}</p>}
-
-            <div className='flex gap-3 mt-6'>
+            {/* Buttons outside the scroll region, matching /admin/users. Inside it
+                they would scroll out of reach on a short screen, leaving no way
+                to submit the form. */}
+            <div className='flex gap-3 mt-6 flex-shrink-0'>
               <button
                 onClick={() => setIsModalOpen(false)}
                 className='flex-1 px-4 py-3 rounded-lg bg-navy-700 hover:bg-navy-600 font-semibold text-sm transition-colors'

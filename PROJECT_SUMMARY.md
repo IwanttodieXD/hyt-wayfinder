@@ -54,13 +54,36 @@ after the fact, not just "who is there now".
 | Role | Can do |
 | --- | --- |
 | `visitor` | Register, scan in/out, view their 3D route |
-| `trainee` | Same as visitor |
-| `trainer` | Same as visitor, plus the trainer view |
 | `admin` | Everything: station, occupancy, attendance records, room visits, user management |
 
-Public registration only offers `visitor`, `trainee` and `trainer`. There is no
-way to self-register as `admin` — an admin account has to be created by another
-admin from `/admin/users`.
+Public registration can only ever produce a `visitor`: the `handle_new_user`
+trigger hardcodes that role and ignores anything the client sends.
+
+There is **exactly one admin**, enforced by a partial unique index rather than
+by the UI, and it is hidden from `/admin/users` — it is neither listed nor
+editable there. A second admin is a liability, not a convenience: anyone who can
+edit users could otherwise grant themselves the keys.
+
+The `trainer` and `trainee` roles were removed. They were never granted
+anything: no RLS policy distinguished them from `visitor`, and `/trainer` was a
+byte-identical copy of `/visitor`. The enum labels still exist in Postgres,
+which cannot drop them — see `20260101000003_retire_trainee_roles.sql`.
+
+### Visitor types are not roles
+
+At an event the people arriving are trainees, trainers and VIPs, but none of
+those need different *permissions*. Putting them on `role` is what created the
+dead roles above. So classification lives in a separate `visitor_types` lookup
+table joined from `users.visitor_type_id`, alongside `company`, `host_name`,
+`phone`, `valid_until` and `notes`.
+
+`role` answers "what may this person do" (two values). The visitor profile
+answers "who is this person" (many values). Neither grants anything the other
+does not. See `20260101000004_visitor_profiles.sql`.
+
+`valid_until` is enforced at login and on session restore, so an orientation's
+credentials stop working the morning after the event without anyone archiving
+rows by hand.
 
 Admin-only pages are enforced with `useRoleGuard`, which redirects non-admins to
 `/admin`.
@@ -73,17 +96,16 @@ Admin-only pages are enforced with `useRoleGuard`, which redirects non-admins to
 | --- | --- | --- |
 | `/` | Anyone | Redirects by auth state and role |
 | `/login` | Anyone | Sign in |
-| `/register` | Anyone | Create a visitor/trainee/trainer account |
-| `/check-in` | visitor, trainee, trainer | Mobile scanner: check in/out, scan room doors, view 3D route |
-| `/trainer` | trainer | Trainer view |
+| `/register` | Anyone | Create a visitor account |
+| `/check-in` | visitor | Mobile scanner: check in/out, scan room doors, view 3D route |
 | `/visitor` | visitor | Visitor view |
-| `/station` | admin | Print the attendance code and each room's door code, plus a live per-room headcount |
+| `/station` | admin | Print the attendance code and each room's door code. Room posters show a live headcount. Live occupancy moved to `/admin` |
 | `/occupancy` | admin | Who is inside which room right now |
 | `/admin` | admin | Dashboard |
 | `/admin/records` | admin | Attendance records (check-in/out), searchable, exportable |
 | `/admin/room-records` | admin | Room visit history, grouped per room |
-| `/admin/users` | admin | Create, edit and delete accounts |
-| `/api/admin/users` | server | Account create/delete via the service role key |
+| `/admin/users` | admin | Manage visitors: classify, set host/company/pass expiry, archive and restore |
+| `/api/admin/users` | server | Visitor create/edit/archive/restore via the service role key |
 
 ---
 

@@ -111,14 +111,6 @@ export default function KioskStationView() {
     return (roomId: string) => byRoom.get(roomId) ?? 0;
   })();
 
-  // How many of the people inside have scanned a room door. This is what makes
-  // the occupancy card say more than "Checked In Now" already does: it splits
-  // the building count into tracked vs still unaccounted for.
-  const trackedCount = getOccupancyByRoom().reduce(
-    (sum, entry) => sum + entry.people.length,
-    0
-  );
-
   // Visits for the open room, newest first. Split so people still inside sit at
   // the top, which is what the person checking the room actually cares about.
   const openRoomVisits = (() => {
@@ -184,7 +176,7 @@ export default function KioskStationView() {
             nothing ever set it inactive, so it was decoration rather than
             information. The live counts below carry the real status. */}
         <div className='mb-8'>
-          <h1 className='text-3xl font-bold text-white mb-2'>Attendance Station</h1>
+          <h1 className='text-3xl font-bold text-white mb-2'>QR Station</h1>
           <p className='text-navy-300'>
             Print the attendance code for the ground floor, and a door code for
             each room.
@@ -240,50 +232,6 @@ export default function KioskStationView() {
                 </div>
               </div>
             </div>
-          </div>
-
-          {/* Occupancy. Deliberately NOT a fourth stat card: it was flush under
-            the Current Time card and read as part of that grid. It also answered
-            a different question - which room each person is in - so it gets its
-            own section with a heading. */}
-          <div className='mt-8'>
-            <h2 className='text-lg font-bold text-white mb-1'>Occupancy</h2>
-            <p className='text-navy-400 text-sm mb-4'>
-              Who is in the building, and which rooms they have scanned into.
-            </p>
-
-            <Link
-              href='/occupancy'
-              className='
-                flex items-center justify-between gap-4
-                glass-panel border-navy-800 p-6 rounded-lg
-                hover:border-orange-500/50 transition-colors
-              '
-            >
-              <span className='flex items-center gap-4 min-w-0'>
-                <span className='w-14 h-14 rounded-lg bg-orange-500/20 flex items-center justify-center flex-shrink-0'>
-                  <i className='fa-solid fa-door-open text-orange-400 text-2xl'></i>
-                </span>
-                <span className='min-w-0'>
-                  <span className='block text-navy-300 text-sm mb-1'>
-                    Inside Right Now
-                  </span>
-                  <span className='block text-white text-2xl font-bold leading-none'>
-                    {activeCount}{' '}
-                    <span className='text-base font-semibold text-navy-300'>
-                      {activeCount === 1 ? 'person' : 'people'}
-                    </span>
-                  </span>
-                </span>
-              </span>
-
-              <span className='flex items-center gap-3 flex-shrink-0'>
-                <span className='text-navy-400 text-sm text-right'>
-                  {trackedCount} of {activeCount} in a room
-                </span>
-                <i className='fa-solid fa-arrow-right text-navy-400'></i>
-              </span>
-            </Link>
           </div>
 
         {/* Attendance heading. There is exactly one attendance code and it is
@@ -355,7 +303,7 @@ export default function KioskStationView() {
           <div className='inline-flex items-center gap-2 px-4 py-2 rounded-full bg-navy-700/50 border border-navy-700 mb-4'>
             <i className='fa-solid fa-door-open text-navy-300'></i>
             <span className='text-navy-200 font-semibold text-sm uppercase tracking-wider'>
-              Room Presence
+              Rooms Station
             </span>
           </div>
           <h2 className='text-2xl font-bold text-white mb-2'>Room Door Codes</h2>

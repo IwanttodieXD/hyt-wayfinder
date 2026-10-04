@@ -14,7 +14,9 @@ occupancy and check-in record dashboards.
 
 ## Features
 
-- Supabase email/password auth with four roles: `admin`, `trainer`, `trainee`, `visitor`
+- Supabase email/password auth with a single admin account and a shared `visitor` role
+- Visitor profiles: classification (trainee / trainer / VIP / contractor), host, company, phone, pass expiry and notes
+- Real access revocation — archiving a visitor bans their login in Supabase Auth, and can be undone
 - Self-service registration with destination assignment
 - Lobby kiosk station that prints the ground floor attendance code and one room door code per destination
 - QR scanning on mobile (`html5-qrcode`): the ground floor code clocks in/out, room door codes track who is inside which room
@@ -107,16 +109,15 @@ mixed-case path otherwise produces two module copies and
 | --- | --- |
 | `/` | Landing page; redirects by role |
 | `/login`, `/register` | Authentication |
-| `/check-in` | Mobile QR scanner and check-in/out (trainer, trainee, visitor) |
-| `/station` | Lobby kiosk — displays the check-in QR code |
-| `/trainer` | Trainer/instructor view |
+| `/check-in` | Mobile QR scanner and check-in/out (visitor) |
+| `/station` | Lobby kiosk — prints the check-in QR code and each room's door code |
 | `/visitor` | Visitor view |
 | `/occupancy` | Live room occupancy |
 | `/admin` | Admin dashboard |
 | `/admin/records` | Attendance records (check-in/out) |
 | `/admin/room-records` | Room visit history, grouped per room |
-| `/admin/users` | User management (requires `SUPABASE_SERVICE_ROLE_KEY` for create/delete) |
-| `/api/admin/users` | Server route for admin user create/delete |
+| `/admin/users` | Visitor management: classify, set pass expiry, archive/restore (requires `SUPABASE_SERVICE_ROLE_KEY`) |
+| `/api/admin/users` | Server route for visitor create/edit/archive/restore |
 
 ## QR codes
 
@@ -181,7 +182,7 @@ app/
   login, register/          # Auth pages
   check-in/                # Mobile QR scan + check-in
   station/                  # Attendance + room door QR codes
-  trainer/, visitor/, occupancy/
+  visitor/, occupancy/
   admin/                    # Dashboard, records, user management
   api/admin/users/route.ts  # Server-only user create/delete
 components/                 # 3D scene, camera, building, QR scanner, route

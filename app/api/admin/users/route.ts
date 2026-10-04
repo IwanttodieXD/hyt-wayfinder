@@ -11,6 +11,11 @@ import { createClient } from '@supabase/supabase-js';
 // Until SUPABASE_SERVICE_ROLE_KEY is configured, create/archive return 501 and
 // the UI disables those actions.
 
+// Note: role is no longer settable through this route. `admin` is a singleton
+// that is not creatable or editable here (see the partial unique index in
+// 20260101000004_visitor_profiles.sql), and the trainer/trainee labels are
+// retired - see 20260101000003_retire_trainee_roles.sql.
+
 const SERVICE_KEY_NOT_SET =
   'User creation/archiving needs SUPABASE_SERVICE_ROLE_KEY. Add it to .env.local to enable.';
 
@@ -103,11 +108,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { email, name, role, password } = body ?? {};
+  const {
+    email,
+    name,
+    password,
+    visitorTypeId,
+    company,
+    hostName,
+    phone,
+    validUntil,
+    notes,
+  } = body ?? {};
 
-  if (!email || !name || !role || !password) {
+  if (!email || !name || !password) {
     return NextResponse.json(
-      { error: 'email, name, role and password are all required' },
+      { error: 'email, name and password are all required' },
       { status: 400 }
     );
   }
@@ -119,9 +134,11 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!['admin', 'trainer', 'trainee', 'visitor'].includes(role)) {
-    return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
-  }
+  // Every account created here is a visitor, always. The admin is a singleton
+  // that is not creatable or editable through this route (enforced by the
+  // `users_single_admin_idx` partial unique index), so accepting a `role` from
+  // the client would only ever be a way to fail confusingly.
+  const role = 'visitor';
 
   // 1. Create the login. email_confirm skips the verification email step,
   //    which suits an admin provisioning accounts by hand.
@@ -149,9 +166,15 @@ export async function POST(request: Request) {
   const { error: profileError } = await service.from('users').upsert(
     {
       id: created.user.id,
-      email,
+      email: email.trim().toLowerCase(),
       name,
       role,
+      visitor_type_id: visitorTypeId || null,
+      company: company?.trim() || null,
+      host_name: hostName?.trim() || null,
+      phone: phone?.trim() || null,
+      notes: notes?.trim() || null,
+      valid_until: validUntil ? new Date(validUntil).toISOString() : null,
     },
     { onConflict: 'id' }
   );
@@ -175,7 +198,9 @@ export async function POST(request: Request) {
  * row (`USING (auth.uid() = id)`), so an admin editing someone else over the anon
  * key is rejected by the database no matter what the UI believes.
  *
- * Only the columns that exist on the new schema are writable here.
+ * Email is written to BOTH auth.users and public.users, in that order, and the
+ * profile write is rolled back if the auth write fails. See the comment at the
+ * auth call below for why the order matters.
  */
 export async function PATCH(request: Request) {
   const admin = await requireAdmin(request);
@@ -195,7 +220,17 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { id, name, email, role } = body ?? {};
+  const {
+    id,
+    name,
+    email,
+    visitorTypeId,
+    company,
+    hostName,
+    phone,
+    validUntil,
+    notes,
+  } = body ?? {};
 
   if (!id || typeof id !== 'string') {
     return NextResponse.json({ error: 'A user id is required' }, { status: 400 });
@@ -209,26 +244,99 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: 'Email is required' }, { status: 400 });
   }
 
-  if (!['admin', 'trainer', 'trainee', 'visitor'].includes(role)) {
-    return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
+  const nextEmail = email.trim().toLowerCase();
+
+  // Build the profile patch from only the keys the caller actually sent, so a
+  // partial update (the role field is no longer editable here) cannot blank a
+  // column by omission.
+  const patch: Record<string, unknown> = {
+    name: name.trim(),
+    email: nextEmail,
+  };
+
+  if (visitorTypeId !== undefined) {
+    patch.visitor_type_id = visitorTypeId || null;
+  }
+  if (company !== undefined) patch.company = company?.trim() || null;
+  if (hostName !== undefined) patch.host_name = hostName?.trim() || null;
+  if (phone !== undefined) patch.phone = phone?.trim() || null;
+  if (notes !== undefined) patch.notes = notes?.trim() || null;
+  if (validUntil !== undefined) {
+    // Empty string means "no expiry". Anything else must be a real date, or it
+    // would be written as an invalid timestamp and fail at the column.
+    patch.valid_until = validUntil ? new Date(validUntil).toISOString() : null;
   }
 
-  // Guard against an admin demoting themselves and locking everyone out of
-  // the admin area.
-  if (id === admin.userId && role !== 'admin') {
+  // 1. Update the auth login FIRST.
+  //
+  //    `public.users.email` is a copy of `auth.users.email`, and the old code
+  //    only ever wrote the copy. That silently broke the account: the person
+  //    kept signing in with the old address (which is the one Auth knows) while
+  //    the admin saw the new one on the profile, and a re-registration attempt
+  //    with the new address was rejected as "already registered".
+  //
+  //    Auth is updated first because it is the stricter gate - it rejects
+  //    duplicate addresses - so failing here means nothing has been written yet
+  //    and there is nothing to undo.
+  //
+  //    The previous address is read up front purely so a failed profile write
+  //    can be rolled back to it. Without that, "roll back" would write the new
+  //    address again and change nothing.
+  const { data: existing, error: readError } = await service
+    .from('users')
+    .select('email')
+    .eq('id', id)
+    .maybeSingle();
+
+  if (readError || !existing) {
     return NextResponse.json(
-      { error: 'You cannot change your own role' },
+      { error: 'Could not read that user. They may have been removed.' },
+      { status: 404 }
+    );
+  }
+
+  const previousEmail = existing.email as string;
+
+  const { error: authError } = await service.auth.admin.updateUserById(id, {
+    email: nextEmail,
+    // Confirmed, because an admin editing an address is not an invitation and
+    // should not trigger a verification email the person may never see.
+    email_confirm: true,
+  });
+
+  if (authError) {
+    return NextResponse.json(
+      {
+        error:
+          authError.message.includes('already') ||
+          authError.message.includes('registered')
+            ? 'That email address is already used by another account.'
+            : authError.message,
+      },
       { status: 400 }
     );
   }
 
-  const { error } = await service
-    .from('users')
-    .update({ name: name.trim(), email: email.trim(), role })
-    .eq('id', id);
+  // 2. Then the profile. If this fails the auth address has already moved, so
+  //    put it back rather than leaving the two disagreeing.
+  const { error } = await service.from('users').update(patch).eq('id', id);
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    // Best effort. If the rollback also fails the admin needs to know the
+    // account is in a split state, so the original error is not swallowed.
+    const { error: rollbackError } = await service.auth.admin.updateUserById(id, {
+      email: previousEmail,
+      email_confirm: true,
+    });
+
+    return NextResponse.json(
+      {
+        error: rollbackError
+          ? `Could not save the profile (${error.message}), and the login email could not be rolled back either (${rollbackError.message}). Please set this user's email directly in Supabase Auth.`
+          : `Could not save the profile: ${error.message}. The login email was left unchanged.`,
+      },
+      { status: 400 }
+    );
   }
 
   return NextResponse.json({ success: true });
@@ -241,6 +349,9 @@ export async function PATCH(request: Request) {
  * path at all: `users` is referenced by `clock_in_records` and `room_visits`
  * with ON DELETE RESTRICT, and no DELETE policy is granted. Setting
  * `archived_at` retires the account while keeping every visit row intact.
+ *
+ * This is a reversible "archive", not a permanent ban. Pass `?restore=1` to
+ * bring the account back, which also lifts the Supabase Auth ban.
  */
 export async function DELETE(request: Request) {
   const admin = await requireAdmin(request);
@@ -253,7 +364,10 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: SERVICE_KEY_NOT_SET }, { status: 501 });
   }
 
-  const id = new URL(request.url).searchParams.get('id');
+  const params = new URL(request.url).searchParams;
+  const id = params.get('id');
+  const restore = params.get('restore') === '1';
+
   if (!id) {
     return NextResponse.json({ error: 'A user id is required' }, { status: 400 });
   }
@@ -266,22 +380,42 @@ export async function DELETE(request: Request) {
     );
   }
 
-  // Only the profile row is touched. Deliberately NOT
-  // `auth.admin.deleteUser`: `users.id` cascades from `auth.users`, so removing
-  // the login would delete the profile and take the attendance history with it
-  // (or fail outright on the ON DELETE RESTRICT foreign keys).
+  // 1. Revoke (or reinstate) the login in Supabase Auth.
   //
-  // Consequence: an archived person keeps a working login. Their sessions stop
-  // resolving a usable profile, so the app treats them as signed out, but to
-  // revoke authentication itself you must ban the user in Supabase Auth.
+  //    This is the step that was missing. Archiving only the profile row left
+  //    the person with a working password: the app treated them as signed out,
+  //    but anyone who had the credentials could still authenticate against
+  //    Supabase directly and read the `users` rows RLS allows them. For a
+  //    visitor system that is the wrong default - a contractor you archived
+  //    should not still be able to get in.
+  //
+  //    `ban_duration: '876000h'` is the documented way to express "forever"
+  //    (roughly 100 years). Restoring sends `null`, which lifts the ban.
+  //
+  //    Deliberately NOT `auth.admin.deleteUser`: `users.id` cascades from
+  //    `auth.users`, so removing the login would delete the profile and take
+  //    the attendance history with it.
+  const { error: banError } = await service.auth.admin.updateUserById(id, {
+    ban_duration: restore ? 'none' : '876000h',
+  });
+
+  if (banError) {
+    return NextResponse.json(
+      { error: `Could not ${restore ? 'restore' : 'revoke'} the login: ${banError.message}` },
+      { status: 400 }
+    );
+  }
+
+  // 2. Flip the profile flag. Archived rows stay readable so attendance history
+  //    and past visits keep resolving the person's name.
   const { error } = await service
     .from('users')
-    .update({ archived_at: new Date().toISOString() })
+    .update({ archived_at: restore ? null : new Date().toISOString() })
     .eq('id', id);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true, restored: restore });
 }

@@ -1,5 +1,25 @@
 # Supabase Setup Guide - HYT Wayfinder
 
+> **⚠️ Partly outdated.** The schema described below predates
+> `supabase/migrations/`. It still shows `role` as a TEXT column with a CHECK
+> constraint; the live schema uses the `user_role` enum and RLS policies instead.
+> **Use the migrations as the source of truth** — run them in filename order on a
+> fresh database:
+>
+> 1. `20260101000001_full_schema.sql` — tables, enums, grants, RLS policies
+> 2. `20260101000002_registration_fix.sql` — required, or registration fails
+> 3. `20260101000003_retire_trainee_roles.sql` — retires `trainer`/`trainee`
+> 4. `20260101000004_visitor_profiles.sql` — visitor types, pass expiry, single admin
+> 5. `20260101000005_service_role_grants.sql` — **required**, or all admin user
+>    create/edit/archive calls fail with `permission denied for table users`
+>
+> Only `admin` and `visitor` roles are used by the app, and there is exactly one
+> admin account. Where this guide mentions `trainer` or `trainee` accounts, read
+> `visitor`.
+>
+> **Apply these in order.** Each is written to be safe to re-run, but they build on
+> one another.
+
 ## 🎯 Overview
 
 This guide will help you set up Supabase as the backend database for HYT Wayfinder, replacing the mock authentication with real database-backed auth and records.

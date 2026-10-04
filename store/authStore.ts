@@ -2,7 +2,21 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { supabase } from '@/lib/supabase';
 
-export type UserRole = 'admin' | 'trainer' | 'trainee' | 'visitor';
+/**
+ * System permission level. Drives what a person may see and do.
+ *
+ * Only two levels exist, because only two behave differently: an admin runs the
+ * building, everyone else is a visitor using the mobile check-in. The trainer and
+ * trainee roles were removed - they were never granted anything by any RLS policy
+ * and their portal was byte-identical to the visitor one.
+ *
+ * Note the `user_role` enum in Postgres still declares 'trainer' and 'trainee'.
+ * They are retired but retained in the type, because Postgres cannot drop an enum
+ * label and recreating the type would mean dropping and rebuilding a column on a
+ * table that attendance history depends on. Nothing writes them any more; see
+ * 20260101000003_retire_trainee_roles.sql, which normalises existing rows.
+ */
+export type UserRole = 'admin' | 'visitor';
 
 /**
  * Destinations a user can be assigned to.
@@ -37,12 +51,6 @@ export interface User {
   name: string;
   role: UserRole;
   /**
-   * Client-side only. `users` has no avatar column on the new schema, so the
-   * chosen photo is kept in the persisted store rather than the database. It is
-   * cosmetic and nothing joins on it.
-   */
-  avatar?: string;
-  /**
    * The room this person is assigned to, held pending.
    *
    * There is no destination column on `users` any more: the assigned room is
@@ -56,7 +64,7 @@ export interface User {
    *
    * Like the assigned room, purpose is deliberately NOT on the user row: the
    * schema puts `purpose_id` on `clock_in_records` so it can change per visit
-   * (a trainee attends a Meeting one day and an Orientation the next). This
+   * (a visitor attends a Meeting one day and an Orientation the next). This
    * value only seeds the visitor's first attendance record at check-in, after
    * which they pick a purpose per visit and the database is the source of truth.
    */
@@ -65,12 +73,24 @@ export interface User {
   createdAt: Date;
 }
 
-/** Fallback avatar per role, used when no photo was uploaded. */
-function roleAvatar(role: UserRole): string {
-  if (role === 'admin') return '👨‍💼';
-  if (role === 'trainer') return '👨‍🏫';
-  if (role === 'trainee') return '🎓';
-  return '👩‍🎓';
+/**
+ * True when a visitor's pass has run out.
+ *
+ * Mirrors `isPassExpired` in usersStore - compared against the start of today,
+ * not the current instant, so a pass set to expire "on the 10th" is still valid
+ * for the whole of the 10th. Using the raw timestamp would lock someone out at
+ * midnight on the night before the event they were registered for.
+ *
+ * A null `valid_until` means the pass never expires, which is the default for
+ * everyone created before migration 004.
+ */
+function isPassExpired(validUntil: string | null | undefined): boolean {
+  if (!validUntil) return false;
+  const expiry = new Date(validUntil);
+  if (Number.isNaN(expiry.getTime())) return false;
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return expiry.getTime() < startOfToday.getTime();
 }
 
 interface AuthState {
@@ -87,10 +107,14 @@ interface AuthState {
     email: string;
     password: string;
     name: string;
-    role: UserRole;
-    avatar?: string;
     destination?: string;
     purpose?: string;
+    // Visitor profile, self-declared at registration. The same columns the admin
+    // form writes (migration 004); an admin can correct any of them later.
+    visitorTypeId?: string;
+    company?: string;
+    hostName?: string;
+    phone?: string;
   }) => Promise<{
     success: boolean;
     error?: string;
@@ -202,7 +226,8 @@ export const useAuthStore = create<AuthState>()(
           }
 
           // An archived account can still hold a valid auth session. Treat it as signed
-          // out rather than letting a retired person keep checking in.
+          // out rather than letting a retired person keep checking in. The server also
+          // bans the auth login on archive, so this is a second line of defence.
           if (userData.archived_at) {
             await supabase.auth.signOut();
             set({ user: null, isAuthenticated: false, isLoading: false });
@@ -212,14 +237,25 @@ export const useAuthStore = create<AuthState>()(
             };
           }
 
+          // An event pass that has run out. Sign out rather than refuse, so the
+          // person is not left with a session that half-works: they get a clear
+          // reason and their history stays intact, and an admin can extend
+          // `valid_until` to let them back in.
+          if (isPassExpired(userData.valid_until)) {
+            await supabase.auth.signOut();
+            set({ user: null, isAuthenticated: false, isLoading: false });
+            return {
+              success: false,
+              error:
+                'Your visitor pass has expired. Please contact reception to renew it.',
+            };
+          }
+
           const user: User = {
             id: userData.id,
             email: userData.email,
             name: userData.name,
             role: userData.role as UserRole,
-            // Neither column exists on the new schema, so the photo is not
-            // persisted server-side and the assigned room is not held here.
-            avatar: roleAvatar(userData.role as UserRole),
             qrCode: `HYT-USER:${userData.id}`,
             createdAt: new Date(userData.created_at),
           };
@@ -236,14 +272,18 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true });
 
         try {
-          // Sign up with Supabase Auth
+          // Sign up with Supabase Auth.
+          //
+          // No role is sent in the metadata, and none is accepted: the
+          // handle_new_user trigger hardcodes 'visitor' and deliberately ignores
+          // raw_user_meta_data, so a client-supplied role could never take effect
+          // anyway. Sending one implied a privilege the visitor does not have.
           const { data: authData, error: authError } = await supabase.auth.signUp({
             email: data.email,
             password: data.password,
             options: {
               data: {
                 name: data.name,
-                role: data.role,
               },
             },
           });
@@ -294,12 +334,6 @@ export const useAuthStore = create<AuthState>()(
           // Wait a moment for the auth user to be fully created
           await new Promise((resolve) => setTimeout(resolve, 500));
 
-          // The photo if one was uploaded, otherwise a neutral placeholder. Derived from
-          // the *granted* role (always 'visitor' at this point) rather than the
-          // requested one, which the database has not accepted - showing a
-          // trainer emoji for someone who is still a visitor would be a lie.
-          const avatar = data.avatar || '👩‍🎓';
-
           // The database trigger (handle_new_user) already created this profile row,
           // so a plain INSERT would collide on the primary key. Upserting on id
           // is therefore the right call here.
@@ -311,6 +345,11 @@ export const useAuthStore = create<AuthState>()(
           //   - The conflict update is limited to name/email, so re-registering
           //     can never downgrade a role an admin granted.
           // Elevated roles are assigned through /admin/users.
+          //
+          // The visitor profile columns are written here but only from the
+          // values the person actually filled in. Sending them unconditionally
+          // would blank anything an admin had since filled in, because the
+          // trigger-created row already exists and this is the update path.
           const { data: userData, error: userError } = await supabase
             .from('users')
             .upsert(
@@ -318,6 +357,12 @@ export const useAuthStore = create<AuthState>()(
                 id: authData.user.id, // This links to auth.users(id)
                 email: data.email,
                 name: data.name,
+                ...(data.visitorTypeId
+                  ? { visitor_type_id: data.visitorTypeId }
+                  : {}),
+                ...(data.company ? { company: data.company } : {}),
+                ...(data.hostName ? { host_name: data.hostName } : {}),
+                ...(data.phone ? { phone: data.phone } : {}),
               },
               { onConflict: 'id' }
             )
@@ -362,10 +407,9 @@ export const useAuthStore = create<AuthState>()(
             email: userData.email,
             name: userData.name,
             role: userData.role as UserRole,
-            // The photo and assigned room were chosen moments ago and are not in
-            // the database, so they are carried in the (persisted) session. The
-            // room is applied to this user's first attendance record at check-in.
-            avatar,
+            // The assigned room was chosen moments ago and is not in the
+            // database, so it is carried in the (persisted) session. The room is
+            // applied to this user's first attendance record at check-in.
             ...(data.destination ? { destination: data.destination } : {}),
             ...(data.purpose ? { purpose: data.purpose } : {}),
             qrCode: `HYT-USER:${userData.id}`,
@@ -417,8 +461,9 @@ export const useAuthStore = create<AuthState>()(
             return;
           }
 
-          // Archived accounts have no valid session, same as on login.
-          if (userData.archived_at) {
+          // Archived accounts have no valid session, same as on login, and an expired
+          // event pass is treated the same way.
+          if (userData.archived_at || isPassExpired(userData.valid_until)) {
             await supabase.auth.signOut();
             set({ user: null, isAuthenticated: false, isLoading: false });
             return;
@@ -429,7 +474,6 @@ export const useAuthStore = create<AuthState>()(
             email: userData.email,
             name: userData.name,
             role: userData.role as UserRole,
-            avatar: roleAvatar(userData.role as UserRole),
             qrCode: `HYT-USER:${userData.id}`,
             createdAt: new Date(userData.created_at),
           };
