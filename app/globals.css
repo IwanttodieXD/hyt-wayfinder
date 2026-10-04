@@ -158,7 +158,10 @@ body {
    - `starfield-drift`: the whole pattern travels up-and-right at 45 degrees.
      The distance (280px) is a common multiple of every layer's tile size, so
      the loop restarts with no visible jump.
-   - `starfield-beat`: a slow opacity pulse, the "beating".
+   - `starfield-beat`: a slow size pulse, the "beating".
+
+   The checkerboard is built from two offset 45-degree gradients, so the
+   squares sit angled like diamonds rather than axis-aligned.
 
    It is a fixed layer at z-index -1: above the body colour, below all content.
    Page wrappers are transparent so it shows through, while panels and cards
@@ -173,10 +176,18 @@ body {
   background-color: rgb(var(--navy-950));
 }
 
-.animated-bg__pattern {
+/* Drift and beat live on separate layers so each can own its own `transform`. */
+.animated-bg__drift {
   position: absolute;
   /* Overhang just past the 280px drift distance so no edge is ever exposed. */
   inset: -320px;
+  animation: starfield-drift 45s linear infinite;
+}
+
+.animated-bg__pattern {
+  position: absolute;
+  inset: 0;
+  transform-origin: center;
   background-image:
     radial-gradient(1.5px 1.5px at 24px 32px, rgba(255, 255, 255, 0.85), transparent 100%),
     radial-gradient(1px 1px at 130px 96px, rgba(147, 197, 253, 0.75), transparent 100%),
@@ -184,8 +195,9 @@ body {
     radial-gradient(1px 1px at 86px 232px, rgba(251, 146, 60, 0.7), transparent 100%),
     radial-gradient(1px 1px at 268px 44px, rgba(255, 255, 255, 0.6), transparent 100%),
     radial-gradient(1px 1px at 172px 12px, rgba(255, 255, 255, 0.55), transparent 100%),
-    linear-gradient(45deg, rgba(255, 255, 255, 0.045) 25%, transparent 25%, transparent 75%, rgba(255, 255, 255, 0.045) 75%),
-    linear-gradient(45deg, rgba(255, 255, 255, 0.045) 25%, transparent 25%, transparent 75%, rgba(255, 255, 255, 0.045) 75%);
+    /* Two offset 45deg gradients turn the tiles into big angled (diamond) squares. */
+    linear-gradient(45deg, rgba(255, 255, 255, 0.07) 25%, transparent 25%, transparent 75%, rgba(255, 255, 255, 0.07) 75%),
+    linear-gradient(45deg, rgba(255, 255, 255, 0.07) 25%, transparent 25%, transparent 75%, rgba(255, 255, 255, 0.07) 75%);
   background-size:
     280px 280px,
     280px 280px,
@@ -193,8 +205,8 @@ body {
     280px 280px,
     280px 280px,
     280px 280px,
-    56px 56px,
-    56px 56px;
+    140px 140px,
+    140px 140px;
   background-position:
     0 0,
     0 0,
@@ -203,10 +215,8 @@ body {
     0 0,
     0 0,
     0 0,
-    28px 28px;
-  animation:
-    starfield-drift 45s linear infinite,
-    starfield-beat 4.5s ease-in-out infinite;
+    70px 70px;
+  animation: starfield-beat 4.5s ease-in-out infinite;
 }
 
 @keyframes starfield-drift {
@@ -219,13 +229,14 @@ body {
   }
 }
 
+/* The "beat": the whole pattern swells and settles, so the squares breathe. */
 @keyframes starfield-beat {
   0%,
   100% {
-    opacity: 0.5;
+    transform: scale(1);
   }
   50% {
-    opacity: 0.95;
+    transform: scale(1.15);
   }
 }
 
@@ -236,9 +247,9 @@ html.light .animated-bg {
 
 /* Respect the OS setting - keep the stars, drop the motion. */
 @media (prefers-reduced-motion: reduce) {
+  .animated-bg__drift,
   .animated-bg__pattern {
     animation: none;
-    opacity: 0.7;
   }
 }
 
