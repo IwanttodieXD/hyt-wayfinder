@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import AuthGate from '@/components/AuthGate';
 
 export const metadata: Metadata = {
   title: 'HYT WAYFINDER',
@@ -42,7 +43,9 @@ export default function RootLayout({
           referrerPolicy='no-referrer'
         />
       </head>
-      <body>{children}</body>
+      <body>
+        <AuthGate>{children}</AuthGate>
+      </body>
     </html>
   );
 }

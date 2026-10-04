@@ -4,13 +4,14 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import { useRecordsStore, formatDurationMinutes } from '@/store/recordsStore';
+import { useLiveData } from '@/hooks/useLiveData';
 import Link from 'next/link';
 import UserProfile from '@/components/UserProfile';
 
 export default function RecordsPage() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
-  const { records, fetchRecords } = useRecordsStore();
+  const { records } = useRecordsStore();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'completed'>('all');
@@ -23,14 +24,18 @@ export default function RecordsPage() {
   const [exportOpen, setExportOpen] = useState(false);
   const exportRef = useRef<HTMLDivElement>(null);
 
+  // Keep the table live. It used to fetch once on mount, so a new check-in
+  // never appeared until the page was reloaded.
+  useLiveData({
+    allRecords: true,
+    enabled: isAuthenticated && user?.role === 'admin',
+  });
+
   useEffect(() => {
     if (!isAuthenticated || user?.role !== 'admin') {
       router.push('/login');
-    } else {
-      // Fetch all records when component mounts
-      fetchRecords();
     }
-  }, [isAuthenticated, user, router, fetchRecords]);
+  }, [isAuthenticated, user, router]);
 
   // Close the export menu when clicking outside of it
   useEffect(() => {

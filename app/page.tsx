@@ -6,32 +6,22 @@ import { useAuthStore } from '@/store/authStore';
 
 export default function HomePage() {
   const router = useRouter();
-  const { isAuthenticated, user, checkAuth, isLoading } = useAuthStore();
+  const { isAuthenticated, user, authResolved } = useAuthStore();
 
-  // Check authentication on mount
+  // The session is restored once, app-wide, by <AuthGate>. Here we only route on
+  // the resolved state - never on the pre-check value, which is what used to
+  // send a signed-in person to /login on a plain reload.
   useEffect(() => {
-    checkAuth();
-  }, [checkAuth]);
-
-  // Redirect to appropriate page based on auth status
-  useEffect(() => {
-    if (isLoading) return; // Wait for auth check to complete
+    if (!authResolved) return;
 
     if (isAuthenticated && user) {
-      // If already logged in, redirect based on role
-      if (user.role === 'admin') {
-        router.push('/admin');
-      } else {
-        // Everyone else is a visitor and goes to the mobile check-in page
-        router.push('/check-in');
-      }
+      router.replace(user.role === 'admin' ? '/admin' : '/check-in');
     } else {
-      // Not logged in, redirect to login page
-      router.push('/login');
+      router.replace('/login');
     }
-  }, [isAuthenticated, user, router, isLoading]);
+  }, [authResolved, isAuthenticated, user, router]);
 
-  // Show loading while checking auth and redirecting
+  // Show loading while the session check finishes and the redirect lands.
   return (
     <div className='w-full h-screen bg-navy-950 flex items-center justify-center'>
       <div className='text-center'>

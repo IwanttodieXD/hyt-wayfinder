@@ -117,6 +117,15 @@ interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  /**
+   * True once `checkAuth` has finished at least once for this page load.
+   *
+   * Guards must wait for this before redirecting. `isAuthenticated` alone is
+   * not enough: on the first render it is whatever was persisted (or the
+   * default `false`), so a guard that redirects on it bounces a signed-in
+   * person to /login before the real Supabase session has been read.
+   */
+  authResolved: boolean;
 
   // Actions
   login: (
@@ -225,6 +234,7 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       isAuthenticated: false,
       isLoading: false,
+      authResolved: false,
 
       login: async (email: string, password: string) => {
         set({ isLoading: true });
@@ -506,7 +516,12 @@ export const useAuthStore = create<AuthState>()(
           } = await supabase.auth.getSession();
 
           if (!session) {
-            set({ user: null, isAuthenticated: false, isLoading: false });
+            set({
+              user: null,
+              isAuthenticated: false,
+              isLoading: false,
+              authResolved: true,
+            });
             return;
           }
 
@@ -514,7 +529,17 @@ export const useAuthStore = create<AuthState>()(
           const userData = await ensureProfile(session.user);
 
           if (!userData) {
-            set({ user: null, isAuthenticated: false, isLoading: false });
+            // The session is real, but the profile could not be read. This used
+            // to sign the person out, which turned a transient read failure into
+            // a forced re-login. Keep the identity already persisted (if any)
+            // and mark the check resolved; the next load repairs the profile.
+            const persisted = get().user;
+            set({
+              user: persisted,
+              isAuthenticated: !!persisted,
+              isLoading: false,
+              authResolved: true,
+            });
             return;
           }
 
@@ -522,7 +547,12 @@ export const useAuthStore = create<AuthState>()(
           // event pass is treated the same way.
           if (userData.archived_at || isPassExpired(userData.valid_until)) {
             await supabase.auth.signOut();
-            set({ user: null, isAuthenticated: false, isLoading: false });
+            set({
+              user: null,
+              isAuthenticated: false,
+              isLoading: false,
+              authResolved: true,
+            });
             return;
           }
 
@@ -545,14 +575,36 @@ export const useAuthStore = create<AuthState>()(
             createdAt: new Date(userData.created_at),
           };
 
-          set({ user, isAuthenticated: true, isLoading: false });
+          set({
+            user,
+            isAuthenticated: true,
+            isLoading: false,
+            authResolved: true,
+          });
         } catch (error) {
-          set({ user: null, isAuthenticated: false, isLoading: false });
+          // A thrown error (a network drop mid-check) must not wipe a session
+          // that is otherwise intact, or the person is logged out by a hiccup.
+          // Keep the persisted identity and resolve the check.
+          const persisted = get().user;
+          set({
+            user: persisted,
+            isAuthenticated: !!persisted,
+            isLoading: false,
+            authResolved: true,
+          });
         }
       },
     }),
     {
       name: 'hyt-auth-storage',
+      // Only the identity is persisted. `isLoading` and `authResolved` are
+      // per-page-load flags: persisting `isLoading` meant a reload could restore
+      // it as `true` and wedge every guard behind a spinner, and persisting
+      // `authResolved` would let a reload skip the session check entirely.
+      partialize: (state) => ({
+        user: state.user,
+        isAuthenticated: state.isAuthenticated,
+      }),
     }
   )
 );

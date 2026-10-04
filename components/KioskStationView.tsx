@@ -14,6 +14,7 @@ import {
   visitDuration,
 } from '@/store/roomPresenceStore';
 import { useRoomsStore } from '@/store/roomsStore';
+import { useLiveData } from '@/hooks/useLiveData';
 
 // Everything the print window needs, without dragging in the waypoint data.
 type PrintableCode = {
@@ -38,12 +39,10 @@ function escapeHtml(value: string) {
 export default function KioskStationView() {
   const { student } = useClockInStore();
   const { user } = useAuthStore();
-  const { getActiveCount, getCompletedTodayCount, fetchTodayRecords } =
-    useRecordsStore();
+  const { getActiveCount, getCompletedTodayCount } = useRecordsStore();
   // Live per-room headcount for the posters below, so whoever is posting them
   // can see at a glance which rooms already have people in them.
-  const { getOccupancyByRoom, fetchTodayPresence, presence } =
-    useRoomPresenceStore();
+  const { getOccupancyByRoom, presence } = useRoomPresenceStore();
   // One poster per room in the `rooms` table, so adding a room in the admin UI
   // is enough to get it printed here. Inactive rooms are excluded but their
   // history is untouched.
@@ -59,12 +58,14 @@ export default function KioskStationView() {
   // when the component rendered, and never advances.
   const [now, setNow] = useState(() => new Date());
 
-  // Load today's records so the active/on-break counts are live
+  // Load rooms for the poster grid.
   useEffect(() => {
-    fetchTodayRecords();
-    fetchTodayPresence();
     fetchRooms();
-  }, [fetchTodayRecords, fetchTodayPresence, fetchRooms]);
+  }, [fetchRooms]);
+
+  // Live counts: the "Checked In Now" / "Checked Out Today" cards and the
+  // per-room headcounts used to be a snapshot from page load.
+  useLiveData();
 
   // Tick once a minute, aligned to the minute boundary so the displayed minute
   // flips when it actually changes rather than up to a minute late.

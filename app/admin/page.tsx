@@ -5,35 +5,29 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import { useRecordsStore } from '@/store/recordsStore';
 import { useRoomPresenceStore } from '@/store/roomPresenceStore';
+import { useLiveData } from '@/hooks/useLiveData';
 import Link from 'next/link';
 import UserProfile from '@/components/UserProfile';
 
 export default function AdminDashboard() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
-  const { records, getActiveCount, getCompletedTodayCount, fetchTodayRecords } =
-    useRecordsStore();
+  const { records, getActiveCount, getCompletedTodayCount } = useRecordsStore();
   // Occupancy lives here rather than on /station. It is a live question about
   // the building, and the station is a kiosk for printing QR codes - not a
   // dashboard. Putting it here means the answer is one click from the admin
   // landing page instead of buried in the print screen.
-  const { getOccupancyByRoom, fetchTodayPresence } = useRoomPresenceStore();
+  const { getOccupancyByRoom } = useRoomPresenceStore();
+
+  // Keep the dashboard numbers live. They used to be a snapshot taken whenever
+  // the page loaded, so a check-in at the kiosk never appeared without a reload.
+  useLiveData({ enabled: isAuthenticated && user?.role === 'admin' });
 
   useEffect(() => {
     if (!isAuthenticated || user?.role !== 'admin') {
       router.push('/login');
-    } else {
-      // Fetch today's records when component mounts
-      fetchTodayRecords();
-      fetchTodayPresence();
     }
-  }, [
-    isAuthenticated,
-    user,
-    router,
-    fetchTodayRecords,
-    fetchTodayPresence,
-  ]);
+  }, [isAuthenticated, user, router]);
 
   if (!isAuthenticated || user?.role !== 'admin') {
     return null;

@@ -303,6 +303,16 @@ const handledRef = useRef(false);
     ]
   );
 
+  // Always points at the latest handleScanSuccess. The camera callback is
+  // registered once, when the scanner starts, so calling `handleScanSuccess`
+  // directly pinned it to the render that started the camera: `status`,
+  // `activeRecordId`, `user` and the purpose list were all frozen at their
+  // mount-time values. That is what let a scan act on a check-in that had since
+  // changed, and why room rows were written with no attendance link. Reading
+  // through a ref means the callback always sees current state.
+  const handleScanRef = useRef(handleScanSuccess);
+  handleScanRef.current = handleScanSuccess;
+
   const startCamera = useCallback(async () => {
     setScanError('');
     handledRef.current = false;
@@ -330,7 +340,7 @@ const handledRef = useRef(false);
           // feed to the container's aspect and the frame stops lining up.
           aspectRatio: 1,
         },
-        (decodedText) => handleScanSuccess(decodedText),
+        (decodedText) => handleScanRef.current(decodedText),
         () => {
           // per-frame failure; ignore
         }
@@ -347,7 +357,7 @@ const handledRef = useRef(false);
       );
       setScannerActive(false);
     }
-  }, [handleScanSuccess]);
+  }, []);
 
   const stopCamera = useCallback(async () => {
     await stopScanner();
