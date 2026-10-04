@@ -152,6 +152,21 @@ const handledRef = useRef(false);
         return;
       }
 
+      // A room poster printed before the codes were split. These look like
+      // attendance codes, so without this they would check the visitor into the
+      // building and silently lose the room. Refused with an actionable message
+      // instead - the poster needs reprinting, not re-scanning.
+      if (parsed.kind === 'retired-room-code') {
+        setScanError(
+          'This is an old room poster and can no longer be used. Please ask reception to reprint it.'
+        );
+        handledRef.current = false;
+        await stopScanner();
+        setScannerActive(false);
+        setTimeout(() => setScanning(false), 3000);
+        return;
+      }
+
       // Stop the camera
       await stopScanner();
 
@@ -579,20 +594,41 @@ const handledRef = useRef(false);
           </div>
         )}
 
-        <p className='text-navy-300 text-xs max-w-xs mx-auto mb-2'>
+        <p className='text-navy-300 text-xs max-w-xs mx-auto mb-3'>
           {showQR
             ? 'Present your personal QR code to the check-in scanner to check in.'
             : status === 'not-clocked-in'
-              ? 'Scan the ground floor code to check in and receive your route.'
-              : 'You are checked in. Scan the ground floor code again to check out, or view your 3D route.'}
+              ? 'Scan the entrance code to check in and receive your route.'
+              : 'Scan the entrance code again when you leave to check out.'}
         </p>
 
-        {/* Room codes are a separate action from attendance, so they are called
-            out separately rather than folded into the instructions above. */}
-        <p className='text-navy-500 text-xs max-w-xs mx-auto mb-4'>
-          <i className='fa-solid fa-door-open'></i> Room door codes only record
-          which room you are in — they do not check you in or out.
-        </p>
+        {/* A legend for the three different codes in the building. Each does a
+            genuinely different thing and none of them is obvious from the
+            poster alone, so the distinction is spelled out here rather than
+            left to be inferred from a failed scan. */}
+        <div className='max-w-xs mx-auto mb-4 rounded-lg border border-navy-700 bg-navy-900/50 divide-y divide-navy-800'>
+          <div className='flex items-start gap-2 px-3 py-2 text-left'>
+            <i className='fa-solid fa-door-open text-orange-400 text-xs mt-0.5'></i>
+            <p className='text-navy-300 text-[11px] leading-snug'>
+              <span className='text-white font-semibold'>Entrance poster</span> —
+              check in on arrival, check out on the way out.
+            </p>
+          </div>
+          <div className='flex items-start gap-2 px-3 py-2 text-left'>
+            <i className='fa-solid fa-location-dot text-orange-400 text-xs mt-0.5'></i>
+            <p className='text-navy-300 text-[11px] leading-snug'>
+              <span className='text-white font-semibold'>Room door poster</span> —
+              records which room you are in. Never checks you in or out.
+            </p>
+          </div>
+          <div className='flex items-start gap-2 px-3 py-2 text-left'>
+            <i className='fa-solid fa-id-card text-orange-400 text-xs mt-0.5'></i>
+            <p className='text-navy-300 text-[11px] leading-snug'>
+              <span className='text-white font-semibold'>Your personal code</span> —
+              shown on this screen for the reception desk to scan.
+            </p>
+          </div>
+        </div>
 
         {/* Current state, as one plain line. This replaces a mode toggle: the
             scanner already knows which kind of code was scanned, so there is

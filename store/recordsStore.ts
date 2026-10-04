@@ -9,6 +9,12 @@ export interface ClockInRecord {
   roomId: string | null;
   /** Joined from `rooms` for display. Not a column on this table. */
   room: string;
+  /**
+   * Room display name, also joined rather than stored. `room` (the number) stays
+   * the authoritative identifier; the name is what a person recognises, and it
+   * was already being fetched by the join but then dropped.
+   */
+  roomName: string | null;
   building: string | null;
   /** FK to purposes.id - why this person is here on this visit. */
   purposeId: string | null;
@@ -85,6 +91,7 @@ function mapRow(record: any): ClockInRecord {
     userName: record.users?.name || 'Unknown User',
     roomId: record.room_id ?? null,
     room: record.rooms?.room_number || 'Unassigned',
+    roomName: record.rooms?.name ?? null,
     building: record.rooms?.building ?? null,
     purposeId: record.purpose_id ?? null,
     purposeLabel: record.purposes?.label ?? null,

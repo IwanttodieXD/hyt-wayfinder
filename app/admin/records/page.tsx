@@ -338,7 +338,7 @@ export default function RecordsPage() {
                     type='text'
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder='Search by name, destination, or room...'
+                    placeholder='Search by name, purpose, or room...'
                     className='
                       w-full pl-12 pr-4 py-3 rounded-lg
                       bg-navy-900/50 border border-navy-700
@@ -497,10 +497,7 @@ export default function RecordsPage() {
                       User
                     </th>
                     <th className='px-4 py-3 text-left text-xs font-semibold text-navy-300 uppercase tracking-wider'>
-                      Role
-                    </th>
-                    <th className='px-4 py-3 text-left text-xs font-semibold text-navy-300 uppercase tracking-wider'>
-                      Destination
+                      Purpose / Room
                     </th>
                     <th className='px-4 py-3 text-left text-xs font-semibold text-navy-300 uppercase tracking-wider'>
                       Time In
@@ -534,11 +531,6 @@ export default function RecordsPage() {
                             <p className='text-navy-500 text-xs'>{record.userId}</p>
                           </div>
                         </div>
-                      </td>
-                      <td className='px-4 py-3 whitespace-nowrap'>
-                        <span className='px-3 py-1 rounded-full text-xs font-semibold bg-orange-500/20 text-orange-300 border border-orange-500/30'>
-                          User
-                        </span>
                       </td>
                       <td className='px-4 py-3'>
                         <p className='text-white font-medium'>

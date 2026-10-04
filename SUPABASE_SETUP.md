@@ -12,6 +12,10 @@
 > 4. `20260101000004_visitor_profiles.sql` — visitor types, pass expiry, single admin
 > 5. `20260101000005_service_role_grants.sql` — **required**, or all admin user
 >    create/edit/archive calls fail with `permission denied for table users`
+> 6. `20260101000006_default_pass_expiry.sql` — new accounts default to a one-day pass
+> 7. `20260101000007_pending_visit_intent.sql` — `pending_room_id` / `pending_purpose_id`
+> 8. `20260101000008_integrity_and_least_privilege.sql` — one open attendance row
+>    per user, and column-scoped `UPDATE` on the two visit tables
 >
 > Only `admin` and `visitor` roles are used by the app, and there is exactly one
 > admin account. Where this guide mentions `trainer` or `trainee` accounts, read

@@ -85,7 +85,7 @@ export default function AdminDashboard() {
               Welcome back, {user.name}
             </h2>
             <p className='text-navy-300'>
-              Here&apos;s what&apos;s happening with your system today
+              Here&apos;s what&apos;s happening with the Visitor Management System today
             </p>
           </div>
 
@@ -117,7 +117,7 @@ export default function AdminDashboard() {
                   <i className='fa-solid fa-user-check text-orange-400 text-xl'></i>
                 </div>
                 <Link
-                  href='/station'
+                  href='/admin/records'
                   className='text-navy-400 hover:text-orange-300 transition-colors'
                 >
                   <i className='fa-solid fa-arrow-right'></i>
@@ -155,7 +155,7 @@ export default function AdminDashboard() {
             >
               <div className='flex items-center gap-3'>
                 <div className='w-14 h-14 rounded-lg bg-orange-500/20 flex items-center justify-center group-hover:bg-orange-500/30 transition-colors'>
-                  <i className='fa-solid fa-door-open text-orange-400 text-2xl'></i>
+                  <i className='fa-solid fa-table text-orange-400 text-2xl'></i>
                 </div>
                 <div>
                   <h3 className='text-white font-semibold text-lg mb-1'>
@@ -188,21 +188,21 @@ export default function AdminDashboard() {
             </Link>
 
             <Link
-              href='/station'
+              href='/occupancy'
               className='glass-panel border-navy-800 p-6 rounded-lg hover:border-orange-500/50 transition-colors group'
             >
               <div className='flex items-center gap-3'>
                 <div className='w-14 h-14 rounded-lg bg-orange-500/20 flex items-center justify-center group-hover:bg-orange-500/30 transition-colors'>
-                  <i className='fa-solid fa-qrcode text-orange-400 text-2xl'></i>
+                  <i className='fa-solid fa-door-open text-orange-400 text-2xl'></i>
                 </div>
                 <div>
-                  <h3 className='text-white font-semibold text-lg mb-1'>QR Station</h3>
-                  <p className='text-navy-300 text-sm'>QR Codes for Attendance and Rooms</p>
+                  <h3 className='text-white font-semibold text-lg mb-1'>Room Occupancy</h3>
+                  <p className='text-navy-300 text-sm'>See visitors who occupies a room</p>
                 </div>
               </div>
             </Link>
-
-            <Link
+	
+	    <Link
               href='/admin/users'
               className='glass-panel border-navy-800 p-6 rounded-lg hover:border-orange-500/50 transition-colors group'
             >
@@ -216,7 +216,22 @@ export default function AdminDashboard() {
                 </div>
               </div>
             </Link>
-          </div>
+          
+            <Link
+              href='/station'
+              className='glass-panel border-navy-800 p-6 rounded-lg hover:border-orange-500/50 transition-colors group'
+            >
+              <div className='flex items-center gap-3'>
+                <div className='w-14 h-14 rounded-lg bg-orange-500/20 flex items-center justify-center group-hover:bg-orange-500/30 transition-colors'>
+                  <i className='fa-solid fa-qrcode text-orange-400 text-2xl'></i>
+                </div>
+                <div>
+                  <h3 className='text-white font-semibold text-lg mb-1'>QR Station</h3>
+                  <p className='text-navy-300 text-sm'>QR Codes for Attendance and Rooms</p>
+                </div>
+              </div>
+            </Link>
+	  </div>
 
           {/* Live Room Occupancy. Moved here from /station: it is a question about the
               building right now, and the station is a kiosk for printing codes.

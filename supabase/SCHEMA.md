@@ -98,6 +98,14 @@ CREATE UNIQUE INDEX room_visits_one_open_per_user
 
 If two scans race, the second fails loudly instead of double-counting someone.
 
+**One open attendance row per person** is enforced the same way (migration 008),
+so a double-tap or a second device cannot leave two concurrent check-ins open:
+
+```sql
+CREATE UNIQUE INDEX clock_in_one_open_per_user
+  ON public.clock_in_records (user_id) WHERE time_out IS NULL;
+```
+
 **Foreign keys are indexed explicitly.** Postgres does not create these for you,
 and the partial indexes on open rows (`WHERE time_out IS NULL`) are what keep
 "who's in the building right now" fast as the tables grow.
@@ -109,16 +117,23 @@ claims, so changing someone's role takes effect immediately instead of waiting
 for a token refresh.
 
 Users can **open** their own attendance and **close** their own open record, but
-cannot freely update one. That closes a real hole in the previous schema, where
-`Users can update own records` let anyone edit their own `time_in` after the
-fact — falsifiable attendance.
+cannot freely update one. The RLS policy limits *which rows* they may touch
+(their own, still open); the column-scoped grants in migration 008 limit *which
+columns* they may change (`time_out` on attendance, `exited_at` on presence), so
+`time_in`, `room_id` and `entered_at` cannot be rewritten after the fact. That
+closes a real hole in the previous schema, where `Users can update own records`
+let anyone edit their own `time_in` — falsifiable attendance.
 
 ## Applying it
 
 Fresh database, in this order:
 
 1. `supabase/migrations/20260101000001_full_schema.sql` — tables, indexes, triggers, RLS
-2. `supabase/seed.sql` — the 11 rooms
+2. `supabase/migrations/20260101000002_registration_fix.sql` … through
+   `20260101000008_integrity_and_least_privilege.sql`, in numeric order
+3. `supabase/seed.sql` — the 11 rooms
+
+The full annotated list is in [../README.md](../README.md) under Database.
 
 Then create your first admin in Supabase Auth (Authentication → Users → Add
 User) and insert the matching profile row:

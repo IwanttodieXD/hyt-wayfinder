@@ -109,7 +109,7 @@ const getRoleIcon = () => {
                 }}
                 className='w-full px-4 py-2.5 rounded-lg text-left text-navy-200 hover:bg-navy-800/50 hover:text-white transition-colors flex items-center gap-3'
               >
-                <i className='fa-solid fa-door-open w-5'></i>
+                <i className='fa-solid fa-table w-5'></i>
 		<span>Room Visits Records</span>
 	      </button>
 	      <button

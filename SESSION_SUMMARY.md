@@ -453,6 +453,124 @@ then the 63-strip used `length === 13` when 2 + 10 = 12.
 Removed the "Any format is fine…" hint from register and "Spaces, dashes and +63 are kept
 as typed" from admin — both described behaviour that did not match reality.
 
+**Phone input restricted to valid characters** (`lib/phone.ts`, both forms). Two
+mechanisms, both needed:
+
+- `onKeyDown` + `isAllowedPhoneKey(key, ctrlOrMeta)` → `preventDefault()` so the
+  character never renders. Filtering alone makes letters blink out after appearing,
+  which reads as a broken field.
+- `onChange` + `sanitisePhone(value)` → catches **paste**, because keydown does not
+  fire for pasted content. Cap is 30 chars.
+
+Allowed: digits `+ - ( ) . /` and space. **Not digits-only** — blocking `+` would make
+`+63 917 123 4567` untypeable. The set is deliberately identical to the characters
+`formatPhone` treats as "the user chose this layout"; if they disagreed the field would
+accept something then discard it.
+
+Ctrl/Cmd combos always allowed, so Cmd+A / Cmd+V keep working.
+
+⚠️ Bug caught while testing: the allow-list was first written as a single **global**
+regex used for both `.replace()` and `.test()`. A global regex carries `lastIndex`
+between `.test()` calls, so it alternates true/false and would have let a letter
+through **every other keystroke**. There are now two constants — `DISALLOWED` (`/g`,
+for replace) and `DISALLOWED_SINGLE` (for test). Verified: 10 consecutive letter checks
+allow 0.
+
+Also dropped `tidyPhone` from register's imports (unused there once onChange switched to
+`sanitisePhone`); still imported in admin, where it tidies the list display.
+
+**Retired room-code format is now refused loudly** (`lib/wayfinding.ts`,
+`components/QRScanner.tsx`). The old format `HYT-KIOSK-01-CHECKIN-STATION:ROOM-201` began
+with the **attendance** prefix, so `parseQrValue` read it as ATTENDANCE — a visitor
+scanning an old room poster was silently checked into the building and the room was
+never recorded. No error, wrong data.
+
+`ParsedQr` gained `{ kind: 'retired-room-code' }`, matched by
+`LEGACY_ROOM_CODE_RE = /^HYT-KIOSK-[^:]*[:-](?:ROOM|ROOFDECK)/i`, checked **before** the
+attendance branch. QRScanner refuses it with "old room poster, ask reception to reprint".
+A bare `HYT-KIOSK-CHECKIN-STATION` has no room suffix so it still checks in normally —
+verified, this is the regression to watch if that regex is ever widened.
+
+Also made both prefixes **case-insensitive** (`ROOM_PREFIX_RE` gained `/i`, attendance
+uses `.toUpperCase().startsWith`), so a retyped or re-encoded lowercase code resolves.
+
+⚠️ Two regex bugs caught by testing, not by reading: (1) `.*[:\-]ROOM[- ]?\d` missed
+`ROOFDECK` — it has no digit, and I had misread it as starting "ROOM" when it starts
+"ROOF"; (2) after fixing, `[^:]*` was needed so the suffix can't span a colon. 12 cases
+pass, including lowercase forms and both real attendance codes.
+
+**Scanner now shows a legend** for the three code types (entrance poster = in/out, room
+door = records room only, personal code = for reception to scan). Replaces two separate
+grey paragraphs that never named the entrance code as a distinct thing.
+
+**Removed** the "Back to Home" link from `/register`.
+
+**"Back to Dashboard" already existed** on all four admin sub-pages (`records`,
+`room-records`, `rooms`, `users`), each `href='/admin'`. Nothing to add — the dashboard
+itself is the one page it should not link to.
+
+**Visitor UI fixes — four reported problems, four root causes fixed**
+
+1. **Refresh logged you out.** `checkAuth()` was called ONLY in `app/page.tsx`, so every
+   other guarded route trusted whatever Zustand rehydrated from localStorage and never
+   revalidated the Supabase session. Moved it into `useRoleGuard`, which every guarded
+   page already calls. Critically, the redirect effect now **returns early while
+   `isLoading`** — without that it would still bounce to `/login` during the async check,
+   since `isAuthenticated` is false until it finishes. `useRoleGuard` also returns
+   `isAuthenticated && !isLoading && ...` so pages don't flash protected UI.
+
+2. **"Not checked in" after refresh / 3D route unreachable / not live** — one root cause:
+   `clockInStore` has **no `persist`**, so check-in state was pure in-memory memory, and
+   `getActiveRecords()` was called from nowhere. Added:
+   - `clockInStore.syncFromServer(openRecord | null)` — skips when
+     `status === 'viewing-route'` so a poll can't eject someone out of their 3D route,
+     and no-ops when the id is unchanged so a poll landing right after a local `clockIn()`
+     doesn't reset the displayed time.
+   - `useAttendanceStatus(userId)` — sync on mount + 30s poll, hidden-tab aware,
+     `inFlight` ref guarding overlapping fetches.
+   Wired into both `/check-in` and `/visitor`.
+
+   This was a **correctness** bug, not cosmetic: stale "not checked in" meant the scanner
+   read the visitor as clocked out, so scanning the entrance code would have clocked them
+   OUT mid-visit.
+
+3. **UI didn't fit the screen.** `StudentMobileView` had `min-h-[560px]` / `min-h-[680px]`
+   — larger than a small phone's viewport once the header is counted, so the frame
+   overflowed. Removed both floors, switched to `dvh` units, `p-4` wrapper padding
+   dropped, and both pages moved to `h-[100dvh]` with `min-h-0` on `<main>` so the frame
+   can actually shrink.
+
+Verified: `tsc` 0, build 16/16 (ran in background — it now exceeds the 30s command limit),
+lint clean on all six files.
+
+**Attendance records table realigned to `clock_in_records`** (`app/admin/records/page.tsx`,
+`store/recordsStore.ts`). The on-screen table had drifted while the **exports were already
+correct** — worth knowing, since CSV/Excel/JSON/PDF all share `buildExportData()`:
+
+- **Dead "Role" column removed.** Rendered a hardcoded "User" badge on every row — zero
+  information. Correctly not derived from the record (the schema invariant is never to
+  denormalise `user_role` onto a visit), but that made the column worthless rather than
+  absent.
+- **"Destination" split into Purpose and Room.** One cell was showing purpose as the
+  primary line with the room beneath, under a heading describing neither.
+- **Room now shows the NAME, not just the number.** `mapRow` was already fetching
+  `rooms.name` in the join and then discarding it. Added `roomName` to `ClockInRecord`.
+  Building stays as the tertiary line.
+- **Raw user UUID removed** from the User cell — kept in the exports where it is useful
+  for reconciliation.
+- Exports gained a "Room Name" column; `Room` is now blank rather than "Unassigned" when
+  there is no room, so an empty cell means genuinely unset.
+- Search now covers room name and building; placeholder says "purpose, or room".
+
+Verified headers == body cells (6 == 6) programmatically, since removing one column and
+adding another is exactly where a mismatch hides. `tsc` 0, build 16/16, lint clean.
+
+**Fixed a pre-existing build break**: `lib/wayfinding.test.ts` (22 tests covering
+`parseQrValue`, written earlier this session) failed `tsc --noEmit` with TS5097 — it
+imports `'./wayfinding.ts'` because `node --test` needs the explicit extension, which
+bundler resolution rejects. Added `**/*.test.ts` to `tsconfig.json` `exclude` with a
+comment explaining why. `npm test` → **22 pass, 0 fail**; `tsc --noEmit` clean again.
+
 ---
 
 ## 6. Recently done

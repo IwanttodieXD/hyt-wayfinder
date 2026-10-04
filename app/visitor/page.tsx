@@ -2,7 +2,7 @@
 
 import { useAuthStore } from '@/store/authStore';
 import { useRoleGuard } from '@/hooks/useRoleGuard';
-import { useClockInProfile } from '@/hooks/useClockInProfile';
+import { useAttendanceStatus, useClockInProfile } from '@/hooks/useClockInProfile';
 import StudentMobileView from '@/components/StudentMobileView';
 import UserProfile from '@/components/UserProfile';
 
@@ -14,13 +14,18 @@ export default function VisitorPortal() {
   // Also loads the rooms list the visitor header resolves its room name from.
   useClockInProfile();
 
+  // Reconciles check-in state with the database, so a refresh doesn't report
+  // "not checked in" for someone who is genuinely inside - and so the 3D route
+  // button is reachable after a refresh.
+  useAttendanceStatus(user?.id);
+
   if (!isAllowed) {
     return null;
   }
 
   return (
     <>
-      <div className='min-h-screen bg-navy-950 flex flex-col'>
+      <div className='h-[100dvh] bg-navy-950 flex flex-col'>
         {/* Header. Slimmer than the admin pages: a visitor has one job here, so
             the chrome stays out of the way of the phone frame below. */}
         <header className='border-b border-navy-800 bg-navy-900/50 flex-shrink-0'>
@@ -48,7 +53,7 @@ export default function VisitorPortal() {
         </header>
 
         {/* Main Content - Full Screen Mobile View */}
-        <main className='flex-1 overflow-hidden'>
+        <main className='flex-1 min-h-0 overflow-hidden'>
           <StudentMobileView />
         </main>
       </div>

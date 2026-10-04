@@ -81,7 +81,8 @@ editor, **in numeric order** (the later files depend on the earlier ones):
 5. `supabase/migrations/20260101000005_service_role_grants.sql` — grants for admin create/archive
 6. `supabase/migrations/20260101000006_default_pass_expiry.sql` — new accounts default to a pass that expires at end of today
 7. `supabase/migrations/20260101000007_pending_visit_intent.sql` — `pending_room_id` / `pending_purpose_id`, so an admin-assigned room and purpose survive until check-in
-8. `supabase/seed.sql` — the 11 rooms and the visit purposes
+8. `supabase/migrations/20260101000008_integrity_and_least_privilege.sql` — one open attendance row per user, and column-scoped `UPDATE` so a visit's timestamps and room cannot be rewritten after the fact
+9. `supabase/seed.sql` — the 11 rooms and the visit purposes
 
 This is a **fresh** schema, not an upgrade path: it creates clean tables rather
 than `ALTER`ing the old ones, so there is no data migration to run.

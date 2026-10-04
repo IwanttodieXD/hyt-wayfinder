@@ -31,6 +31,8 @@ interface ClockInState {
   clockIn: (recordId?: string) => void;
   clockOut: () => void;
   startRouteView: () => void;
+  /** Reconciles in-memory state with the open attendance record in the database. */
+  syncFromServer: (openRecord: { id: string; timeIn: Date } | null) => void;
   setStudentName: (name: string) => void;
   setDestination: (destination: string) => void;
 
@@ -82,6 +84,35 @@ export const useClockInStore = create<ClockInState>((set) => ({
   startRouteView: () =>
     set({
       status: 'viewing-route',
+    }),
+
+  /**
+   * Reconciles the store with the database after a fetch.
+   *
+   * The visitor's check-in state used to live only in memory, so a refresh or a
+   * direct visit to `/check-in` reported "not checked in" for someone who was
+   * genuinely inside the building. That is not cosmetic: the scanner then read
+   * them as not clocked in, so scanning the entrance code would have CLOCKED
+   * THEM OUT mid-visit.
+   *
+   * `status: 'viewing-route'` is deliberately left alone. A poll landing while
+   * someone is watching their 3D route must not eject them back to the scanner.
+   */
+  syncFromServer: (openRecord: { id: string; timeIn: Date } | null) =>
+    set((state) => {
+      if (state.status === 'viewing-route') return state;
+
+      // Already carrying the same record - a poll landing right after a local
+      // clockIn would otherwise reset the time they were shown.
+      if (openRecord && state.activeRecordId === openRecord.id) return state;
+
+      return openRecord
+        ? {
+            status: 'clocked-in',
+            activeRecordId: openRecord.id,
+            clockInTime: openRecord.timeIn,
+          }
+        : { status: 'not-clocked-in', activeRecordId: null, clockInTime: null };
     }),
 
   setRouteAnimating: (animating) => set({ isRouteAnimating: animating }),

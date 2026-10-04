@@ -33,13 +33,18 @@ export default function StudentMobileView() {
   const showingRoute = status === 'viewing-route';
 
   return (
-    <div className='w-full min-h-full bg-navy-950 flex items-center justify-center p-4'>
-      {/* Mobile Device Frame */}
+    <div className='w-full h-full bg-navy-950 flex items-center justify-center'>
+      {/* Mobile Device Frame.
+          Sized entirely from the viewport height with `dvh`, and with NO
+          `min-h` floor. The floors this used to carry (560px / 680px) exceed the
+          viewport of a small phone once the page header is counted, so the frame
+          overflowed and pushed the scan area below the fold. `min-h-0` lets this
+          flex child shrink instead. */}
       <div
         className={`relative w-full h-full bg-navy-900 rounded-lg border-4 border-navy-800 overflow-hidden flex flex-col transition-all duration-300 ${
           showingRoute
-            ? 'max-w-2xl max-h-[min(1150px,calc(100dvh-5rem))] min-h-[680px]'
-            : 'max-w-md max-h-[800px] min-h-[560px]'
+            ? 'max-w-2xl max-h-[min(1150px,calc(100dvh-9rem))]'
+            : 'max-w-md max-h-[calc(100dvh-7rem)]'
         }`}
       >
         {/* App Header. One row of identity + one status pill, rather than the

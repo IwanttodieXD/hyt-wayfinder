@@ -628,17 +628,6 @@ export default function RegisterPage() {
               </Link>
             </div>
           </div>
-
-          {/* Back to Home */}
-          <div className='mt-6 text-center'>
-            <Link
-              href='/'
-              className='text-orange-300 hover:text-orange-200 text-sm flex items-center justify-center gap-2 transition-colors'
-            >
-              <i className='fa-solid fa-arrow-left'></i>
-              <span>Back to Home</span>
-            </Link>
-          </div>
         </div>
       </div>
       )}

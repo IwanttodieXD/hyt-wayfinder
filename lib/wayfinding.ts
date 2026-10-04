@@ -48,8 +48,31 @@ const ATTENDANCE_PREFIX = 'HYT-KIOSK-';
  */
 const ROOM_PREFIX = 'HYT-ROOM-01';
 
-/** Matches the room prefix followed by either a colon or a hyphen. */
-const ROOM_PREFIX_RE = /^HYT-ROOM-01[:-]/;
+/**
+ * Matches the room prefix followed by either a colon or a hyphen.
+ *
+ * Case-insensitive: a QR retyped by hand, or re-encoded by a different tool,
+ * may not preserve case, and rejecting it as "not an HYT QR code" would be a
+ * pointless failure. `normalise` already upper-cases for comparison; this just
+ * lets the prefix itself be recognised regardless of case.
+ */
+const ROOM_PREFIX_RE = /^HYT-ROOM-01[:-]/i;
+
+/**
+ * The RETIRED room code format: `HYT-KIOSK-01-CHECKIN-STATION:ROOM-304`.
+ *
+ * Room codes used to be minted under the attendance prefix, with the room number
+ * after it. Because the value still begins `HYT-KIOSK-`, `parseQrValue` used to
+ * read these as ATTENDANCE - so a visitor scanning an old poster on a room door
+ * was silently checked into the building and the room was never recorded. No
+ * error, wrong data.
+ *
+ * That is precisely the failure the two prefixes exist to prevent, so it is
+ * detected explicitly and refused. A bare `HYT-KIOSK-CHECKIN-STATION` does NOT
+ * match this (there is no room suffix), which is what keeps ordinary check-in
+ * working.
+ */
+const LEGACY_ROOM_CODE_RE = /^HYT-KIOSK-[^:]*[:-](?:ROOM|ROOFDECK)/i;
 
 /** Single building. Kept as a constant so routes and the DB default agree. */
 const BUILDING = 'HYT-Business Center';
@@ -152,6 +175,7 @@ export function getRouteByRoom(room: string): DestinationRoute | undefined {
 export type ParsedQr =
   | { kind: 'attendance' }
   | { kind: 'room'; roomNumber: string; routeId: string }
+  | { kind: 'retired-room-code' }
   | null;
 
 /** Strips the punctuation so 'room 304' matches 'ROOM-304'. */
@@ -176,6 +200,14 @@ function roomCodeValue(qrValue: string): string {
 export function parseQrValue(value: string): ParsedQr {
   const trimmed = value.trim();
 
+  // Checked BEFORE the attendance branch. This value starts with the attendance
+  // prefix, so without this it would be read as a check-in - silently checking a
+  // visitor into the building when they meant to record a room. The room suffix
+  // is what makes it unambiguously a retired room poster.
+  if (LEGACY_ROOM_CODE_RE.test(trimmed)) {
+    return { kind: 'retired-room-code' };
+  }
+
   if (ROOM_PREFIX_RE.test(trimmed)) {
     const encoded = trimmed.slice(ROOM_PREFIX.length).replace(/^[:\-]/, '').trim();
     if (!encoded) return null;
@@ -191,7 +223,12 @@ export function parseQrValue(value: string): ParsedQr {
       : null;
   }
 
-  if (trimmed.startsWith(ATTENDANCE_PREFIX)) return { kind: 'attendance' };
+  // Case-insensitive, matching ROOM_PREFIX_RE. A lowercased kiosk code would
+  // otherwise fall through to "not an HYT QR code" and confuse someone who had
+  // done nothing wrong.
+  if (trimmed.toUpperCase().startsWith(ATTENDANCE_PREFIX)) {
+    return { kind: 'attendance' };
+  }
 
   return null;
 }

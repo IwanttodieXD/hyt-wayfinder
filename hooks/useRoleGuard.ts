@@ -18,7 +18,7 @@ import { useAuthStore, type UserRole } from '@/store/authStore';
  */
 export function useRoleGuard(allowed: UserRole[], fallback: string = '/login') {
   const router = useRouter();
-  const { user, isAuthenticated } = useAuthStore();
+  const { user, isAuthenticated, isLoading, checkAuth } = useAuthStore();
   const role = user?.role;
 
   // Kept in a ref so a fresh array literal on every render can't retrigger
@@ -26,7 +26,23 @@ export function useRoleGuard(allowed: UserRole[], fallback: string = '/login') {
   const allowedRef = useRef(allowed);
   allowedRef.current = allowed;
 
+  // Revalidate the Supabase session on every guarded mount.
+  //
+  // This used to live only in `app/page.tsx`, so refreshing any other guarded
+  // route (/check-in, /visitor, /admin/...) left the store resting on whatever
+  // Zustand had rehydrated from localStorage. When that disagreed with the real
+  // session the guard bounced the visitor to /login. Validating here means the
+  // store is correct before any redirect decision is made, and a revoked or
+  // expired session is caught rather than trusted.
   useEffect(() => {
+    checkAuth();
+  }, [checkAuth]);
+
+  useEffect(() => {
+    // Wait for `checkAuth` to settle. Redirecting while it is still in flight is
+    // exactly the bug this fixes: `isAuthenticated` is false until it finishes.
+    if (isLoading) return;
+
     if (!isAuthenticated) {
       router.push('/login');
       return;
@@ -35,7 +51,7 @@ export function useRoleGuard(allowed: UserRole[], fallback: string = '/login') {
     if (role && !allowedRef.current.includes(role)) {
       router.push(fallback);
     }
-  }, [isAuthenticated, role, router, fallback]);
+  }, [isAuthenticated, isLoading, role, router, fallback]);
 
-  return isAuthenticated && !!role && allowed.includes(role);
+  return isAuthenticated && !isLoading && !!role && allowed.includes(role);
 }

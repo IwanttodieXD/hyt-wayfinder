@@ -23,5 +23,6 @@
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules"]
+  "//exclude": "Test files run under `node --test`, which needs the explicit .ts import extension Node's native TypeScript support requires. `tsc` rejects that extension under bundler resolution (TS5097), and Next has no reason to typecheck or bundle them either.",
+  "exclude": ["node_modules", "**/*.test.ts"]
 }
