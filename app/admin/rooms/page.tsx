@@ -218,7 +218,7 @@ export default function RoomsPage() {
     await loadRooms();
   };
   return (
-    <div className='min-h-screen bg-navy-950'>
+    <div className='min-h-screen'>
       {/* Header matches the other admin pages: sticky, logo lockup, px-4 py-3.
           This page previously used a different bar (icon + text, px-6, not
           sticky), which made it read as a separate app when navigating between

@@ -33,7 +33,7 @@ export default function StudentMobileView() {
   const showingRoute = status === 'viewing-route';
 
   return (
-    <div className='w-full h-full bg-navy-950 flex items-center justify-center'>
+    <div className='w-full h-full flex items-center justify-center'>
       {/* Mobile Device Frame.
           Sized entirely from the viewport height with `dvh`, and with NO
           `min-h` floor. The floors this used to carry (560px / 680px) exceed the

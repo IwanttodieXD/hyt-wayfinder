@@ -398,7 +398,7 @@ export default function RouteVisualization() {
   }
 
   return (
-    <div className='theme-fixed-light w-full h-full flex flex-col relative'>
+    <div className='theme-fixed-light w-full h-full flex flex-col relative bg-navy-950'>
       {/* The canvas fills whatever space is left between the frame header and the
           controls below, rather than forcing a width-driven square. On a phone
           the square was taller than the space available, so the bottom of the 3D

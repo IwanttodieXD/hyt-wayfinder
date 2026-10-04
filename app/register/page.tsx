@@ -135,7 +135,7 @@ export default function RegisterPage() {
           error: there is genuinely nothing to fix, they just need to click the
           link Supabase emailed them. */}
       {pendingConfirmation && (
-        <div className='min-h-screen bg-navy-900 flex items-center justify-center p-4'>
+        <div className='min-h-screen flex items-center justify-center p-4'>
           <div className='w-full max-w-md text-center'>
             <div className='glass-panel border-navy-700 rounded-lg p-8'>
               <div className='w-16 h-16 mx-auto mb-5 rounded-full bg-orange-500/20 flex items-center justify-center'>
@@ -182,7 +182,7 @@ export default function RegisterPage() {
         // items-start on small screens. Centring a tall form with flex centres
         // the overflow too, so the top and bottom get clipped and become
         // unreachable on a phone - including the Create Account button.
-        <div className='min-h-screen bg-navy-900 flex items-start sm:items-center justify-center p-4 sm:py-8'>
+        <div className='min-h-screen flex items-start sm:items-center justify-center p-4 sm:py-8'>
         {/* Register Card */}
         <div className='relative w-full max-w-md'>
           {/* Logo. Smaller on phones so it does not push the form off screen. */}

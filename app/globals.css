@@ -149,6 +149,99 @@ body {
   }
 }
 
+/* ---------------------------------------------------------------------------
+   Animated app background.
+
+   A faint checkerboard with scattered stars, sitting behind every page. It has
+   two independent animations:
+
+   - `starfield-drift`: the whole pattern travels up-and-right at 45 degrees.
+     The distance (280px) is a common multiple of every layer's tile size, so
+     the loop restarts with no visible jump.
+   - `starfield-beat`: a slow opacity pulse, the "beating".
+
+   It is a fixed layer at z-index -1: above the body colour, below all content.
+   Page wrappers are transparent so it shows through, while panels and cards
+   keep their own opaque backgrounds so text stays readable.
+--------------------------------------------------------------------------- */
+.animated-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  background-color: rgb(var(--navy-950));
+}
+
+.animated-bg__pattern {
+  position: absolute;
+  /* Overhang just past the 280px drift distance so no edge is ever exposed. */
+  inset: -320px;
+  background-image:
+    radial-gradient(1.5px 1.5px at 24px 32px, rgba(255, 255, 255, 0.85), transparent 100%),
+    radial-gradient(1px 1px at 130px 96px, rgba(147, 197, 253, 0.75), transparent 100%),
+    radial-gradient(1.5px 1.5px at 214px 168px, rgba(255, 255, 255, 0.7), transparent 100%),
+    radial-gradient(1px 1px at 86px 232px, rgba(251, 146, 60, 0.7), transparent 100%),
+    radial-gradient(1px 1px at 268px 44px, rgba(255, 255, 255, 0.6), transparent 100%),
+    radial-gradient(1px 1px at 172px 12px, rgba(255, 255, 255, 0.55), transparent 100%),
+    linear-gradient(45deg, rgba(255, 255, 255, 0.045) 25%, transparent 25%, transparent 75%, rgba(255, 255, 255, 0.045) 75%),
+    linear-gradient(45deg, rgba(255, 255, 255, 0.045) 25%, transparent 25%, transparent 75%, rgba(255, 255, 255, 0.045) 75%);
+  background-size:
+    280px 280px,
+    280px 280px,
+    280px 280px,
+    280px 280px,
+    280px 280px,
+    280px 280px,
+    56px 56px,
+    56px 56px;
+  background-position:
+    0 0,
+    0 0,
+    0 0,
+    0 0,
+    0 0,
+    0 0,
+    0 0,
+    28px 28px;
+  animation:
+    starfield-drift 45s linear infinite,
+    starfield-beat 4.5s ease-in-out infinite;
+}
+
+@keyframes starfield-drift {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    /* 45 degrees up-and-right. */
+    transform: translate3d(280px, -280px, 0);
+  }
+}
+
+@keyframes starfield-beat {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 0.95;
+  }
+}
+
+/* A dark-theme flourish: in light mode it would fight the near-white palette. */
+html.light .animated-bg {
+  display: none;
+}
+
+/* Respect the OS setting - keep the stars, drop the motion. */
+@media (prefers-reduced-motion: reduce) {
+  .animated-bg__pattern {
+    animation: none;
+    opacity: 0.7;
+  }
+}
+
 * {
   margin: 0;
   padding: 0;

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import AuthGate from '@/components/AuthGate';
+import AnimatedBackground from '@/components/AnimatedBackground';
 
 export const metadata: Metadata = {
   title: 'HYT WAYFINDER',
@@ -44,6 +45,7 @@ export default function RootLayout({
         />
       </head>
       <body>
+        <AnimatedBackground />
         <AuthGate>{children}</AuthGate>
       </body>
     </html>

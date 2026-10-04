@@ -611,6 +611,34 @@ An expired pass is a **business rule, not an authentication failure**. Fixed:
 This is why the earlier `useRoleGuard`/`AuthGate` work appeared not to fix it — that code
 was correct. The redirect was genuine server-truth behaviour, not a race.
 
+**3D floor plan rebuilt: stairs only, 4 rooms front / 1 back** (`lib/wayfinding.ts`,
+`components/Building.tsx`).
+
+New layout per storey — hallway runs **left-to-right** through the middle (z = -3..3), four
+rooms along the front band (z = -15..-3) at x = -15/-5/5/15, one room centred at the back
+(z = 3..15), stairs at the centre of the hallway (x = 0, z = 0). The **elevator label is
+gone** — waypoints said `Elevator ${floor}F` for floors above 2, sending people looking for
+doors that were never modelled.
+
+All geometry now derives from a single exported **`BUILDING_LAYOUT`** constant that
+`Building.tsx` imports. Previously the two files hardcoded their own numbers independently,
+which is exactly how a route ends up walking through a wall.
+
+⚠️ **Fixed a pre-existing mismatch**: `wayfinding` used `FLOOR_HEIGHT = 5` while `Building`
+used `4`, so every route sat roughly one unit *above* the floor it belonged to. New
+`floorLevelY()` lands routes exactly on the slab surface — verified Room 304 → y 8.35, which
+is floor 3's slab top. Verified all 11 rooms land inside the footprint and none inside the
+hallway band.
+
+Stairs are drawn as an actual flight of 8 steps plus a handrail, per storey, rather than a
+single grey block.
+
+**The back slot is rendered but currently unassigned** — seed data has at most 4 rooms per
+floor (floor 2 has 2, floors 3–4 have 4, roof has 1), so nothing occupies the back room
+band. Filling it is a seed/migration change, not a graphics one; flagged to the user.
+
+Verified: `tsc` 0, 22/22 tests, build 16/16, lint clean. Committed and pushed (`f9777a4`).
+
 ---
 
 ## 6. Recently done

@@ -175,7 +175,7 @@ export default function KioskStationView() {
   };
 
   return (
-    <div className='w-full min-h-full bg-navy-950 p-8'>
+    <div className='w-full min-h-full p-8'>
       <div className='max-w-7xl mx-auto'>
         {/* Page title. No status badge here: it used to read "Station Active", but
             nothing ever set it inactive, so it was decoration rather than

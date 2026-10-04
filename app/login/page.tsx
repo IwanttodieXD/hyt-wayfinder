@@ -40,7 +40,7 @@ export default function LoginPage() {
 
   return (
     <>
-      <div className='min-h-screen bg-navy-900 flex items-center justify-center p-4'>
+      <div className='min-h-screen flex items-center justify-center p-4'>
         {/* Login Card */}
         <div className='relative w-full max-w-md'>
           {/* Logo */}

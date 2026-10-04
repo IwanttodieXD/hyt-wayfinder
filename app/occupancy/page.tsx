@@ -18,7 +18,7 @@ export default function OccupancyPage() {
 
   return (
     <>
-      <div className='min-h-screen bg-navy-950 flex flex-col'>
+      <div className='min-h-screen flex flex-col'>
         {/* Header */}
         <header className='flex-shrink-0 border-b border-navy-800 bg-navy-900/50 px-4 py-3'>
           <div className='max-w-7xl mx-auto flex items-center justify-between'>

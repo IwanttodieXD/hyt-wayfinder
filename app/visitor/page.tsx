@@ -25,7 +25,7 @@ export default function VisitorPortal() {
 
   return (
     <>
-      <div className='h-[100dvh] bg-navy-950 flex flex-col'>
+      <div className='h-[100dvh] flex flex-col'>
         {/* Header. Slimmer than the admin pages: a visitor has one job here, so
             the chrome stays out of the way of the phone frame below. */}
         <header className='border-b border-navy-800 bg-navy-900/50 flex-shrink-0'>
