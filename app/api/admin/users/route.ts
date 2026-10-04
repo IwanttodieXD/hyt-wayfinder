@@ -118,6 +118,8 @@ export async function POST(request: Request) {
     phone,
     validUntil,
     notes,
+    pendingRoomId,
+    pendingPurposeId,
   } = body ?? {};
 
   if (!email || !name || !password) {
@@ -175,6 +177,11 @@ export async function POST(request: Request) {
       phone: phone?.trim() || null,
       notes: notes?.trim() || null,
       valid_until: validUntil ? new Date(validUntil).toISOString() : null,
+      // Seeds the visitor's first attendance record at check-in. The real room
+      // and purpose are written per visit on clock_in_records; these are only
+      // the expectation until then. Empty means "not assigned", not "no room".
+      pending_room_id: pendingRoomId || null,
+      pending_purpose_id: pendingPurposeId || null,
     },
     { onConflict: 'id' }
   );
@@ -230,6 +237,8 @@ export async function PATCH(request: Request) {
     phone,
     validUntil,
     notes,
+    pendingRoomId,
+    pendingPurposeId,
   } = body ?? {};
 
   if (!id || typeof id !== 'string') {
@@ -265,6 +274,12 @@ export async function PATCH(request: Request) {
     // Empty string means "no expiry". Anything else must be a real date, or it
     // would be written as an invalid timestamp and fail at the column.
     patch.valid_until = validUntil ? new Date(validUntil).toISOString() : null;
+  }
+  if (pendingRoomId !== undefined) {
+    patch.pending_room_id = pendingRoomId || null;
+  }
+  if (pendingPurposeId !== undefined) {
+    patch.pending_purpose_id = pendingPurposeId || null;
   }
 
   // 1. Update the auth login FIRST.

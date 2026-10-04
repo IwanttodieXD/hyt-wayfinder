@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { supabase } from '@/lib/supabase';
+import { useRoomsStore } from '@/store/roomsStore';
 
 /**
  * System permission level. Drives what a person may see and do.
@@ -17,33 +18,6 @@ import { supabase } from '@/lib/supabase';
  * 20260101000003_retire_trainee_roles.sql, which normalises existing rows.
  */
 export type UserRole = 'admin' | 'visitor';
-
-/**
- * Destinations a user can be assigned to.
- *
- * Room numbers are the authoritative identifier, so this is derived from the
- * `rooms` table rather than hardcoded - a room that exists in the database but
- * not in this list would silently be unassignable. Kept as a fallback for the
- * admin form's initial render, before the fetch resolves.
- *
- * Note the user's assigned room is stored on the attendance record, not on the
- * user row; this list only describes what may be chosen.
- */
-export const DESTINATIONS = [
-  'Room 201',
-  'Room 202',
-  'Room 301',
-  'Room 302',
-  'Room 303',
-  'Room 304',
-  'Room 401',
-  'Room 402',
-  'Room 403',
-  'Room 404',
-  'Roofdeck',
-] as const;
-
-export type Destination = (typeof DESTINATIONS)[number];
 
 export interface User {
   id: string;
@@ -69,8 +43,54 @@ export interface User {
    * which they pick a purpose per visit and the database is the source of truth.
    */
   purpose?: string;
+  /**
+   * Ids from `users.pending_room_id` / `pending_purpose_id` (migration 007).
+   *
+   * How an admin-created visitor's expectations reach the scanner. The register
+   * path fills `destination`/`purpose` from the form; this path fills them from
+   * the database instead. Either way `QRScanner` reads only `destination` and
+   * `purpose`, so the two entry points converge in one place.
+   *
+   * Only the id is needed: the scanner resolves the room and the purpose label
+   * from the `rooms` and `purposes` lists it already has loaded.
+   */
+  pendingRoomId?: string;
+  pendingPurposeId?: string;
   qrCode?: string;
   createdAt: Date;
+}
+
+/**
+ * Turns the pending columns on a `users` row into the fields `QRScanner` reads.
+ *
+ * `destination` is the room NUMBER rather than the id, because that is what
+ * `getRoomByNumber` and `routeIdForDestination` resolve. `purpose` is the label,
+ * because `QRScanner` matches the purpose chosen at the scanner by label.
+ *
+ * Both are resolved through `useRoomsStore.getState()` rather than passed in, so
+ * every sign-in path can call this identically. Resolving to nothing simply
+ * leaves the visitor with no assigned room or purpose - the same as before
+ * migration 007, not an error.
+ */
+function pendingFromProfile(row: any): Partial<User> {
+  const pendingRoomId: string | null = row.pending_room_id ?? null;
+  const pendingPurposeId: string | null = row.pending_purpose_id ?? null;
+
+  if (!pendingRoomId && !pendingPurposeId) return {};
+
+  const { getAllRooms, getActivePurposes } = useRoomsStore.getState();
+
+  const room = pendingRoomId
+    ? getAllRooms().find((r) => r.id === pendingRoomId)
+    : undefined;
+  const purpose = pendingPurposeId
+    ? getActivePurposes().find((p) => p.id === pendingPurposeId)
+    : undefined;
+
+  return {
+    ...(room ? { destination: room.roomNumber } : {}),
+    ...(purpose ? { purpose: purpose.label } : {}),
+  };
 }
 
 /**
@@ -124,6 +144,13 @@ interface AuthState {
      * own date instead; leaving it undefined means the pass never expires.
      */
     validUntil?: string;
+    /**
+     * Ids (rooms.id / purposes.id) of the chosen room and purpose, persisted as
+     * pending intent by migration 007. Optional and only written when supplied,
+     * so registering without a room leaves an existing assignment alone.
+     */
+    pendingRoomId?: string;
+    pendingPurposeId?: string;
   }) => Promise<{
     success: boolean;
     error?: string;
@@ -260,11 +287,21 @@ export const useAuthStore = create<AuthState>()(
             };
           }
 
+          // Resolve any pending room/purpose BEFORE building the user, so the
+          // assigned room is present the first time the scanner reads it. Both
+          // stores are idempotent and cache, so this is cheap on a repeat
+          // sign-in. Only needed when the row actually carries the columns.
+          if (userData.pending_room_id || userData.pending_purpose_id) {
+            await useRoomsStore.getState().fetchRooms();
+            await useRoomsStore.getState().fetchPurposes();
+          }
+
           const user: User = {
             id: userData.id,
             email: userData.email,
             name: userData.name,
             role: userData.role as UserRole,
+            ...pendingFromProfile(userData),
             qrCode: `HYT-USER:${userData.id}`,
             createdAt: new Date(userData.created_at),
           };
@@ -375,6 +412,14 @@ export const useAuthStore = create<AuthState>()(
                 // had already given a long pass does not silently shorten it back to
                 // today. The register form always supplies one.
                 ...(data.validUntil ? { valid_until: data.validUntil } : {}),
+                // Persist the chosen room and purpose as pending intent (migration
+                // 007), the same columns the admin form writes. The register path
+                // also keeps them in the session, but persisting means the choice
+                // survives a sign-out and still applies at the next check-in.
+                ...(data.pendingRoomId ? { pending_room_id: data.pendingRoomId } : {}),
+                ...(data.pendingPurposeId
+                  ? { pending_purpose_id: data.pendingPurposeId }
+                  : {}),
               },
               { onConflict: 'id' }
             )
@@ -481,11 +526,21 @@ export const useAuthStore = create<AuthState>()(
             return;
           }
 
+          // Resolve any pending room/purpose BEFORE building the user, so the
+          // assigned room is present the first time the scanner reads it. Both
+          // stores are idempotent and cache, so this is cheap on a repeat
+          // sign-in. Only needed when the row actually carries the columns.
+          if (userData.pending_room_id || userData.pending_purpose_id) {
+            await useRoomsStore.getState().fetchRooms();
+            await useRoomsStore.getState().fetchPurposes();
+          }
+
           const user: User = {
             id: userData.id,
             email: userData.email,
             name: userData.name,
             role: userData.role as UserRole,
+            ...pendingFromProfile(userData),
             qrCode: `HYT-USER:${userData.id}`,
             createdAt: new Date(userData.created_at),
           };

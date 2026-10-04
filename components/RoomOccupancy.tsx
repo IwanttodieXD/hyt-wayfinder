@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRecordsStore } from '@/store/recordsStore';
 import { useRoomPresenceStore } from '@/store/roomPresenceStore';
 import { useRoomsStore } from '@/store/roomsStore';
@@ -20,12 +20,48 @@ import { useRoomsStore } from '@/store/roomsStore';
  * longer active is still shown rather than dropped, so scanned-but-retired rooms
  * stay visible instead of silently disappearing.
  *
+ * Rooms are bucketed into one container per floor, so the page reads as a
+ * building rather than a flat list of cards. A floor heading carries that
+ * floor's headcount, which is the question a front desk actually asks ("how busy
+ * is 3rd floor?") - without it you would have to add up the room badges yourself.
+ *
  * Every room is a button that drops down the people inside it. Several can be
  * open at once - comparing two rooms is the main reason to want this, so forcing
  * one open at a time would work against it. Empty rooms stay clickable rather
  * than being disabled, so "this room is empty" is something you confirm rather
  * than something you infer from a control that refuses to respond.
  */
+/**
+ * Floor ordering. Mirrors FLOOR_ORDER in roomsStore: `rooms.floor` is TEXT, so a
+ * plain sort would put 'Roof' before '3'. Ranked explicitly instead.
+ *
+ * Kept in step with the store's own ordering rather than re-deriving it, so the
+ * groups here appear in the same sequence the rooms were fetched in.
+ */
+const FLOOR_ORDER: Record<string, number> = { G: 0, '2': 1, '3': 2, '4': 3, Roof: 4 };
+
+/** '2' -> '2nd Floor', 'Roof' -> 'Roof'. For the group heading. */
+function floorLabel(floor: string): string {
+  if (floor === 'Roof') return 'Roof';
+  if (floor === 'G') return 'Ground Floor';
+  const n = Number(floor);
+  if (Number.isNaN(n)) return floor;
+  // 1st, 2nd, 3rd, 4th... Only the 11th/12th/13th need the 'th' special case
+  // in this building, but the rule is written out so it stays correct if a
+  // floor is ever added beyond 4.
+  const suffix =
+    n % 100 >= 11 && n % 100 <= 13
+      ? 'th'
+      : n % 10 === 1
+        ? 'st'
+        : n % 10 === 2
+          ? 'nd'
+          : n % 10 === 3
+            ? 'rd'
+            : 'th';
+  return `${n}${suffix} Floor`;
+}
+
 export default function RoomOccupancy() {
   const { getActiveCount, fetchTodayRecords } = useRecordsStore();
   const { getOccupancyByRoom, fetchTodayPresence } = useRoomPresenceStore();
@@ -35,11 +71,61 @@ export default function RoomOccupancy() {
   // room never closes another.
   const [expandedRooms, setExpandedRooms] = useState<Set<string>>(new Set());
 
+  // When the numbers on screen were last fetched. Ticks every 10s purely to
+  // re-render the "updated Ns ago" label below; it does not trigger a fetch.
+  const [lastRefreshed, setLastRefreshed] = useState(() => Date.now());
+  const [, setTick] = useState(0);
+
+  // True while a poll is in flight, so overlapping requests cannot race.
+  // A ref, not state: changing it must not trigger a render.
+  const refreshingRef = useRef(false);
+
   useEffect(() => {
     fetchTodayRecords();
     fetchTodayPresence();
     fetchRooms();
+    setLastRefreshed(Date.now());
   }, [fetchTodayRecords, fetchTodayPresence, fetchRooms]);
+
+  // The page is titled "Live Occupancy", so it has to actually keep itself
+  // current - without this the headcounts froze at whatever they were when the
+  // page loaded, which is actively misleading to someone deciding where to send
+  // a visitor. 30s is frequent enough to feel live and cheap enough to leave
+  // open on a wall display all day.
+  //
+  // Skipped while the tab is hidden: a background tab polling every 30s wastes
+  // requests and nobody is looking at the result. `visibilitychange` refetches
+  // on return, so the numbers are never stale when the page becomes visible.
+  useEffect(() => {
+    const refresh = () => {
+      // Guard against overlap. A 30s interval is shorter than a slow connection
+      // can take on a bad mobile connection, so without this two requests race
+      // and the slower one can land last, leaving the screen showing older data
+      // than the newer response. Skipping while one is in flight is the same
+      // pattern `fetchRooms` uses.
+      if (refreshingRef.current) return;
+      refreshingRef.current = true;
+
+      Promise.all([fetchTodayRecords(), fetchTodayPresence()]).finally(() => {
+        refreshingRef.current = false;
+        setLastRefreshed(Date.now());
+      });
+    };
+
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') refresh();
+    }, 30000);
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') refresh();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [fetchTodayRecords, fetchTodayPresence]);
 
   const toggleRoom = (roomId: string) =>
     setExpandedRooms((prev) => {
@@ -52,19 +138,38 @@ export default function RoomOccupancy() {
       return next;
     });
 
+  // Repaints the "updated Ns ago" label without any network traffic. 10s is
+  // enough resolution for a countdown that only ever reads "just now" up to
+  // "30s ago", and costs nothing while the tab sits idle.
+  useEffect(() => {
+    const id = setInterval(() => setTick((n) => n + 1), 10000);
+    return () => clearInterval(id);
+  }, []);
+
+  const secondsSinceRefresh = Math.floor((Date.now() - lastRefreshed) / 1000);
+
   // Everyone checked in, regardless of whether they've scanned a door yet.
   const insideCount = getActiveCount();
 
   // Presence is grouped by room id. Active rooms come first so the grid reads in
   // building order; anything left over is a room that has been retired but still
   // has people recorded against it, which is worth showing rather than hiding.
-  const occupancy = (() => {
+  //
+  // Each entry carries its floor so the render below can put it in the right
+  // group. A retired room is looked up in the full room list to recover its
+  // floor; if it is not there either (deactivated then hard-deleted from the
+  // table) it lands in an "Other" group rather than being hidden.
+  const entries = (() => {
     const byRoom = new Map(getOccupancyByRoom().map((r) => [r.roomId, r]));
+
+    const allRooms = getAllRooms();
+    const floorOf = new Map(allRooms.map((room) => [room.id, room.floor]));
 
     const known = getActiveRooms().map((room) => ({
       id: room.id,
       label: room.name,
       room: room.roomNumber,
+      floor: room.floor,
       people: byRoom.get(room.id)?.people ?? [],
     }));
 
@@ -75,13 +180,33 @@ export default function RoomOccupancy() {
         id: roomId,
         label: entry.roomLabel,
         room: entry.room,
+        floor: floorOf.get(roomId) ?? '',
         people: entry.people,
       }));
 
     return [...known, ...extra];
   })();
 
-  const trackedCount = occupancy.reduce((sum, r) => sum + r.people.length, 0);
+  const trackedCount = entries.reduce((sum, r) => sum + r.people.length, 0);
+
+  // Bucket into floors. `entries` is already floor-ordered by the store, and Map
+  // preserves insertion order, so the groups come out ground-first without a
+  // second sort. Retired rooms are appended last by the spread above, so they
+  // land in whatever group their floor maps to, or in a trailing one.
+  const groups: { floor: string; rooms: typeof entries }[] = [];
+  for (const entry of entries) {
+    const existing = groups.find((g) => g.floor === entry.floor);
+    if (existing) {
+      existing.rooms.push(entry);
+    } else {
+      groups.push({ floor: entry.floor, rooms: [entry] });
+    }
+  }
+
+  groups.sort(
+    (a, b) =>
+      (FLOOR_ORDER[a.floor] ?? 99) - (FLOOR_ORDER[b.floor] ?? 99)
+  );
 
   return (
     <div className='glass-panel border-navy-800 p-6 rounded-lg'>
@@ -90,9 +215,20 @@ export default function RoomOccupancy() {
           <i className='fa-solid fa-door-open text-orange-400'></i>
           Inside Right Now
         </h2>
-        <span className='text-navy-300 text-sm'>
-          {insideCount} {insideCount === 1 ? 'person' : 'people'} in the building
-        </span>
+        <div className='text-right'>
+          <span className='block text-navy-300 text-sm'>
+            {insideCount} {insideCount === 1 ? 'person' : 'people'} in the building
+          </span>
+          {/* Says out loud that these numbers refresh themselves. Someone deciding
+              where to send a visitor should not have to guess how old the figures
+              are, and "just now" is also the cheapest proof the polling is alive. */}
+          <span className='block text-navy-500 text-xs mt-0.5'>
+            <i className='fa-solid fa-rotate text-[10px] mr-1'></i>
+            {secondsSinceRefresh < 5
+              ? 'just now'
+              : `updated ${secondsSinceRefresh}s ago`}
+          </span>
+        </div>
       </div>
 
       <p className='text-navy-400 text-xs mb-4'>
@@ -101,76 +237,109 @@ export default function RoomOccupancy() {
         code. Anyone in the building without a room is in a corridor or the lobby.
       </p>
 
-      <div className='grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 items-start'>
-        {occupancy.map(({ id, label, room, people }) => {
-          const isExpanded = expandedRooms.has(id);
+      {/* One container per floor, so the page reads as a building rather than a flat
+          list of cards. Each heading carries that floor's headcount, which is the
+          number a front desk actually asks for ("how busy is 3rd floor?"). */}
+      <div className='space-y-5'>
+        {groups.map((group) => {
+          const groupPeople = group.rooms.reduce(
+            (sum, r) => sum + r.people.length,
+            0
+          );
 
           return (
-            <div
-              key={id}
-              className='rounded-lg border border-navy-700 bg-navy-900/40 overflow-hidden'
-            >
-              {/* The whole header is the button, so the hit area covers the room
-                  name, the number and the count badge - not just the chevron. */}
-              <button
-                type='button'
-                onClick={() => toggleRoom(id)}
-                aria-expanded={isExpanded}
-                className='w-full text-left p-4 flex items-center justify-between gap-3 hover:bg-navy-800/40 transition-colors'
-              >
-                <div className='min-w-0'>
-                  <p className='text-white font-semibold text-sm truncate'>{label}</p>
-                  <p className='text-navy-400 text-xs'>{room}</p>
-                </div>
+            <section key={group.floor || 'unknown'}>
+              <div className='flex items-center gap-3 mb-2'>
+                <h3 className='text-orange-300 font-semibold text-sm uppercase tracking-wider flex-shrink-0'>
+                  {group.floor ? floorLabel(group.floor) : 'Other Rooms'}
+                </h3>
+                <div className='flex-1 h-px bg-navy-800' />
+                <span className='text-navy-400 text-xs whitespace-nowrap'>
+                  {groupPeople}{' '}
+                  {groupPeople === 1 ? 'person' : 'people'} ·{' '}
+                  {group.rooms.length}{' '}
+                  {group.rooms.length === 1 ? 'room' : 'rooms'}
+                </span>
+              </div>
 
-                <div className='flex items-center gap-2 flex-shrink-0'>
-                  <span
-                    className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-                      people.length > 0
-                        ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                        : 'bg-navy-700/40 text-navy-400 border border-navy-700'
-                    }`}
-                  >
-                    {people.length}
-                  </span>
-                  <i
-                    className={`fa-solid fa-chevron-down text-navy-300 text-xs transition-transform ${
-                      isExpanded ? 'rotate-180' : ''
-                    }`}
-                  ></i>
-                </div>
-              </button>
+              <div className='grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 items-start'>
+                {group.rooms.map(({ id, label, room, people }) => {
+                  const isExpanded = expandedRooms.has(id);
 
-              {isExpanded && (
-                <div className='px-4 pb-4 border-t border-navy-800'>
-                  {people.length > 0 ? (
-                    <ul className='space-y-1.5 pt-3'>
-                      {people.map((person) => (
-                        <li
-                          key={person.id}
-                          className='flex items-center justify-between gap-2 text-sm'
-                        >
-                          <span className='flex items-center gap-2 text-navy-200 min-w-0'>
-                            <i className='fa-solid fa-user text-navy-500 text-xs'></i>
-                            <span className='truncate'>
-                              {person.userName || 'Unknown user'}
-                            </span>
+                  return (
+                    <div
+                      key={id}
+                      className='rounded-lg border border-navy-700 bg-navy-900/40 overflow-hidden'
+                    >
+                      {/* The whole header is the button, so the hit area covers the room
+                          name, the number and the count badge - not just the chevron. */}
+                      <button
+                        type='button'
+                        onClick={() => toggleRoom(id)}
+                        aria-expanded={isExpanded}
+                        className='w-full text-left p-4 flex items-center justify-between gap-3 hover:bg-navy-800/40 transition-colors'
+                      >
+                        <div className='min-w-0'>
+                          <p className='text-white font-semibold text-sm truncate'>
+                            {label}
+                          </p>
+                          <p className='text-navy-400 text-xs'>{room}</p>
+                        </div>
+
+                        <div className='flex items-center gap-2 flex-shrink-0'>
+                          <span
+                            className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                              people.length > 0
+                                ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                                : 'bg-navy-700/40 text-navy-400 border border-navy-700'
+                            }`}
+                          >
+                            {people.length}
                           </span>
-                          <span className='text-navy-500 text-xs whitespace-nowrap'>
-                            {person.enteredAt.toLocaleTimeString('en-US', {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className='text-navy-500 text-xs pt-3'>Nobody is in this room.</p>
-                  )}
-                </div>
-              )}
-            </div>
+                          <i
+                            className={`fa-solid fa-chevron-down text-navy-300 text-xs transition-transform ${
+                              isExpanded ? 'rotate-180' : ''
+                            }`}
+                          ></i>
+                        </div>
+                      </button>
+
+                      {isExpanded && (
+                        <div className='px-4 pb-4 border-t border-navy-800'>
+                          {people.length > 0 ? (
+                            <ul className='space-y-1.5 pt-3'>
+                              {people.map((person) => (
+                                <li
+                                  key={person.id}
+                                  className='flex items-center justify-between gap-2 text-sm'
+                                >
+                                  <span className='flex items-center gap-2 text-navy-200 min-w-0'>
+                                    <i className='fa-solid fa-user text-navy-500 text-xs'></i>
+                                    <span className='truncate'>
+                                      {person.userName || 'Unknown user'}
+                                    </span>
+                                  </span>
+                                  <span className='text-navy-500 text-xs whitespace-nowrap'>
+                                    {person.enteredAt.toLocaleTimeString('en-US', {
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                    })}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className='text-navy-500 text-xs pt-3'>
+                              Nobody is in this room.
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
           );
         })}
       </div>

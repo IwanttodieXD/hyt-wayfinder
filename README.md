@@ -80,7 +80,8 @@ editor, **in numeric order** (the later files depend on the earlier ones):
 4. `supabase/migrations/20260101000004_visitor_profiles.sql` — classification and profile columns
 5. `supabase/migrations/20260101000005_service_role_grants.sql` — grants for admin create/archive
 6. `supabase/migrations/20260101000006_default_pass_expiry.sql` — new accounts default to a pass that expires at end of today
-7. `supabase/seed.sql` — the 11 rooms and the visit purposes
+7. `supabase/migrations/20260101000007_pending_visit_intent.sql` — `pending_room_id` / `pending_purpose_id`, so an admin-assigned room and purpose survive until check-in
+8. `supabase/seed.sql` — the 11 rooms and the visit purposes
 
 This is a **fresh** schema, not an upgrade path: it creates clean tables rather
 than `ALTER`ing the old ones, so there is no data migration to run.
@@ -226,9 +227,11 @@ The two are reported separately on purpose:
   is deliberately left out of the print window, since a printed number would be
   stale the moment it went up.
 
-To add a room, add an entry to `lib/wayfinding.ts` for its waypoints and QR code.
-The admin form's room list is read from the `rooms` table, so it picks the new
-room up automatically.
+To add a room, use `/admin/rooms` — it writes to the `rooms` table, which every
+consumer reads. The register form's room picker, `/station`, `/occupancy` and the
+scanner all pick it up from there. `lib/wayfinding.ts` additionally needs a route entry
+if the new room should get a 3D walkthrough; without one, a visitor assigned to it
+falls back to the default route.
 
 ## Controls
 
@@ -292,6 +295,27 @@ There is no test runner configured. The QR parser (`parseQrValue` in
   trigger hardcodes the role and ignores whatever the client sends.
 - Attendance history is never deleted — `users` uses `archived_at`, and the
   foreign keys are `ON DELETE RESTRICT`.
+
+### Assigned room and purpose
+
+Both the register form and the admin form collect an assigned room and a purpose. They
+look the same but store differently, and both end up in the same place:
+
+- **Register** keeps the values in the visitor's session (room *number*, purpose
+  *label*) and additionally writes them to `users.pending_room_id` /
+  `pending_purpose_id`.
+- **Admin** has no session belonging to the new visitor, so it writes straight to
+  those two columns. The picker stores the room *id* here, not the number.
+
+At sign-in, `pendingFromProfile()` in `store/authStore.ts` resolves those ids back to
+the room number and purpose label, so `QRScanner` reads one shape regardless of how
+the account was created. It fetches the rooms and purposes lists first when the
+columns are present, so the assignment is there the first time the scanner runs.
+
+These are **pending intent, not a record**. The authoritative room and purpose are on
+`clock_in_records`, one row per visit, because a person can attend a Meeting today and
+an Orientation next week. The pending columns only seed the first visit, and an admin
+can change them any time before the person arrives.
 
 ### Pass expiry
 

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuthStore } from '@/store/authStore';
 import { useRoomsStore } from '@/store/roomsStore';
+import { tidyPhone, formatPhone, sanitisePhone, isAllowedPhoneKey } from '@/lib/phone';
 import {
   useUsersStore,
   isPassExpired,
@@ -36,6 +37,10 @@ type FormState = {
   visitorTypeId: string;
   company: string;
   phone: string;
+  /** Room id (rooms.id), or '' for none. Seeds the first attendance record. */
+  pendingRoomId: string;
+  /** Purpose id (purposes.id), or '' for none. */
+  pendingPurposeId: string;
   /** `yyyy-mm-dd`, the format an `<input type="date">` produces. */
   validUntil: string;
 };
@@ -47,6 +52,8 @@ const EMPTY_FORM: FormState = {
   visitorTypeId: '',
   company: '',
   phone: '',
+  pendingRoomId: '',
+  pendingPurposeId: '',
   validUntil: '',
 };
 
@@ -72,7 +79,14 @@ const formatDate = (date: Date) =>
 export default function UsersPage() {
   const router = useRouter();
   const { user: currentUser, isAuthenticated } = useAuthStore();
-  const { fetchVisitorTypes, getActiveVisitorTypes } = useRoomsStore();
+  const {
+    fetchVisitorTypes,
+    getActiveVisitorTypes,
+    fetchRooms,
+    getActiveRooms,
+    fetchPurposes,
+    getActivePurposes,
+  } = useRoomsStore();
   const {
     users,
     archivedUsers,
@@ -102,6 +116,10 @@ export default function UsersPage() {
   const [isSaving, setIsSaving] = useState(false);
 
   const visitorTypes = getActiveVisitorTypes();
+  // Rooms and purposes back the assigned-room and purpose pickers, which mirror
+  // the register form. Both are ordered by the store (rooms by floor).
+  const rooms = getActiveRooms();
+  const purposes = getActivePurposes();
   const typeCounts = getCountByVisitorType();
   const expiredCount = getExpiredCount();
 
@@ -111,8 +129,18 @@ export default function UsersPage() {
     } else {
       fetchUsers();
       fetchVisitorTypes();
+      fetchRooms();
+      fetchPurposes();
     }
-  }, [isAuthenticated, currentUser, router, fetchUsers, fetchVisitorTypes]);
+  }, [
+    isAuthenticated,
+    currentUser,
+    router,
+    fetchUsers,
+    fetchVisitorTypes,
+    fetchRooms,
+    fetchPurposes,
+  ]);
 
   useEffect(() => {
     if (!notice) return;
@@ -128,12 +156,23 @@ export default function UsersPage() {
     () =>
       source.filter((u) => {
         const term = searchTerm.trim().toLowerCase();
+        // Room and purpose are searchable by their display text, not their ids,
+        // so "Room 304" or "Orientation" finds the person. Resolved through the
+        // same lists the table renders from.
+        const room = rooms.find((r) => r.id === u.pendingRoomId);
+        const purpose = purposes.find((p) => p.id === u.pendingPurposeId);
+
         const matchesSearch =
           !term ||
           u.name.toLowerCase().includes(term) ||
           u.email.toLowerCase().includes(term) ||
           (u.company ?? '').toLowerCase().includes(term) ||
-          (u.hostName ?? '').toLowerCase().includes(term);
+          // Still searched even though it is no longer editable: legacy rows may
+          // carry a host name, and staff looking someone up should still find them.
+          (u.hostName ?? '').toLowerCase().includes(term) ||
+          (room?.name ?? '').toLowerCase().includes(term) ||
+          (room?.roomNumber ?? '').toLowerCase().includes(term) ||
+          (purpose?.label ?? '').toLowerCase().includes(term);
 
         const matchesType =
           typeFilter === 'all' ||
@@ -141,7 +180,7 @@ export default function UsersPage() {
 
         return matchesSearch && matchesType;
       }),
-    [source, searchTerm, typeFilter]
+    [source, searchTerm, typeFilter, rooms, purposes]
   );
 
   if (!isAuthenticated || currentUser?.role !== 'admin') {
@@ -166,6 +205,8 @@ export default function UsersPage() {
         : '',
       company: target.company ?? '',
       phone: target.phone ?? '',
+      pendingRoomId: target.pendingRoomId ?? '',
+      pendingPurposeId: target.pendingPurposeId ?? '',
       validUntil: toDateInputValue(target.validUntil),
     });
     setFormError(null);
@@ -198,6 +239,8 @@ const profileFields = () => ({
   visitorTypeId: form.visitorTypeId,
   company: form.company,
   phone: form.phone,
+  pendingRoomId: form.pendingRoomId,
+  pendingPurposeId: form.pendingPurposeId,
   validUntil: form.validUntil,
 });
 
@@ -365,7 +408,7 @@ if (editing) {
                     type='text'
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder='Search by name or email...'
+                    placeholder='Search name, email, room, or purpose...'
                     className='w-full pl-12 pr-4 py-2.5 rounded-lg bg-navy-900/50 border border-navy-700 text-white placeholder-navy-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors'
                   />
                 </div>
@@ -419,7 +462,7 @@ if (editing) {
               <table className='w-full'>
                 <thead className='bg-navy-900/50 border-b border-navy-800'>
                   <tr>
-                    {['Visitor', 'Type', 'Host / Company', 'Pass', 'Joined', 'Actions'].map(
+                    {['Visitor', 'Type', 'Assigned / Purpose', 'Pass', 'Joined', 'Actions'].map(
                       (heading) => (
                         <th
                           key={heading}
@@ -448,7 +491,12 @@ if (editing) {
                               <p className='text-white font-semibold text-sm'>{u.name}</p>
                               <p className='text-navy-500 text-xs truncate'>{u.email}</p>
                               {u.phone && (
-                                <p className='text-navy-500 text-xs truncate'>{u.phone}</p>
+                                // Tidied on display as well, so rows typed before
+                                // this existed read the same as new ones. The stored
+                                // value is never rewritten by this.
+                                <p className='text-navy-500 text-xs truncate'>
+                                  {tidyPhone(u.phone)}
+                                </p>
                               )}
                             </div>
                           </div>
@@ -460,16 +508,45 @@ if (editing) {
                             {u.visitorType ?? 'Unclassified'}
                           </span>
                         </td>
-                        {/* Host first: who someone is here to see is the question a
-                            front desk actually asks. */}
+                        {/* What this person is expected to be here for. Room and purpose are the two
+                            things staff now assign, so they are what the list shows
+                            in the primary slot; company is secondary context.
+                            Resolved from the rooms/purposes lists already loaded on
+                            this page. */}
                         <td className='px-4 py-3 text-sm'>
-                          {u.hostName ? (
-                            <p className='text-white'>{u.hostName}</p>
-                          ) : (
-                            <p className='text-navy-500'>-</p>
-                          )}
+                          {(() => {
+                            const room = rooms.find((r) => r.id === u.pendingRoomId);
+                            const purpose = purposes.find(
+                              (p) => p.id === u.pendingPurposeId
+                            );
+
+                            if (!room && !purpose) {
+                              return <p className='text-navy-500'>-</p>;
+                            }
+
+                            return (
+                              <>
+                                {room && (
+                                  <p className='text-white'>
+                                    {room.name}
+                                    <span className='text-navy-500 text-xs'>
+                                      {' '}
+                                      {room.roomNumber}
+                                    </span>
+                                  </p>
+                                )}
+                                {purpose && (
+                                  <p className='text-navy-400 text-xs'>
+                                    {purpose.label}
+                                  </p>
+                                )}
+                              </>
+                            );
+                          })()}
                           {u.company && (
-                            <p className='text-navy-400 text-xs'>{u.company}</p>
+                            <p className='text-navy-500 text-xs truncate'>
+                              {u.company}
+                            </p>
                           )}
                         </td>
                         <td className='px-4 py-3 whitespace-nowrap text-sm'>
@@ -641,6 +718,79 @@ if (editing) {
                   this is here so you can count who came to the orientation.
                 </p>
               </div>
+
+              {/* Assigned room. Same picker as the register form, but storing the
+                  room id rather than the number: this value is persisted on
+                  `users.pending_room_id` (migration 007) and resolved to a room at
+                  check-in. The register form keeps the number in the visitor's
+                  session instead, so the two differ deliberately. */}
+              <div>
+                <label
+                  htmlFor='pendingRoomId'
+                  className='block text-sm font-medium text-navy-200 mb-2'
+                >
+                  Assigned room
+                </label>
+                <div className='relative'>
+                  <select
+                    id='pendingRoomId'
+                    value={form.pendingRoomId}
+                    onChange={(e) =>
+                      setForm({ ...form, pendingRoomId: e.target.value })
+                    }
+                    className={`${INPUT} appearance-none cursor-pointer`}
+                  >
+                    <option value='' className='bg-navy-900'>
+                      No assigned room
+                    </option>
+                    {rooms.map((room) => (
+                      <option key={room.id} value={room.id} className='bg-navy-900'>
+                        {room.name} ({room.roomNumber})
+                      </option>
+                    ))}
+                  </select>
+                  <i className='fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-navy-400 text-xs pointer-events-none'></i>
+                </div>
+                <p className='text-navy-500 text-xs mt-1'>
+                  Optional. Applied to their first check-in; after that the room is
+                  recorded when they scan a door code.
+                </p>
+              </div>
+
+              {/* Purpose. Same reasoning as the room above: seeded onto the first
+                  attendance record, not a permanent property of the person. */}
+              <div>
+                <label
+                  htmlFor='pendingPurposeId'
+                  className='block text-sm font-medium text-navy-200 mb-2'
+                >
+                  Purpose
+                </label>
+                <div className='relative'>
+                  <select
+                    id='pendingPurposeId'
+                    value={form.pendingPurposeId}
+                    onChange={(e) =>
+                      setForm({ ...form, pendingPurposeId: e.target.value })
+                    }
+                    className={`${INPUT} appearance-none cursor-pointer`}
+                  >
+                    <option value='' className='bg-navy-900'>
+                      Not sure yet
+                    </option>
+                    {purposes.map((purpose) => (
+                      <option key={purpose.id} value={purpose.id} className='bg-navy-900'>
+                        {purpose.label}
+                      </option>
+                    ))}
+                  </select>
+                  <i className='fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-navy-400 text-xs pointer-events-none'></i>
+                </div>
+                <p className='text-navy-500 text-xs mt-1'>
+                  Optional. Applied to their first check-in, and they can pick a
+                  different reason on later visits.
+                </p>
+              </div>
               {/* `host_name` and `notes` are deliberately not editable here any more, so this
                   form matches what the register form collects: a visitor cannot
                   supply either, so letting staff set them here only created a
@@ -672,8 +822,31 @@ if (editing) {
                 <input
                   id='phone'
                   type='tel'
+                  inputMode='tel'
+                  autoComplete='tel'
                   value={form.phone}
-                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      phone: sanitisePhone(e.target.value),
+                    }))
+                  }
+                  // Block the keystroke rather than filtering it afterwards: a
+                  // character that appears and then vanishes reads as a broken
+                  // field. onChange still sanitises, which is what catches a paste
+                  // (keydown does not fire for pasted content).
+                  onKeyDown={(e) => {
+                    if (!isAllowedPhoneKey(e.key, e.ctrlKey || e.metaKey)) {
+                      e.preventDefault();
+                    }
+                  }}
+                  // Grouping runs on BLUR, not on every keystroke. Regrouping
+                  // mid-type reorders characters and drags the caret backwards
+                  // over what was just typed; on blur there is no caret to move,
+                  // so the number is tidied while the field is not being edited.
+                  onBlur={() =>
+                    setForm((prev) => ({ ...prev, phone: formatPhone(prev.phone) }))
+                  }
                   placeholder='For the front desk to call ahead'
                   className={INPUT}
                 />
@@ -698,11 +871,18 @@ if (editing) {
                 </p>
               </div>
               {/* See the note above: `notes` is not editable here. */}
-              {/* There is no assigned-room field here any more. `users` has no
-                  destination/building column on the new schema: the room belongs to
-                  a visit, recorded on `clock_in_records.room_id` when the person
-                  checks in. An admin sets it per check-in, or leaves it blank and
-                  the person scans a room door instead. */}
+              {/* The assigned room and purpose live on `users.pending_room_id` /
+                  `pending_purpose_id` (migration 007) as PENDING intent, seeding the
+                  first attendance record. The authoritative room and purpose are on
+                  `clock_in_records`, one row per visit, because a person can attend a
+                  Meeting today and an Orientation next week.
+
+                  Before 007 this form had no room or purpose field at all, because
+                  there was nowhere to put them: the register form holds the same two
+                  values in the visitor's own session, and an admin creating someone
+                  else has no such session. `host_name` and `notes` remain genuinely
+                  uneditable — staff can still see them in the list, but the register
+                  form does not collect them either. */}
               <p className='text-navy-500 text-xs'>
                 Assigned rooms are no longer stored on the account. They are
                 recorded per visit when the person checks in.
@@ -741,7 +921,7 @@ if (editing) {
                   disabled={isSaving}
                   className='flex-1 px-4 py-2.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-paper font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
                 >
-                  {isSaving ? 'Saving...' : editing ? 'Save Changes' : 'Create Visitor'}
+                  {isSaving ? 'Saving...' : editing ? 'Save Changes' : 'Create'}
                 </button>
               </div>
             </form>

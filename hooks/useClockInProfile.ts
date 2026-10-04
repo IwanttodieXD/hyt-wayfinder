@@ -3,18 +3,22 @@
 import { useEffect, useRef } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import { useClockInStore } from '@/store/clockInStore';
+import { useRoomsStore } from '@/store/roomsStore';
 
 /**
  * Mirrors the signed-in user's profile into the clock-in store, so the mobile
  * view and the resulting clock-in record show who is checking in and where
  * they are headed.
  *
- * Shared by every page that renders `StudentMobileView`, so a new route can't
- * silently forget to sync the profile.
+ * Also loads the rooms list. `StudentMobileView` resolves the assigned room's
+ * name from the `rooms` table, and `/visitor` and `/check-in` both render that
+ * component without otherwise loading rooms. Doing it here means neither page
+ * can forget, and the store caches it so the second render is free.
  */
 export function useClockInProfile() {
   const { user, isAuthenticated } = useAuthStore();
   const { setStudentName, setDestination } = useClockInStore();
+  const { fetchRooms } = useRoomsStore();
 
   // Held in a ref so the store actions don't retrigger the effect on every
   // render.
@@ -33,5 +37,7 @@ export function useClockInProfile() {
     if (user.destination) {
       setDestination(user.destination);
     }
-  }, [isAuthenticated, user]);
+
+    fetchRooms();
+  }, [isAuthenticated, user, fetchRooms]);
 }

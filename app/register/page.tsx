@@ -2,17 +2,24 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuthStore, DESTINATIONS } from '@/store/authStore';
+import { useAuthStore } from '@/store/authStore';
 import { useRoomsStore } from '@/store/roomsStore';
+import { formatPhone, sanitisePhone, isAllowedPhoneKey } from '@/lib/phone';
 import Link from 'next/link';
 
 export default function RegisterPage() {
   const router = useRouter();
   const { register } = useAuthStore();
-  // Purposes come from the `purposes` lookup table, not a hardcoded list, so
-  // adding a reason in the database makes it selectable here immediately.
-  const { fetchPurposes, getActivePurposes, fetchVisitorTypes, getActiveVisitorTypes } =
-    useRoomsStore();
+  // Purposes and rooms both come from lookup tables, not hardcoded lists, so adding
+  // a reason or a room in the database makes it selectable here immediately.
+  const {
+    fetchPurposes,
+    getActivePurposes,
+    fetchVisitorTypes,
+    getActiveVisitorTypes,
+    fetchRooms,
+    getActiveRooms,
+  } = useRoomsStore();
 
   const [formData, setFormData] = useState({
     name: '',
@@ -43,11 +50,14 @@ export default function RegisterPage() {
 
   const purposes = getActivePurposes();
   const visitorTypes = getActiveVisitorTypes();
+  // Already ordered by floor then room number by the store.
+  const rooms = getActiveRooms();
 
   useEffect(() => {
     fetchPurposes();
     fetchVisitorTypes();
-  }, [fetchPurposes, fetchVisitorTypes]);
+    fetchRooms();
+  }, [fetchPurposes, fetchVisitorTypes, fetchRooms]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,12 +89,20 @@ export default function RegisterPage() {
     const endOfToday = new Date();
     endOfToday.setHours(23, 59, 59, 999);
 
+    // The pickers work in numbers and labels, but the pending columns are FKs, so
+    // resolve the chosen values back to their row ids. Looked up by the same
+    // value the <option> carried, so this cannot disagree with the picker.
+    const chosenRoom = rooms.find((r) => r.roomNumber === formData.destination);
+    const chosenPurpose = purposes.find((p) => p.label === formData.purpose);
+
     const result = await register({
       name: formData.name,
       email: formData.email,
       password: formData.password,
       destination: formData.destination || undefined,
       purpose: formData.purpose || undefined,
+      pendingRoomId: chosenRoom?.id,
+      pendingPurposeId: chosenPurpose?.id,
       visitorTypeId: formData.visitorTypeId || undefined,
       company: formData.company.trim() || undefined,
       phone: formData.phone.trim() || undefined,
@@ -298,13 +316,14 @@ export default function RegisterPage() {
                       '
                   >
                     <option value=''>No assigned room</option>
-                    {DESTINATIONS.map((destination) => (
-                      <option
-                        key={destination}
-                        value={destination}
-                        className='bg-navy-900'
-                      >
-                        {destination}
+                    {/* Options come from the `rooms` table, not a hardcoded list, so
+                        a room added in /admin/rooms is selectable here immediately.
+                        The VALUE is the room number because that is what
+                        `getRoomByNumber` resolves at check-in; the LABEL is the room
+                        name, which is what a person recognises. */}
+                    {rooms.map((room) => (
+                      <option key={room.id} value={room.roomNumber} className='bg-navy-900'>
+                        {room.name} ({room.roomNumber})
                       </option>
                     ))}
                   </select>
@@ -324,7 +343,7 @@ export default function RegisterPage() {
                   htmlFor='purpose'
                   className='block text-sm font-medium text-orange-200 mb-2'
                 >
-                  Reason for your visit
+                  Purpose
                 </label>
                 <div className='relative'>
                   <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
@@ -341,10 +360,12 @@ export default function RegisterPage() {
                       bg-navy-900/80 border-2 border-orange-500/30
                       text-white placeholder-navy-500
                       focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500
-                      transition-colors
+                      transition-colors cursor-pointer
                     '
                   >
-                    <option value=''>Not sure yet</option>
+                    <option value='' className='bg-navy-900'>
+                      Not sure yet
+                    </option>
                     {purposes.map((purpose) => (
                       <option
                         key={purpose.id}
@@ -459,9 +480,30 @@ export default function RegisterPage() {
                       <input
                         type='tel'
                         id='phone'
+                        inputMode='tel'
+                        autoComplete='tel'
                         value={formData.phone}
                         onChange={(e) =>
-                          setFormData({ ...formData, phone: e.target.value })
+                          setFormData((prev) => ({
+                            ...prev,
+                            phone: sanitisePhone(e.target.value),
+                          }))
+                        }
+                        // Blocks the keystroke outright; onChange sanitises, which is
+                        // what catches a paste since keydown does not fire for it.
+                        onKeyDown={(e) => {
+                          if (!isAllowedPhoneKey(e.key, e.ctrlKey || e.metaKey)) {
+                            e.preventDefault();
+                          }
+                        }}
+                        // Grouping runs on BLUR, not on every keystroke. Regrouping
+                        // mid-type reorders characters and drags the caret backwards
+                        // over what was just typed; on blur there is no caret to move.
+                        onBlur={() =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            phone: formatPhone(prev.phone),
+                          }))
                         }
                         placeholder='Optional'
                         className='

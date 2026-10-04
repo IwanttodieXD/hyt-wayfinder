@@ -4,11 +4,18 @@ import { DEFAULT_ROUTE_ID } from '@/lib/wayfinding';
 export type ClockInStatus = 'not-clocked-in' | 'clocked-in' | 'viewing-route';
 
 interface StudentProfile {
-  id: string;
   name: string;
+  /**
+   * The assigned room, held as a room NUMBER because that is what
+   * `getRoomByNumber` and `routeIdForDestination` resolve.
+   *
+   * The former `id`, `building` and `room` fields are gone. `id` was never set
+   * (it rendered as a bare "ID #"), and `building`/`room` were hardcoded
+   * placeholders that no action ever updated, so the visitor header showed
+   * "Building B, Room 304" under every destination. The real values come from
+   * the `rooms` table via `useRoomsStore`.
+   */
   destination: string;
-  building: string;
-  room: string;
 }
 
 interface ClockInState {
@@ -39,11 +46,8 @@ interface ClockInState {
 export const useClockInStore = create<ClockInState>((set) => ({
   // Initial state
   student: {
-    id: '',
     name: '',
     destination: 'TESDA Electronics Lab',
-    building: 'Building B',
-    room: 'Room 304',
   },
   clockInTime: null,
   status: 'not-clocked-in',

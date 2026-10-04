@@ -242,6 +242,217 @@ Deliberately NOT removed: the `users.host_name` / `users.notes` **columns**, the
 existing host name still shown in the admin user list. Existing data must stay
 readable — only the editing UI went away.
 
+**Register form: room picker shows names, purpose label shortened; dead `DESTINATIONS`
+export removed.** The assigned-room `<option>` **value is still the room number** while
+the label is now `Name (Room 201)`. That split is load-bearing:
+- `QRScanner.tsx:261` resolves the pending destination via `getRoomByNumber(...)` → needs the NUMBER
+- `wayfinding.ts:207routeIdForDestination` matches `r.room` first → also needs the NUMBER
+- `register()` stores it in the persisted session only, never the DB
+
+So the label is free to be human-readable without touching any resolution logic.
+
+Options now come from `getActiveRooms()` (the `rooms` table) instead of a hardcoded
+11-entry array, so a room added in `/admin/rooms` is immediately assignable. Deleted
+`DESTINATIONS` / `Destination` from `store/authStore.ts` — the last consumer was the
+register form.
+
+`Reason for your visit` → `Purpose`, still fed from the `purposes` table.
+
+**Admin add-user form deliberately has NO room or purpose field**, matching register's
+*persisted* field set minus the two session-only ones. `users` has no destination or
+purpose column — both live on `clock_in_records` because they change per visit. An
+admin creating someone else has no session to write them into, so adding the fields
+would collect input and silently discard it. Attempted and reverted for that reason;
+documented in a comment at `app/admin/users/page.tsx:701`.
+
+**Occupance page groups rooms into one container per floor** (`components/RoomOccupancy.tsx`).
+Each floor gets a `<section>` with a heading, a divider rule, and a per-floor headcount
+("2 people · 2 rooms"). Rooms bucket by `floor`; `FLOOR_ORDER` mirrors the one in
+`roomsStore` so groups come out G→2→3→4→Roof.
+
+`floorLabel()` renders 1st/2nd/3rd/4th with the full `%100 in 11..13` rule, so it stays
+correct if a 5th floor is added. `rooms.floor` is TEXT constrained to
+`('G','2','3','4','Roof')` — a new floor value needs a schema change to
+`rooms_floor_check`, and `?? 99` would sort it after Roof until then.
+
+A **retired** room (present in presence rows but not active) recovers its floor from
+`getAllRooms()`. If it's missing there too, floor is `''` and it lands in a trailing
+"Other Rooms" group rather than being hidden — presence data must not disappear.
+
+Room cards themselves are unchanged: whole-header `<button aria-expanded>`, several open
+at once, empty rooms clickable. Nested grid is `items-start` so one expanded card doesn't
+stretch its floor-mates.
+
+Verified: `tsc` 0 errors, `next lint` clean, build 16/16. Lint initially failed with
+`react/jsx-no-comment-textnodes` + `react/no-unescaped-entities` — a `//` comment placed
+in JSX children position instead of `{/* */}`. Caught by lint, fixed.
+
+**Admin add-user form now matches register** (room + purpose pickers added), enabled by
+**new migration `20260101000007_pending_visit_intent.sql`** adding
+`users.pending_room_id` / `pending_purpose_id` (both nullable FKs, `ON DELETE SET NULL`).
+
+This resolves the blocker flagged earlier. The reason the admin form had no room/purpose
+was that there was nowhere to persist them: register holds them in the *visitor's own*
+session, and an admin creating someone else has no such session. Two columns make the
+intent survive to check-in.
+
+Design points not to re-derive:
+- Named **pending**, not `destination`/`purpose` — those belong to a visit
+  (`clock_in_records`), one row per visit. Pending only *seeds* the first visit.
+- **The two forms store different shapes, deliberately.** Register sends the room
+  NUMBER (session value, consumed by `getRoomByNumber`); admin sends the room ID
+  (column is a FK). Both converge at `pendingFromProfile()` in `authStore.ts`, which
+  resolves ids → number/label so `QRScanner` reads one shape either way.
+- `pendingFromProfile()` is called from **both** sign-in paths (login + session
+  restore), each preceded by `fetchRooms()`/`fetchPurposes()` when the columns are
+  present — otherwise the rooms list is empty at that moment and the assignment
+  silently resolves to nothing.
+- Register now ALSO persists its pickers, so the choice survives sign-out.
+- `usersStore` SELECT gained a third tier for 007 absence. **Pre-existing bug fixed
+  here:** the retry chain referenced an undefined `SELECT_COLUMNS_BASE`, so a database
+  missing migration 004 threw a ReferenceError instead of falling back.
+- Assigned room/purpose shown in the admin user list under the email.
+- `Create Visitor` button → `Create`.
+
+`host_name` and `notes` remain uneditable on BOTH forms (per the earlier request).
+
+**Migration 007 verification block rewritten.** The first version failed in the Supabase
+SQL editor with `42601: syntax error at or near "column"` — `column` is a **reserved word
+in Postgres**, so `FROM (VALUES (...)) AS expected(column)` is invalid. Replaced the
+VALUES list with two plain `SELECT EXISTS` scalar lookups, which cannot hit that class of
+problem. The `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` above it was always fine, so the
+columns may already be created — the file is re-runnable.
+
+Migration 006 uses `column_default`/`column_name` as *column names*, which is legal; only
+using `column` as an *alias* breaks. Verified 006 is unaffected.
+
+⚠️ Lesson: no Postgres is available locally (no psql, no docker/podman), so migration SQL
+cannot be executed before shipping. Prefer constructs that avoid aliasing keywords.
+
+**Admin user table now shows "Assigned / Purpose"** instead of "Host / Company". Room
+name + number on the first line, purpose beneath, company as tertiary. Host name is gone
+from the list because it is no longer editable anywhere.
+
+Search extended to match room name, room number and purpose label, with `rooms` and
+`purposes` added to the `useMemo` deps — they were previously not dependencies, so
+searching by them would have returned nothing. Placeholder updated to "Search name,
+email, room, or purpose...". Host name is still searched (legacy rows), just not shown.
+
+**Visitor UI cleaned up — and two real data bugs fixed along the way**
+(`components/StudentMobileView.tsx`, `app/visitor/page.tsx`,
+`hooks/useClockInProfile.ts`, `store/clockInStore.ts`).
+
+Bugs found while restyling:
+- `student.building` and `student.room` were **hardcoded placeholders** (`'Building B'`,
+  `'Room 304'`) that no action ever updated, so the header rendered *"Building B, Room
+  304"* under **every** destination. Now resolved from the `rooms` table via
+  `getActiveRooms().find(r => r.roomNumber === user.destination)`.
+- `student.id` was initialised to `''` and never set, rendering a bare **"ID #"**. Field
+  deleted; email shown instead.
+- `fetchRooms()` was missing from both `/visitor` and `/check-in`, so any room name
+  resolved from `rooms` would be empty. Moved into `useClockInProfile()` — the shared hook
+  both pages already call — so neither route can forget it. `fetchRooms` is now a dep of
+  that effect.
+
+Layout changes:
+- Header collapsed from a stacked block + separate destination card + separate
+  check-in-time row into **one identity row + one info strip** (room name · number, with
+  check-in time beside it behind a divider). Less vertical chrome, more scan area.
+- Status pill shortened `NOT CHECKED IN` → `Not In` (the `uppercase tracking-wider` was
+  what made it long, so that was dropped).
+- Added a plain-language **next step** line, which did not exist: tells the visitor whether
+  to scan the entrance, a room door, or scan again to leave.
+- `/visitor` header slimmed (logo 48→36px, `py-3`→`py-2.5`, "Welcome, X" → "X").
+
+Verified: `tsc` 0, build 16/16, lint clean, no dangling `student.*` references.
+
+**`/occupancy` now actually refreshes** (`components/RoomOccupancy.tsx`). The page was
+titled "Live Occupancy" but only fetched once on mount — the counts silently froze, which
+matters now that rooms are clickable. 30s poll, **skipped while the tab is hidden**, with
+a `visibilitychange` refetch on return so figures are never stale when visible. Matches the
+existing `setInterval` pattern in `KioskStationView.tsx:75`.
+
+Details worth knowing:
+- `refreshingRef` guards **overlapping requests**. 30s is shorter than a slow connection
+  takes, so without it two requests race and the slower can land last, showing *older* data
+  than the newer response. Same pattern `fetchRooms` already uses. A ref, not state, so it
+  doesn't re-render.
+- A "just now" / "updated Ns ago" label in the header. Repainted by a **separate 10s
+  interval that does no network work** — `setLastRefreshed` only fires on real fetches.
+  Two timers with different jobs; don't merge them.
+- Verified `fetchTodayRecords`/`fetchTodayPresence` are defined once in the Zustand store,
+  so refs are stable and the interval effect won't re-run.
+
+**Deleted the dead `Database` interface** (`lib/supabase.ts`, 117→27 lines). Confirmed via
+grep it was declared and never imported, never passed to `createClient`. Replaced with a
+comment explaining why it's gone and pointing at `npx supabase gen types` — **generate, do
+not hand-maintain**, since hand-editing recreates exactly the drift that made it wrong.
+
+Verified: `tsc` 0, build 16/16, lint clean on both files.
+
+**Fixed: admin room/purpose edits saved but never showed up in the list**
+(`store/usersStore.ts`). `createUser` refetches via `fetchUsers()`, but `updateUser`
+uses an **optimistic local mirror** instead — and that mirror never handled
+`pendingRoomId`/`pendingPurposeId`. The PATCH reached the database correctly; the table
+just kept rendering the previous assignment until a full page reload. Added the two
+`if (updates.X !== undefined)` lines next to the existing ones.
+
+Worth knowing for any future field added here: **a new column is written by the API
+route but will not appear in the list until it is also mirrored in `updateUser`'s
+optimistic block.** `createUser` is safe (it refetches); only edit needs the mirror.
+The mirror stores raw ids — the table resolves display text from `rooms`/`purposes`.
+
+**Phone formatting added** (`lib/phone.ts`, new). `tidyPhone()` normalises whitespace and
+dash spacing **without assuming a country code** — per the user's choice, whatever they
+type is preserved; nothing is regrouped or has `+63` added/removed.
+
+Wired into both `/register` and `/admin/users` phone inputs, plus the admin list cell.
+
+Two design points that took a bug to get right:
+- **The dash rule is symmetric and decided in ONE pass.** `/(\S)( ?)-( ?)(\S)/` keeps
+  `"0917 - 1234"` (space both sides = deliberate) but strips `"0917- 1234"` and
+  `"0917 -1234"` (space on one side = a slip). An earlier two-step version collapsed the
+  spaces first and then tried to restore them — which **destroys the evidence** needed to
+  tell a deliberate group from a typo. My test caught it producing `"0917 -1234"`.
+- **Idempotent** (verified: `tidy(tidy(x)) === tidy(x)` for 16 inputs). This is what makes
+  it safe to run on every keystroke without the caret jumping.
+
+Also: `inputMode='tel'` + `autoComplete='tel'` for the numeric keypad on mobile. Stored
+value is untouched on display-tidying — `tidyPhone` is applied when rendering list rows, so
+pre-existing ragged data reads correctly without a migration.
+
+⚠️ `isReasonablePhone()` is written but **not yet used** — deliberately not wired as a
+hard validation, since the column is descriptive only (no SMS is ever sent) and rejecting
+an unusual-but-valid number would be worse than storing it.
+
+**Phone now actually formats** (`lib/phone.ts`, both forms). Two bugs found:
+
+- A comment in `register/page.tsx` described an `onBlur` that **did not exist** in either
+  form. So nothing ever applied the promised formatting.
+- `tidyPhone` deliberately never regroups digits (it runs per-keystroke, and reordering
+  moves the caret), so `09171234567` rendered as `09171234567`. Correct by design for
+  keystrokes, but it meant the field *looked* broken.
+
+Added `formatPhone()` in `lib/phone.ts`, applied via `onBlur` in `/register` and
+`/admin/users`. On blur there is no caret to disturb, so regrouping is safe there.
+**tidy on keystroke, group on blur** — do not merge these.
+
+Rules: any `-()./` the user typed is respected untouched (they chose that grouping);
+otherwise 11 digits → `0917 123 4567`, 10 → `917 123 4567`, longer → 4s. A leading
+`+` is preserved, and a `63` country code on a 12-digit number is split as
+`+63 917 123 4567`.
+
+Tested 13 cases incl. `+63` intl, dashed, parenthesised landline, deliberate
+`0917 - 1234`, sub-7-digit, empty, messy paste — **all idempotent** (formatting twice ==
+once), which matters because onBlur can fire repeatedly.
+
+Bugs I introduced and caught by testing before shipping: first version dropped the `+`
+entirely (`+639171234567` → `6391 7123 4567`) and mis-split 11 digits as `091 712 3 4567`;
+then the 63-strip used `length === 13` when 2 + 10 = 12.
+
+Removed the "Any format is fine…" hint from register and "Spaces, dashes and +63 are kept
+as typed" from admin — both described behaviour that did not match reality.
+
 ---
 
 ## 6. Recently done

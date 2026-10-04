@@ -23,6 +23,14 @@ export interface ManagedUser {
   /** Pass expiry. Null means the pass never expires. */
   validUntil: Date | null;
   notes: string | null;
+  /**
+   * What staff expect this person to be here for. Seeds the first attendance
+   * record only; `clock_in_records` holds the real per-visit room and purpose.
+   * Display labels are resolved by the caller, which has the rooms/purposes
+   * lists loaded.
+   */
+  pendingRoomId: string | null;
+  pendingPurposeId: string | null;
 }
 
 /**
@@ -51,6 +59,10 @@ export interface NewUserInput {
   phone?: string;
   validUntil?: string;
   notes?: string;
+  /** FK to rooms.id. Seeds the visitor's first attendance record at check-in. */
+  pendingRoomId?: string;
+  /** FK to purposes.id. Same: an expectation, not a record. */
+  pendingPurposeId?: string;
 }
 
 export interface UpdateUserInput {
@@ -62,6 +74,8 @@ export interface UpdateUserInput {
   phone?: string;
   validUntil?: string;
   notes?: string;
+  pendingRoomId?: string;
+  pendingPurposeId?: string;
 }
 
 interface UsersState {
@@ -116,10 +130,15 @@ const SELECT_COLUMNS_BASE =
 const SELECT_COLUMNS_FULL = `
   id, email, name, role, created_at, archived_at,
   visitor_type_id, company, host_name, phone, valid_until, notes,
+  pending_room_id, pending_purpose_id,
   visitor_types ( label )
 `;
 const SELECT_COLUMNS_FALLBACK =
   'id, email, name, role, created_at, archived_at, visitor_type_id, company, host_name, phone, valid_until, notes';
+// Used when migration 007 has not been applied. Naming a column that does not
+// exist fails the whole query with a Postgres error, not a partial result, so
+// the pending columns have to be dropped as a unit.
+const SELECT_COLUMNS_NO_PENDING = SELECT_COLUMNS_FALLBACK;
 
 function mapRow(row: any): ManagedUser {
   // Supabase returns a relation as an object for a many-to-one embed, but as an
@@ -142,6 +161,8 @@ function mapRow(row: any): ManagedUser {
     phone: row.phone ?? null,
     validUntil: row.valid_until ? new Date(row.valid_until) : null,
     notes: row.notes ?? null,
+    pendingRoomId: row.pending_room_id ?? null,
+    pendingPurposeId: row.pending_purpose_id ?? null,
   };
 }
 
@@ -225,14 +246,23 @@ export const useUsersStore = create<UsersState>()((set, get) => ({
       };
 
       // Try the widest select first, then narrow it. Each failure means the
-      // database predates migration 004, so the next select drops back to the
-      // columns that have always existed. The visitor profile columns then read
-      // as null (see mapRow) rather than the page showing nothing at all.
+      // database predates a migration, so the next select drops back to columns
+      // that are known to exist. The newer columns then read as null (see
+      // mapRow) rather than the page showing nothing at all.
       //
-      // Cascade rather than a single fallback: the embed and the new columns can
-      // fail independently (a missing table gives PGRST205, a missing column
-      // gives 42703), and one narrow retry covers both.
-      const attempts = [SELECT_COLUMNS_FULL, SELECT_COLUMNS_BASE];
+      // Cascade rather than a single fallback: the embed, the 004 profile
+      // columns and the 007 pending columns can fail independently (a missing
+      // table gives PGRST205, a missing column gives 42703), so each step has to
+      // drop one group at a time.
+      //
+      // NOTE: this previously referenced a `SELECT_COLUMNS_BASE` that was never
+      // defined, so a database missing migration 004 threw a ReferenceError
+      // instead of falling back.
+      const attempts = [
+        SELECT_COLUMNS_FULL,
+        SELECT_COLUMNS_NO_PENDING,
+        SELECT_COLUMNS_FALLBACK,
+      ];
 
       let data: any[] | null = null;
       let usedColumns = SELECT_COLUMNS_FULL;
@@ -342,6 +372,16 @@ export const useUsersStore = create<UsersState>()((set, get) => ({
           if (updates.notes !== undefined) next.notes = updates.notes || null;
           if (updates.validUntil !== undefined) {
             next.validUntil = updates.validUntil ? new Date(updates.validUntil) : null;
+          }
+          // Ids, not labels: the table resolves the display text from the rooms
+          // and purposes lists, so mirroring the raw id is exactly right here.
+          // Without these two lines the write reached the database but the list
+          // kept rendering the PREVIOUS assignment until a full page reload.
+          if (updates.pendingRoomId !== undefined) {
+            next.pendingRoomId = updates.pendingRoomId || null;
+          }
+          if (updates.pendingPurposeId !== undefined) {
+            next.pendingPurposeId = updates.pendingPurposeId || null;
           }
 
           return next;
