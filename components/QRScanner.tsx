@@ -7,7 +7,8 @@ import { useRoomsStore } from '@/store/roomsStore';
 import { useAuthStore } from '@/store/authStore';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
-import { parseQrValue, getRoute, routeIdForDestination } from '@/lib/wayfinding';
+import { parseQrValue } from '@/lib/wayfinding';
+import { performVisitorCheckIn } from '@/lib/checkIn';
 import QRCode from 'react-qr-code';
 
 export default function QRScanner() {
@@ -17,14 +18,12 @@ export default function QRScanner() {
     clockOut,
     activeRecordId,
     startRouteView,
-    setActiveRoute,
   } = useClockInStore();
-  const { addRecord, clockOutRecord } = useRecordsStore();
+  const { clockOutRecord } = useRecordsStore();
   const { enterRoom, leaveRoom, getCurrentRoom, fetchTodayPresence } =
     useRoomPresenceStore();
-  const { fetchRooms, fetchPurposes, getRoomByQr, getRoomByNumber, getActivePurposes } =
+  const { fetchRooms, fetchPurposes, getRoomByQr, getRoomByNumber } =
     useRoomsStore();
-  const activePurposes = getActivePurposes();
   const { user } = useAuthStore();
 
   const [scannerActive, setScannerActive] = useState(false);
@@ -260,39 +259,25 @@ const handledRef = useRef(false);
         return;
       }
 
-      // First scan: check in + create the DB record. Keep the returned record
-      // id so the next scan can close the same row (time_out), and so room
-      // scans can be linked to this visit.
-      //
-      // The ground floor code carries no room, so the route comes from the
-      // person's assigned destination rather than from the code.
-      const route = getRoute(routeIdForDestination(user?.destination));
-      setActiveRoute(route.id);
-      let recordId: string | undefined;
+      // First scan: check in + create the DB record. `performVisitorCheckIn` is
+      // the same action the automatic post-verification check-in uses, so the
+      // two paths cannot drift. It resolves the assigned room and purpose,
+      // writes the attendance row, and mirrors the result into the clock-in
+      // store (keeping the record id so the next scan closes this same row).
       if (user) {
-        // The assigned room is now a room_id, resolved from `rooms`.
-        const assigned = getRoomByNumber(user.destination);
-
-        // The reason for the visit is the one captured at registration, so the
-        // visitor does not have to answer again on their first visit.
-        const purpose = activePurposes.find((p) => p.label === user.purpose);
-
-        // Guard against writing a `fallback-*` placeholder id into a UUID
-        // column, which would fail the insert and lose the whole check-in.
-        // The signed-in user can normally read purposes, so this only triggers
-        // if that fetch also failed.
-        const purposeIdToWrite =
-          purpose && !purpose.id.startsWith('fallback-') ? purpose.id : null;
-
-        const result = await addRecord({
-          userId: user.id,
-          roomId: assigned?.id ?? null,
-          purposeId: purposeIdToWrite,
-          timeIn: new Date(),
-        });
-        recordId = result.recordId;
+        const result = await performVisitorCheckIn(user);
+        if (!result.success) {
+          // Do not report a check-in that did not reach the database.
+          setScanError(result.error || 'Could not check in. Please try again.');
+          handledRef.current = false;
+          setTimeout(() => setScanning(false), 2500);
+          return;
+        }
+      } else {
+        // Unreachable on the guarded visitor pages, but keep the old local-only
+        // fallback rather than inventing a record with no user.
+        clockIn();
       }
-      clockIn(recordId);
       setTimeout(() => setScanning(false), 1200);
     },
     [
@@ -300,15 +285,12 @@ const handledRef = useRef(false);
       status,
       activeRecordId,
       clockIn,
-      addRecord,
       stopScanner,
       enterRoom,
       getCurrentRoom,
       getRoomByQr,
       getRoomByNumber,
-      setActiveRoute,
       performClockOut,
-      activePurposes,
     ]
   );
 
@@ -428,7 +410,7 @@ const handledRef = useRef(false);
             '
           >
         {/* Viewfinder Frame */}
-        <div className='absolute inset-0 rounded-lg border-2 border-orange-400/50 overflow-hidden bg-navy-900'>
+        <div className='absolute inset-0 rounded-lg border-2 border-yellow-400/50 overflow-hidden bg-navy-900'>
           {/* Real Camera Feed */}
           <div id='qr-reader-mobile' className='w-full h-full' />
 
@@ -473,7 +455,7 @@ const handledRef = useRef(false);
                   onClick={startCamera}
                   className='
                     mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-full
-                    bg-orange-500 hover:bg-orange-600 text-paper text-xs font-medium
+                    bg-yellow-500 hover:bg-yellow-600 text-yellow-950 text-xs font-medium
                     transition-colors duration-150
                   '
                 >
@@ -495,7 +477,7 @@ const handledRef = useRef(false);
           ].map((position, idx) => (
             <div
               key={idx}
-              className={`absolute ${position} border-orange-400 w-[15%] h-[15%] min-w-6 min-h-6 pointer-events-none rounded-sm ${scanning ? 'border-green-400' : ''}`}
+              className={`absolute ${position} border-yellow-400 w-[15%] h-[15%] min-w-6 min-h-6 pointer-events-none rounded-sm ${scanning ? 'border-green-400' : ''}`}
             ></div>
           ))}
         </div>
@@ -505,9 +487,9 @@ const handledRef = useRef(false);
             narrower. */}
         <div className='absolute inset-0 flex items-center justify-center pointer-events-none'>
           <div className='relative w-[80%] aspect-square'>
-            <div className='absolute inset-0 border border-orange-400/30 rounded-lg'></div>
-            <div className='absolute top-1/2 left-0 right-0 h-px bg-orange-400/30'></div>
-            <div className='absolute left-1/2 top-0 bottom-0 w-px bg-orange-400/30'></div>
+            <div className='absolute inset-0 border border-yellow-400/30 rounded-lg'></div>
+            <div className='absolute top-1/2 left-0 right-0 h-px bg-yellow-400/30'></div>
+            <div className='absolute left-1/2 top-0 bottom-0 w-px bg-yellow-400/30'></div>
           </div>
         </div>
 
@@ -534,7 +516,7 @@ const handledRef = useRef(false);
       <div className='mt-4 flex items-center justify-center gap-3'>
         <span
           className={`flex items-center gap-1.5 text-xs font-medium transition-colors ${
-            !showQR ? 'text-orange-300' : 'text-navy-500'
+            !showQR ? 'text-yellow-300' : 'text-navy-500'
           }`}
         >
           <i className='fa-solid fa-camera'></i>
@@ -549,7 +531,7 @@ const handledRef = useRef(false);
           // The visual pill stays 48x24, but the hit area is padded out to
           // 48x44 - the minimum comfortable touch target on a phone.
           className={`relative w-12 h-6 my-2.5 rounded-full transition-colors duration-150 after:absolute after:inset-x-0 after:-inset-y-2 after:content-[''] ${
-            showQR ? 'bg-orange-500' : 'bg-navy-700'
+            showQR ? 'bg-yellow-500' : 'bg-navy-700'
           }`}
         >
           <span
@@ -560,7 +542,7 @@ const handledRef = useRef(false);
         </button>
         <span
           className={`flex items-center gap-1.5 text-xs font-medium transition-colors ${
-            showQR ? 'text-orange-300' : 'text-navy-500'
+            showQR ? 'text-yellow-300' : 'text-navy-500'
           }`}
         >
           <i className='fa-solid fa-qrcode'></i>
@@ -571,16 +553,16 @@ const handledRef = useRef(false);
       {/* Instructions */}
       <div className='mt-5 text-center'>
         {showQR ? (
-          <div className='inline-flex items-center gap-2 px-4 py-2 rounded-full bg-orange-500/10 border border-orange-500/30 mb-4'>
-            <i className='fa-solid fa-qrcode text-orange-400 text-sm'></i>
-            <span className='text-orange-300 text-sm font-medium'>
+          <div className='inline-flex items-center gap-2 px-4 py-2 rounded-full bg-yellow-500/10 border border-yellow-500/30 mb-4'>
+            <i className='fa-solid fa-qrcode text-yellow-400 text-sm'></i>
+            <span className='text-yellow-300 text-sm font-medium'>
               Show this QR at check-in
             </span>
           </div>
         ) : !scannerActive && !scanning ? (
           <button
             onClick={startCamera}
-            className='inline-flex items-center gap-2 px-4 py-2 rounded-full bg-orange-500 hover:bg-orange-600 text-paper text-sm font-medium transition-colors duration-150 mb-4'
+            className='inline-flex items-center gap-2 px-4 py-2 rounded-full bg-yellow-500 hover:bg-yellow-600 text-yellow-950 text-sm font-medium transition-colors duration-150 mb-4'
           >
             <i className='fa-solid fa-camera text-sm'></i>
             {status === 'not-clocked-in'
@@ -588,9 +570,9 @@ const handledRef = useRef(false);
               : 'Open camera to scan'}
           </button>
         ) : (
-          <div className='inline-flex items-center gap-2 px-4 py-2 rounded-full bg-orange-500/10 border border-orange-500/30 mb-4'>
-            <i className='fa-solid fa-camera text-orange-400 text-sm'></i>
-            <span className='text-orange-300 text-sm font-medium'>
+          <div className='inline-flex items-center gap-2 px-4 py-2 rounded-full bg-yellow-500/10 border border-yellow-500/30 mb-4'>
+            <i className='fa-solid fa-camera text-yellow-400 text-sm'></i>
+            <span className='text-yellow-300 text-sm font-medium'>
               {status === 'not-clocked-in'
                 ? 'Point at the entrance code to check in'
                 : 'Point at any room door or the entrance'}
@@ -612,14 +594,14 @@ const handledRef = useRef(false);
             left to be inferred from a failed scan. */}
         <div className='max-w-xs mx-auto mb-4 rounded-lg border border-navy-700 bg-navy-900/50 divide-y divide-navy-800'>
           <div className='flex items-start gap-2 px-3 py-2 text-left'>
-            <i className='fa-solid fa-door-open text-orange-400 text-xs mt-0.5'></i>
+            <i className='fa-solid fa-door-open text-yellow-400 text-xs mt-0.5'></i>
             <p className='text-navy-300 text-[11px] leading-snug'>
               <span className='text-white font-semibold'>Entrance poster</span> —
               check in on arrival, check out on the way out.
             </p>
           </div>
           <div className='flex items-start gap-2 px-3 py-2 text-left'>
-            <i className='fa-solid fa-location-dot text-orange-400 text-xs mt-0.5'></i>
+            <i className='fa-solid fa-location-dot text-yellow-400 text-xs mt-0.5'></i>
             <p className='text-navy-300 text-[11px] leading-snug'>
               <span className='text-white font-semibold'>Room door poster</span> —
               records which room you are in. Never checks you in or out.
@@ -627,7 +609,7 @@ const handledRef = useRef(false);
                   actually has available in the building and the scanner gave no
                   hint of it otherwise. */}
               {status !== 'not-clocked-in' && (
-                <span className='block mt-1 text-orange-300'>
+                <span className='block mt-1 text-yellow-300'>
                   <i className='fa-solid fa-circle-check text-[10px] mr-1'></i>
                   You can scan these now.
                 </span>
@@ -635,7 +617,7 @@ const handledRef = useRef(false);
             </p>
           </div>
           <div className='flex items-start gap-2 px-3 py-2 text-left'>
-            <i className='fa-solid fa-id-card text-orange-400 text-xs mt-0.5'></i>
+            <i className='fa-solid fa-id-card text-yellow-400 text-xs mt-0.5'></i>
             <p className='text-navy-300 text-[11px] leading-snug'>
               <span className='text-white font-semibold'>Your personal code</span> —
               shown on this screen for the reception desk to scan.
@@ -706,7 +688,7 @@ const handledRef = useRef(false);
                 onClick={confirmClockOut}
                 className='
                   flex-1 px-4 py-3 rounded-lg font-semibold text-sm
-                  bg-orange-500 hover:bg-orange-600 text-paper
+                  bg-yellow-500 hover:bg-yellow-600 text-yellow-950
                   transition-colors duration-150
                 '
               >
@@ -722,8 +704,8 @@ const handledRef = useRef(false);
       {alreadyInRoom && (
         <div className='fixed inset-0 z-50 bg-navy-950/80 flex items-center justify-center p-4'>
           <div className='glass-panel border-navy-700 rounded-lg p-6 max-w-sm w-full text-center'>
-            <div className='w-14 h-14 rounded-full bg-orange-500/20 flex items-center justify-center mx-auto mb-3'>
-              <i className='fa-solid fa-location-dot text-orange-400 text-2xl'></i>
+            <div className='w-14 h-14 rounded-full bg-yellow-500/20 flex items-center justify-center mx-auto mb-3'>
+              <i className='fa-solid fa-location-dot text-yellow-400 text-2xl'></i>
             </div>
             <h3 className='text-white font-bold text-lg mb-2'>
               You&apos;re already inside this room
@@ -736,7 +718,7 @@ const handledRef = useRef(false);
               onClick={() => setAlreadyInRoom(null)}
               className='
                 w-full px-4 py-3 rounded-lg font-semibold text-sm
-                bg-orange-500 hover:bg-orange-600 text-paper
+                bg-yellow-500 hover:bg-yellow-600 text-yellow-950
                 transition-colors duration-150
               '
             >

@@ -15,15 +15,25 @@
   --navy-200: 182 195 224;
   --white: 255 255 255;
   --paper: 255 255 255;
-  --orange-100: 255 247 237;
-  --orange-200: 254 215 170;
-  --orange-300: 253 186 116;
-  --orange-400: 251 146 60;
-  --orange-500: 249 115 22;
-  --orange-600: 234 88 12;
-  --orange-700: 194 65 12;
-  --orange-800: 154 52 18;
-  --orange-900: 124 45 18;
+  --yellow-50: 254 252 232;
+  --yellow-100: 254 249 195;
+  --yellow-200: 254 240 138;
+  --yellow-300: 253 224 71;
+  --yellow-400: 250 204 21;
+  --yellow-500: 234 179 8;
+  --yellow-600: 202 138 4;
+  --yellow-700: 161 98 7;
+  --yellow-800: 133 77 14;
+  --yellow-900: 113 63 18;
+  --yellow-950: 66 32 6;
+  /* Animated background pattern (checkerboard diamonds + starfield). RGB
+     triplets plus an alpha so each theme can dial the intensity separately. */
+  --pattern-diamond: 0 0 0;
+  --pattern-diamond-alpha: 0.7;
+  --pattern-star: 255 255 255;
+  --pattern-star-cool: 147 197 253;
+  --pattern-star-warm: 250 204 21;
+  --pattern-stars-opacity: 1;
   --red-300: 252 165 165;
   --red-400: 248 113 113;
   --red-500: 239 68 68;
@@ -71,15 +81,28 @@ html.light,
   --navy-200: 16 42 78; /* headings / emphasis */
   --white: 15 23 42;
   --paper: 255 255 255;
-  --orange-100: 255 237 213;
-  --orange-200: 253 224 178;
-  --orange-300: 254 215 170;
-  --orange-400: 253 186 116;
-  --orange-500: 234 88 12;
-  --orange-600: 194 65 12;
-  --orange-700: 154 52 18;
-  --orange-800: 124 45 18;
-  --orange-900: 88 30 12;
+  /* Accent: the text steps (200-400) go dark for contrast on light surfaces,
+     while the fill steps (500-600) stay golden so buttons read the same in
+     both themes. */
+  --yellow-50: 254 252 232;
+  --yellow-100: 254 249 195;
+  --yellow-200: 113 63 18;
+  --yellow-300: 133 77 14;
+  --yellow-400: 161 98 7;
+  --yellow-500: 234 179 8;
+  --yellow-600: 202 138 4;
+  --yellow-700: 161 98 7;
+  --yellow-800: 133 77 14;
+  --yellow-900: 113 63 18;
+  --yellow-950: 66 32 6;
+  /* The same pattern, but a faint gold/neutral version: lower opacity and warm
+     tones so it reads on the bright page without competing with text. */
+  --pattern-diamond: 202 138 4;
+  --pattern-diamond-alpha: 0.12;
+  --pattern-star: 100 119 168;
+  --pattern-star-cool: 96 165 250;
+  --pattern-star-warm: 202 138 4;
+  --pattern-stars-opacity: 0.35;
   --red-300: 185 28 28;
   --red-400: 220 38 38;
   --red-500: 239 68 68;
@@ -104,6 +127,38 @@ html.light,
   --background: 240 245 252;
   --foreground: 16 42 78;
   color-scheme: light;
+}
+
+/* Pins the palette to its dark-theme values regardless of the active theme.
+
+   Used by the HUD that floats over the 3D scene. That scene is fixed (a bright
+   sky and a lit building), so its overlays are translucent black in both
+   themes. Without this scope the light-mode text steps would resolve to dark
+   gold and the `text-white` tokens to near-black, both of which vanish against
+   the dark overlays. Scoping the dark values keeps the HUD readable in either
+   theme, and keeps the yellow accents bright. */
+.theme-fixed-dark {
+  --navy-950: 6 15 52;
+  --navy-900: 10 16 39;
+  --navy-800: 17 26 58;
+  --navy-700: 26 37 73;
+  --navy-600: 36 50 92;
+  --navy-500: 51 66 111;
+  --navy-400: 100 119 168;
+  --navy-300: 139 156 199;
+  --navy-200: 182 195 224;
+  --white: 255 255 255;
+  --paper: 255 255 255;
+  --yellow-100: 254 249 195;
+  --yellow-200: 254 240 138;
+  --yellow-300: 253 224 71;
+  --yellow-400: 250 204 21;
+  --yellow-500: 234 179 8;
+  --yellow-600: 202 138 4;
+  --yellow-700: 161 98 7;
+  --yellow-800: 133 77 14;
+  --yellow-900: 113 63 18;
+  --yellow-950: 66 32 6;
 }
 
 body {
@@ -178,20 +233,17 @@ body {
   /* -----------------------------------------------------------------------
      App header.
 
-     A saturated, flat brand band - one solid colour, no gradient. Light mode
-     gets vivid `blue-700`; dark mode keeps the deep navy bar, which reads as
-     the same brand colour at a lower lightness.
+     Dark mode keeps the deep navy bar. Light mode is a bright, clean surface -
+     a faint yellow wash (`yellow-50`) with a soft gold hairline and a barely
+     there shadow - so the header reads as light and modern rather than a
+     saturated colour band, with the yellow theme carried by the accents.
 
-     The palette re-declaration under `html.light` is what makes this work.
-     The bar is coloured in both themes, so its contents must resolve to
-     light-on-dark text in both - but `text-white` and `text-navy-300` are
-     theme-driven and turn near-black in light mode. Scoping those variables to
-     the bar fixes every descendant at once: the title, the subtitle, and the
-     user dropdown, which is positioned inside the bar.
-
-     The muted text steps are kept close to full white on purpose. A heavily
-     tinted blue-grey reads as washed out against a saturated band, so the
-     subtitle is separated from the title by opacity, not by hue.
+     Because the light bar is a light surface, the theme-driven text tokens
+     (`text-white`, `text-navy-300`) resolve to their light-mode (dark) values
+     on their own, and the user dropdown - positioned inside the bar - becomes
+     a light panel that matches. That is why there is no palette re-declaration
+     under `html.light` any more: the old one existed only to force
+     light-on-dark text onto a coloured band.
   ------------------------------------------------------------------------ */
   .app-header {
     background-color: rgb(var(--navy-900));
@@ -200,36 +252,9 @@ body {
 
   html.light .app-header,
   .theme-fixed-light .app-header {
-    /* Light-on-dark text, so it stays readable on the coloured band. */
-    --navy-950: 6 15 52;
-    --navy-900: 10 16 39;
-    --navy-800: 17 26 58;
-    --navy-700: 26 37 73;
-    --navy-600: 36 50 92;
-    --navy-500: 51 66 111;
-    --navy-400: 213 226 245;
-    --navy-300: 238 243 251;
-    --navy-200: 226 235 248;
-    --white: 255 255 255;
-
-    /* Status colours too. The user dropdown is a dark panel positioned inside
-       this bar, but `red-300` / `purple-300` are theme-driven and resolve to
-       their *light*-mode values here - dark red and dark purple on a near-black
-       panel, roughly 2.9:1 and 2.7:1. These are the dark-theme values, which
-       clear 9:1. Any status colour used inside the bar needs the same
-       treatment as the navy text tokens. */
-    --red-300: 252 165 165;
-    --red-400: 248 113 113;
-    --purple-300: 216 180 254;
-    --purple-500: 168 85 247;
-    --green-300: 134 239 172;
-    --teal-300: 94 234 212;
-
-    /* Flat vivid blue. `blue-700` rather than `blue-500`/`blue-600` so the
-       small subtitle text clears 4.5:1 without leaning on a gradient to
-       carry the contrast. */
-    background-color: rgb(var(--blue-700));
-    border-bottom-color: rgb(var(--blue-900));
+    background-color: rgb(var(--yellow-50));
+    border-bottom-color: rgb(var(--yellow-500) / 0.3);
+    box-shadow: 0 1px 3px rgb(var(--yellow-900) / 0.08);
   }
 }
 
@@ -240,7 +265,9 @@ body {
    up-and-right at 45 degrees.
 
    - `.animated-bg__checker`: a big board centred on the viewport. Every other
-     cell holds a black square rotated 45 degrees into a diamond. The board
+     cell holds a square rotated 45 degrees into a diamond. Its colour and alpha
+     come from the `--pattern-diamond*` variables, so dark mode gets the
+     original dark diamonds and light mode a faint gold version. The board
      drifts up-and-right by exactly one cell, which lands the checkerboard back
      on itself, so the loop has no seam.
    - `.animated-bg__diamond`: each square slowly shrinks and returns to its
@@ -291,7 +318,7 @@ body {
   width: 7.5%;
   height: 7.5%;
   border-radius: 12%;
-  background-color: rgba(0, 0, 0, 0.7);
+  background-color: rgb(var(--pattern-diamond) / var(--pattern-diamond-alpha));
   animation: diamond-pulse var(--pulse-dur, 6s) ease-in-out infinite;
   animation-delay: var(--pulse-delay, 0s);
 }
@@ -317,13 +344,14 @@ body {
   position: absolute;
   inset: 0;
   background-image:
-    radial-gradient(1.5px 1.5px at 24px 32px, rgba(255, 255, 255, 0.85), transparent 100%),
-    radial-gradient(1px 1px at 130px 96px, rgba(147, 197, 253, 0.75), transparent 100%),
-    radial-gradient(1.5px 1.5px at 214px 168px, rgba(255, 255, 255, 0.7), transparent 100%),
-    radial-gradient(1px 1px at 86px 232px, rgba(251, 146, 60, 0.7), transparent 100%),
-    radial-gradient(1px 1px at 268px 44px, rgba(255, 255, 255, 0.6), transparent 100%),
-    radial-gradient(1px 1px at 172px 12px, rgba(255, 255, 255, 0.55), transparent 100%);
+    radial-gradient(1.5px 1.5px at 24px 32px, rgb(var(--pattern-star) / 0.85), transparent 100%),
+    radial-gradient(1px 1px at 130px 96px, rgb(var(--pattern-star-cool) / 0.75), transparent 100%),
+    radial-gradient(1.5px 1.5px at 214px 168px, rgb(var(--pattern-star) / 0.7), transparent 100%),
+    radial-gradient(1px 1px at 86px 232px, rgb(var(--pattern-star-warm) / 0.7), transparent 100%),
+    radial-gradient(1px 1px at 268px 44px, rgb(var(--pattern-star) / 0.6), transparent 100%),
+    radial-gradient(1px 1px at 172px 12px, rgb(var(--pattern-star) / 0.55), transparent 100%);
   background-size: 280px 280px;
+  opacity: var(--pattern-stars-opacity, 1);
 }
 
 @keyframes starfield-drift {
@@ -336,10 +364,9 @@ body {
   }
 }
 
-/* A dark-theme flourish: in light mode it would fight the near-white palette. */
-html.light .animated-bg {
-  display: none;
-}
+/* The pattern runs in both themes. Light mode swaps in the faint gold/neutral
+   variables declared under `html.light`, so the same shapes read as a subtle
+   texture on the bright page instead of being hidden. */
 
 /* Respect the OS setting - keep the shapes, drop the motion. */
 @media (prefers-reduced-motion: reduce) {

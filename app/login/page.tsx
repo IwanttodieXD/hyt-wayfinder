@@ -53,11 +53,11 @@ export default function LoginPage() {
               />
             </div>
             <h1 className='text-3xl font-bold text-white mb-2'>HYT Wayfinder</h1>
-            <p className='text-orange-300'>Sign in to your account</p>
+            <p className='text-yellow-300'>Sign in to your account</p>
           </div>
 
           {/* Login Form */}
-          <div className='border border-orange-400/30 rounded-lg p-8 bg-navy-900/60'>
+          <div className='border border-yellow-400/30 rounded-lg p-8 bg-navy-900/60'>
             <form onSubmit={handleSubmit} className='space-y-6'>
               {/* Error Message */}
               {error && (
@@ -71,13 +71,13 @@ export default function LoginPage() {
               <div>
                 <label
                   htmlFor='email'
-                  className='block text-sm font-medium text-orange-200 mb-2'
+                  className='block text-sm font-medium text-yellow-200 mb-2'
                 >
                   Email Address
                 </label>
                 <div className='relative'>
                   <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
-                    <i className='fa-solid fa-envelope text-orange-400'></i>
+                    <i className='fa-solid fa-envelope text-yellow-400'></i>
                   </div>
                   <input
                     type='email'
@@ -87,9 +87,9 @@ export default function LoginPage() {
                     required
                     className='
                       w-full pl-12 pr-4 py-3 rounded-lg
-                      bg-navy-900/80 border-2 border-orange-500/30
+                      bg-navy-900/80 border-2 border-yellow-500/30
                       text-white placeholder-navy-500
-                      focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500
+                      focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500
                       transition-colors
                       '
                     placeholder='you@example.com'
@@ -101,13 +101,13 @@ export default function LoginPage() {
               <div>
                 <label
                   htmlFor='password'
-                  className='block text-sm font-medium text-orange-200 mb-2'
+                  className='block text-sm font-medium text-yellow-200 mb-2'
                 >
                   Password
                 </label>
                 <div className='relative'>
                   <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
-                    <i className='fa-solid fa-lock text-orange-400'></i>
+                    <i className='fa-solid fa-lock text-yellow-400'></i>
                   </div>
                   <input
                     type='password'
@@ -117,9 +117,9 @@ export default function LoginPage() {
                     required
                     className='
                       w-full pl-12 pr-4 py-3 rounded-lg
-                      bg-navy-900/80 border-2 border-orange-500/30
+                      bg-navy-900/80 border-2 border-yellow-500/30
                       text-white placeholder-navy-500
-                      focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500
+                      focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500
                       transition-colors
                       '
                     placeholder='••••••••'
@@ -132,12 +132,12 @@ export default function LoginPage() {
                 type='submit'
                 disabled={loading}
                 className='
-                  w-full py-3 rounded-lg font-semibold text-paper
-                  bg-orange-600 hover:bg-orange-700
+                  w-full py-3 rounded-lg font-semibold text-yellow-950
+                  bg-yellow-500 hover:bg-yellow-600
                   transition-colors duration-150
                   disabled:opacity-50 disabled:cursor-not-allowed
                   flex items-center justify-center gap-2
-                  border border-orange-500/50
+                  border border-yellow-500/50
                   '
               >
                 {loading ? (
@@ -159,7 +159,7 @@ export default function LoginPage() {
               Don&apos;t have an account?{' '}
               <Link
                 href='/register'
-                className='text-orange-400 hover:text-orange-300 font-semibold transition-colors'
+                className='text-yellow-400 hover:text-yellow-300 font-semibold transition-colors'
               >
                 Create one
               </Link>

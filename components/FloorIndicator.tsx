@@ -4,9 +4,9 @@ interface FloorIndicatorProps {
 
 export default function FloorIndicator({ currentFloor }: FloorIndicatorProps) {
   return (
-    <div className='absolute top-8 right-8 bg-black/50 px-4 py-3 rounded-lg border border-orange-400/30'>
+    <div className='theme-fixed-dark absolute top-8 right-8 bg-black/50 px-4 py-3 rounded-lg border border-yellow-400/30'>
       <div className='text-center'>
-        <p className='text-sm text-orange-300 font-semibold uppercase tracking-wider'>
+        <p className='text-sm text-yellow-300 font-semibold uppercase tracking-wider'>
           Floor
         </p>
         <p className='text-4xl font-bold text-white'>{currentFloor}</p>
@@ -16,7 +16,7 @@ export default function FloorIndicator({ currentFloor }: FloorIndicatorProps) {
           <div
             key={floor}
             className={`w-2 h-6 rounded-full transition-colors ${
-              floor === currentFloor ? 'bg-orange-400' : 'bg-gray-600'
+              floor === currentFloor ? 'bg-yellow-400' : 'bg-gray-600'
             }`}
           />
         ))}

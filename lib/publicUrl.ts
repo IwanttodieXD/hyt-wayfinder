@@ -118,6 +118,24 @@ export async function fetchOrientationStatus(
 // Entrance verification
 // ---------------------------------------------------------------------------
 
+/**
+ * Where the verify page sends an approved visitor once it has signed them in,
+ * carrying a marker the check-in page reads to perform the automatic check-in
+ * exactly once.
+ *
+ * WHY A MARKER AND NOT A SEPARATE ROUTE
+ * -------------------------------------
+ * /verify establishes the session (see `requestVerifyLogin`), but the check-in
+ * INSERT is authorised by RLS as `auth.uid() = user_id` and the app's user
+ * object is only populated once AuthGate runs `checkAuth` on the destination
+ * page. So the automatic check-in happens on /check-in, not on /verify.
+ *
+ * The flag rides along in the query string so no extra route has to exist just
+ * to carry a boolean. It is read and then stripped by
+ * `useAutoCheckInAfterVerify`.
+ */
+export const VERIFIED_CHECKIN_PATH = '/check-in?verified=1';
+
 export interface VerifyRecord {
   orientation_status: OrientationStatus;
   full_name: string;
@@ -125,12 +143,41 @@ export interface VerifyRecord {
   course_id: string | null;
   /**
    * Nullable since migration 20260101000014: a roster row with no address on
-   * file has no email. Callers must not pass this to signInWithOtp without
-   * checking `has_email` first.
+   * file has no email. The route still signs this person in - it derives a
+   * synthetic login address from the profile id - so a missing address is no
+   * longer a reason to turn anyone away.
    */
   email: string | null;
-  /** False when there is no address, so no magic link can be delivered. */
+  /** False when there is no address on file. Informational only. */
   has_email: boolean;
+  /**
+   * Migration 20260101000015: approved, or already a signed-in account. Absent
+   * on an un-migrated database, which is read as false (fail safe -> review).
+   */
+  recognized?: boolean;
+}
+
+/** What the verify page should do with a resolved record. */
+export type VerifyDecision = 'declined' | 'review' | 'send-login-link';
+
+/**
+ * The single decision point between login / review / refusal.
+ *
+ * Order matters: declined (revoked) is checked first and can never be
+ * overridden by `recognized`. Only a strictly-true `recognized` or an explicit
+ * 'approved' verdict leads to login; anything missing or ambiguous falls to
+ * review.
+ *
+ * An address on file is NOT required. Sign-in is minted server-side (see
+ * /api/verify) and no email is ever sent, so a profile with no address is given
+ * a synthetic login address derived from its id rather than being turned away.
+ */
+export function decideVerification(record: VerifyRecord): VerifyDecision {
+  if (record.orientation_status === 'declined') return 'declined';
+  const qualifies =
+    record.orientation_status === 'approved' || record.recognized === true;
+  if (!qualifies) return 'review';
+  return 'send-login-link';
 }
 
 /**
@@ -145,7 +192,12 @@ export type VerifyOutcome =
   | { kind: 'found'; record: VerifyRecord }
   | { kind: 'not-found' }
   | { kind: 'ambiguous'; count: number }
-  | { kind: 'error'; message: string };
+  /**
+   * `cause` carries the underlying failure (the RPC error or the thrown value)
+   * for server-side logging. It is deliberately NOT surfaced to the visitor -
+   * the `message` is the safe, human-facing text.
+   */
+  | { kind: 'error'; message: string; cause?: unknown };
 
 /**
  * Resolves who somebody claims to be.
@@ -187,12 +239,89 @@ export async function verifyVisitor(
       return {
         kind: 'error',
         message: 'Could not check your record. Try again in a moment.',
+        cause: error,
       };
     }
     const rows = Array.isArray(data) ? (data as VerifyRecord[]) : [];
     if (rows.length === 0) return { kind: 'not-found' };
     if (rows.length > 1) return { kind: 'ambiguous', count: rows.length };
     return { kind: 'found', record: rows[0] };
+  } catch (err) {
+    return {
+      kind: 'error',
+      message: 'Could not reach the server. Check your connection and try again.',
+      cause: err,
+    };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Entrance verification -> immediate sign-in
+// ---------------------------------------------------------------------------
+
+/**
+ * The slice of a matched record the visitor is allowed to see back.
+ *
+ * Deliberately not the whole `VerifyRecord`: the email on file is used by the
+ * server to resolve the login and has no reason to travel to the browser.
+ */
+export interface VerifyLoginRecord {
+  full_name: string;
+  programme: string | null;
+  orientation_status: OrientationStatus;
+}
+
+/**
+ * What `POST /api/verify` answers with.
+ *
+ * `ok` carries a real Supabase session the page installs with `setSession` -
+ * there is no email and no link. Every other branch is a verdict or a failure,
+ * and none of them sign the visitor in.
+ *
+ * `unavailable` is kept apart from `error` on purpose: it means the deployment
+ * has no service-role key configured (the route could not even attempt a
+ * login), which is an operator problem, not a bad name.
+ */
+export type VerifyLoginResponse =
+  | {
+      kind: 'ok';
+      accessToken: string;
+      refreshToken: string;
+      record: VerifyLoginRecord;
+    }
+  | { kind: 'declined'; record: VerifyLoginRecord }
+  | { kind: 'review'; record: VerifyLoginRecord }
+  | { kind: 'not-found' }
+  | { kind: 'ambiguous' }
+  | { kind: 'unavailable'; message: string }
+  | { kind: 'error'; message: string };
+
+/**
+ * Verifies name + course and, when the record is approved, signs the visitor in.
+ *
+ * Calls the server route rather than Supabase directly, because minting a
+ * session needs the service-role key, which must never reach the browser. The
+ * route re-runs the lookup itself: the verdict is decided server-side and never
+ * trusted from here, so a tampered page cannot talk its way into a session.
+ *
+ * Always resolves - a network or parse failure becomes an `error` response, the
+ * same way `verifyVisitor` degrades, so the page has one shape to handle.
+ */
+export async function requestVerifyLogin(
+  name: string,
+  courseId: string
+): Promise<VerifyLoginResponse> {
+  try {
+    const response = await fetch('/api/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name.trim(), courseId }),
+    });
+    const data = (await response.json()) as VerifyLoginResponse;
+    if (!data || typeof data !== 'object' || !('kind' in data)) {
+      return { kind: 'error', message: 'Unexpected response from the server.' };
+    }
+    return data;
   } catch {
     return {
       kind: 'error',

@@ -7,10 +7,14 @@ import type { CSSProperties } from 'react';
  * up-and-right at 45 degrees.
  *
  * The board is a big square centred on the viewport. Every other cell holds a
- * black square rotated 45 degrees into a diamond, and each diamond slowly
- * shrinks and returns to its original size. The whole board drifts up-and-right
- * by exactly one cell, which lands the checkerboard back on itself, so the loop
- * is seamless.
+ * square rotated 45 degrees into a diamond, and each diamond slowly shrinks and
+ * returns to its original size. The whole board drifts up-and-right by exactly
+ * one cell, which lands the checkerboard back on itself, so the loop is
+ * seamless.
+ *
+ * Colours and opacity are theme-driven (see the `--pattern-*` variables in
+ * globals.css): dark mode keeps the original dark diamonds and bright stars,
+ * while light mode swaps in a faint gold/neutral version of the same shapes.
  *
  * Pure CSS (see globals.css). Fixed at z-index -1 so it sits behind everything,
  * and `aria-hidden` because it carries no meaning. Panels stay opaque; only the

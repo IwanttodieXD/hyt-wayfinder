@@ -5,7 +5,7 @@ import { useRoomsStore } from '@/store/roomsStore';
 import { formatPhone, sanitisePhone, isAllowedPhoneKey } from '@/lib/phone';
 
 const INPUT =
-  'w-full px-4 py-2.5 rounded-lg bg-navy-950/60 border border-navy-700 text-white placeholder-navy-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors';
+  'w-full px-4 py-2.5 rounded-lg bg-navy-950/60 border border-navy-700 text-white placeholder-navy-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500 transition-colors';
 
 const LABEL = 'block text-sm font-medium text-navy-200 mb-1.5';
 
@@ -153,7 +153,7 @@ export default function StationRegistrationForm() {
     <div className='glass-panel border-navy-800 rounded-lg p-6'>
       <div className='flex items-start justify-between gap-4 mb-1'>
         <h2 className='text-xl font-bold text-white flex items-center gap-2'>
-          <i className='fa-solid fa-user-plus text-orange-400'></i>
+          <i className='fa-solid fa-user-plus text-yellow-400'></i>
           Visitor Registration
         </h2>
         {done && (
@@ -359,7 +359,7 @@ export default function StationRegistrationForm() {
           <button
             type='submit'
             disabled={busy}
-            className='px-5 py-2.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-paper font-semibold text-sm transition-colors duration-150 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed'
+            className='px-5 py-2.5 rounded-lg bg-yellow-500 hover:bg-yellow-600 text-yellow-950 font-semibold text-sm transition-colors duration-150 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed'
           >
             {busy ? (
               <>

@@ -91,7 +91,7 @@ export default function StudentMobileView() {
               about the same visit, so splitting them across two bordered boxes
               spent vertical space on chrome rather than information. */}
           <div className='mt-3 flex items-center gap-2 rounded-lg bg-navy-800/50 border border-navy-700 px-3 py-2'>
-            <i className='fa-solid fa-location-dot text-orange-400 text-xs flex-shrink-0'></i>
+            <i className='fa-solid fa-location-dot text-yellow-400 text-xs flex-shrink-0'></i>
 
             <div className='min-w-0 flex-1'>
               <p className='text-navy-400 text-[11px] leading-none mb-0.5'>

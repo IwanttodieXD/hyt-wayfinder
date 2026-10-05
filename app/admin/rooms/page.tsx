@@ -13,7 +13,7 @@ import UserProfile from '@/components/UserProfile';
 const FLOORS = ['G', '2', '3', '4', 'Roof'] as const;
 
 const INPUT =
-  'w-full px-4 py-2.5 rounded-lg bg-navy-950/60 border border-navy-700 text-white placeholder-navy-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors';
+  'w-full px-4 py-2.5 rounded-lg bg-navy-950/60 border border-navy-700 text-white placeholder-navy-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500 transition-colors';
 
 type FormState = {
   roomNumber: string;
@@ -259,7 +259,7 @@ export default function RoomsPage() {
           </Link>
           <button
             onClick={openCreate}
-            className='px-4 py-2 rounded-lg bg-orange-500/20 text-orange-300 border border-orange-500/30 hover:bg-orange-500/30 transition-colors flex items-center gap-2 font-semibold text-sm'
+            className='px-4 py-2 rounded-lg bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 hover:bg-yellow-500/30 transition-colors flex items-center gap-2 font-semibold text-sm'
           >
             <i className='fa-solid fa-plus'></i>
             Add Room
@@ -513,7 +513,7 @@ export default function RoomsPage() {
               <button
                 onClick={handleSave}
                 disabled={isSaving}
-                className='flex-1 px-4 py-3 rounded-lg bg-orange-500 hover:bg-orange-600 text-paper font-semibold text-sm transition-colors disabled:opacity-50'
+                className='flex-1 px-4 py-3 rounded-lg bg-yellow-500 hover:bg-yellow-600 text-yellow-950 font-semibold text-sm transition-colors disabled:opacity-50'
               >
                 {isSaving ? 'Saving...' : editing ? 'Save Changes' : 'Add Room'}
               </button>

@@ -14,12 +14,12 @@ import {
 import UserProfile from '@/components/UserProfile';
 
 const INPUT =
-  'w-full px-4 py-2.5 rounded-lg bg-navy-950/60 border border-navy-700 text-white placeholder-navy-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors';
+  'w-full px-4 py-2.5 rounded-lg bg-navy-950/60 border border-navy-700 text-white placeholder-navy-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500 transition-colors';
 
 /** Badge colours per visitor type. Unknown labels fall back to neutral. */
 const TYPE_STYLES: Record<string, string> = {
   Trainee: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
-  Trainer: 'bg-orange-500/20 text-orange-300 border-orange-500/30',
+  Trainer: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30',
   VIP: 'bg-amber-400/20 text-amber-300 border-amber-400/30',
   Guest: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
   Contractor: 'bg-navy-600/20 text-navy-300 border-navy-600/30',
@@ -347,7 +347,7 @@ if (editing) {
             </Link>
             <button
               onClick={openCreate}
-              className='px-4 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 text-paper font-semibold text-sm transition-colors flex items-center gap-2'
+              className='px-4 py-2 rounded-lg bg-yellow-500 hover:bg-yellow-600 text-yellow-950 font-semibold text-sm transition-colors flex items-center gap-2'
             >
               <i className='fa-solid fa-user-plus'></i>
               Add User
@@ -358,13 +358,13 @@ if (editing) {
               headline number for this page; the role counts below are the
               breakdown of it. */}
           <div className='mb-3'>
-            <div className='glass-panel border-orange-500/30 rounded-lg p-6'>
+            <div className='glass-panel border-yellow-500/30 rounded-lg p-6'>
               <div className='flex items-center gap-5'>
-                <div className='w-16 h-16 rounded-xl bg-orange-500/20 flex items-center justify-center flex-shrink-0'>
-                  <i className='fa-solid fa-users text-orange-400 text-3xl'></i>
+                <div className='w-16 h-16 rounded-xl bg-yellow-500/20 flex items-center justify-center flex-shrink-0'>
+                  <i className='fa-solid fa-users text-yellow-400 text-3xl'></i>
                 </div>
                 <div className='min-w-0'>
-                  <p className='text-orange-300 text-xs font-semibold uppercase tracking-wider mb-1'>
+                  <p className='text-yellow-300 text-xs font-semibold uppercase tracking-wider mb-1'>
                     Total Users
                   </p>
                   <p className='text-white text-5xl font-bold leading-none tabular-nums'>
@@ -428,7 +428,7 @@ if (editing) {
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     placeholder='Search name, email, room, or purpose...'
-                    className='w-full pl-12 pr-4 py-2.5 rounded-lg bg-navy-900/50 border border-navy-700 text-white placeholder-navy-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500 transition-colors'
+                    className='w-full pl-12 pr-4 py-2.5 rounded-lg bg-navy-900/50 border border-navy-700 text-white placeholder-navy-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500 transition-colors'
                   />
                 </div>
               </div>
@@ -439,7 +439,7 @@ if (editing) {
                 <div className='flex flex-wrap gap-2'>
                   <button
                     onClick={() => setTypeFilter('all')}
-                    className={`px-4 py-2.5 rounded-lg font-semibold text-sm capitalize transition-colors border-2 ${typeFilter === 'all' ? 'bg-orange-500/20 text-orange-300 border-orange-500' : 'bg-navy-900/50 text-navy-300 border-navy-700 hover:border-navy-600'}`}
+                    className={`px-4 py-2.5 rounded-lg font-semibold text-sm capitalize transition-colors border-2 ${typeFilter === 'all' ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500' : 'bg-navy-900/50 text-navy-300 border-navy-700 hover:border-navy-600'}`}
                   >
                     All ({users.length})
                   </button>
@@ -447,7 +447,7 @@ if (editing) {
                     <button
                       key={label}
                       onClick={() => setTypeFilter(label)}
-                      className={`px-4 py-2.5 rounded-lg font-semibold text-sm capitalize transition-colors border-2 ${typeFilter === label ? 'bg-orange-500/20 text-orange-300 border-orange-500' : 'bg-navy-900/50 text-navy-300 border-navy-700 hover:border-navy-600'}`}
+                      className={`px-4 py-2.5 rounded-lg font-semibold text-sm capitalize transition-colors border-2 ${typeFilter === label ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500' : 'bg-navy-900/50 text-navy-300 border-navy-700 hover:border-navy-600'}`}
                     >
                       {label} ({count})
                     </button>
@@ -461,13 +461,13 @@ if (editing) {
                 <div className='flex flex-wrap gap-2'>
                   <button
                     onClick={() => setShowArchived(false)}
-                    className={`px-4 py-2.5 rounded-lg font-semibold text-sm transition-colors border-2 ${!showArchived ? 'bg-orange-500/20 text-orange-300 border-orange-500' : 'bg-navy-900/50 text-navy-300 border-navy-700 hover:border-navy-600'}`}
+                    className={`px-4 py-2.5 rounded-lg font-semibold text-sm transition-colors border-2 ${!showArchived ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500' : 'bg-navy-900/50 text-navy-300 border-navy-700 hover:border-navy-600'}`}
                   >
                     Active ({users.length})
                   </button>
                   <button
                     onClick={() => setShowArchived(true)}
-                    className={`px-4 py-2.5 rounded-lg font-semibold text-sm transition-colors border-2 ${showArchived ? 'bg-orange-500/20 text-orange-300 border-orange-500' : 'bg-navy-900/50 text-navy-300 border-navy-700 hover:border-navy-600'}`}
+                    className={`px-4 py-2.5 rounded-lg font-semibold text-sm transition-colors border-2 ${showArchived ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500' : 'bg-navy-900/50 text-navy-300 border-navy-700 hover:border-navy-600'}`}
                   >
                     Archived ({archivedUsers.length})
                   </button>
@@ -503,8 +503,8 @@ if (editing) {
                       >
                         <td className='px-4 py-3'>
                           <div className='flex items-center gap-3'>
-                            <div className='w-9 h-9 rounded-lg bg-orange-500/20 flex items-center justify-center flex-shrink-0'>
-                              <i className='fa-solid fa-user text-orange-400'></i>
+                            <div className='w-9 h-9 rounded-lg bg-yellow-500/20 flex items-center justify-center flex-shrink-0'>
+                              <i className='fa-solid fa-user text-yellow-400'></i>
                             </div>
                             <div className='min-w-0'>
                               <p className='text-white font-semibold text-sm'>{u.name}</p>
@@ -634,7 +634,7 @@ if (editing) {
 
               {isLoading && users.length === 0 && (
                 <div className='text-center py-12'>
-                  <i className='fa-solid fa-spinner fa-spin text-orange-400 text-2xl'></i>
+                  <i className='fa-solid fa-spinner fa-spin text-yellow-400 text-2xl'></i>
                   <p className='text-navy-300 mt-2'>Loading users...</p>
                 </div>
               )}
@@ -824,7 +824,7 @@ if (editing) {
                   htmlFor='courseId'
                   className='block text-sm font-medium text-navy-200 mb-2'
                 >
-                  Course <span className='text-orange-400'>*</span>
+                  Course <span className='text-yellow-400'>*</span>
                 </label>
                 <div className='relative'>
                   <select
@@ -975,7 +975,7 @@ if (editing) {
                 <button
                   type='submit'
                   disabled={isSaving}
-                  className='flex-1 px-4 py-2.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-paper font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+                  className='flex-1 px-4 py-2.5 rounded-lg bg-yellow-500 hover:bg-yellow-600 text-yellow-950 font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
                 >
                   {isSaving ? 'Saving...' : editing ? 'Save Changes' : 'Create'}
                 </button>

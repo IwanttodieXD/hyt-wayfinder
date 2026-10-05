@@ -3,6 +3,7 @@
 import { useAuthStore } from '@/store/authStore';
 import { useRoleGuard } from '@/hooks/useRoleGuard';
 import { useAttendanceStatus, useClockInProfile } from '@/hooks/useClockInProfile';
+import { useAutoCheckInAfterVerify } from '@/hooks/useAutoCheckInAfterVerify';
 import StudentMobileView from '@/components/StudentMobileView';
 import UserProfile from '@/components/UserProfile';
 
@@ -20,6 +21,11 @@ export default function CheckInPage() {
   // "not checked in" for someone who is genuinely inside - and so the 3D route
   // button is reachable after a refresh.
   useAttendanceStatus(user?.id);
+
+  // When the visitor arrives signed in from /verify, check them in
+  // automatically (reusing the same action as a manual scan) instead of making
+  // them scan the entrance code. Returns an error string if that write failed.
+  const { error: autoCheckInError } = useAutoCheckInAfterVerify();
 
   if (!isAllowed) {
     return null;
@@ -55,6 +61,21 @@ export default function CheckInPage() {
             {isAuthenticated && user ? <UserProfile /> : null}
           </div>
         </header>
+
+        {/* Automatic check-in failure. Shown instead of a false "checked in"
+            state: the visitor is genuinely not checked in, so they are pointed
+            at the manual scan that still works. */}
+        {autoCheckInError && (
+          <div className='flex-shrink-0 bg-red-500/10 border-b border-red-500/30 px-4 py-2'>
+            <p
+              role='alert'
+              className='max-w-7xl mx-auto text-red-300 text-xs flex items-start gap-2'
+            >
+              <i className='fa-solid fa-circle-exclamation mt-0.5'></i>
+              <span>{autoCheckInError}</span>
+            </p>
+          </div>
+        )}
 
         {/* Main Content - Full Screen Mobile View. `min-h-0` lets this flex child
             shrink so the taller route frame fits without pushing the header

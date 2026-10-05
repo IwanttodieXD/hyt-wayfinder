@@ -38,10 +38,10 @@ export default function Scene() {
   return (
     <>
       {!isLocked && (
-        <div className='absolute inset-0 z-10 flex items-center justify-center bg-black/50 pointer-events-none'>
-          <div className='bg-black/80 px-5 py-3 rounded-lg border-2 border-orange-400 text-center pointer-events-auto space-y-4'>
+        <div className='theme-fixed-dark absolute inset-0 z-10 flex items-center justify-center bg-black/50 pointer-events-none'>
+          <div className='bg-black/80 px-5 py-3 rounded-lg border-2 border-yellow-400 text-center pointer-events-auto space-y-4'>
             <h2 className='text-2xl font-bold text-white'>Click to Start</h2>
-            <p className='text-orange-300'>Click anywhere to begin exploring</p>
+            <p className='text-yellow-300'>Click anywhere to begin exploring</p>
             <button
               onClick={handleReturn}
               className='mt-2 flex items-center gap-2 mx-auto px-5 py-2.5 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 text-white text-sm font-medium transition-colors duration-150'

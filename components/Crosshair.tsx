@@ -6,7 +6,7 @@ interface CrosshairProps {
 
 export default function Crosshair({ isTargeting = false }: CrosshairProps) {
   return (
-    <div className='fixed inset-0 pointer-events-none z-30 flex items-center justify-center'>
+    <div className='theme-fixed-dark fixed inset-0 pointer-events-none z-30 flex items-center justify-center'>
       {/* Outer circle */}
       <div
         className={`relative w-8 h-8 rounded-full border-2 transition-colors duration-150 ${
