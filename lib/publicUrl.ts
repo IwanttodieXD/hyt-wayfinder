@@ -123,7 +123,14 @@ export interface VerifyRecord {
   full_name: string;
   programme: string | null;
   course_id: string | null;
-  email: string;
+  /**
+   * Nullable since migration 20260101000014: a roster row with no address on
+   * file has no email. Callers must not pass this to signInWithOtp without
+   * checking `has_email` first.
+   */
+  email: string | null;
+  /** False when there is no address, so no magic link can be delivered. */
+  has_email: boolean;
 }
 
 /**
@@ -137,6 +144,7 @@ export interface VerifyRecord {
 export type VerifyOutcome =
   | { kind: 'found'; record: VerifyRecord }
   | { kind: 'not-found' }
+  | { kind: 'ambiguous'; count: number }
   | { kind: 'error'; message: string };
 
 /**
@@ -144,26 +152,36 @@ export type VerifyOutcome =
  *
  * IDENTIFICATION ONLY - this does not authenticate. See the header of migration
  * 20260101000013 for why name and course cannot stand in for a credential.
+ *
+ * Keyed on name + course rather than email, because the visitor picks a course
+ * from a list instead of typing an address. The returned record still carries
+ * the email, and that - never anything the caller supplied - is where the magic
+ * link goes. So a visitor cannot redirect their own sign-in link by typing a
+ * different address here.
+ *
+ * `ambiguous` is a distinct outcome on purpose. Courses hold many people and two
+ * of them can share a name, so more than one row is a real possibility. Picking
+ * the first would show somebody a stranger's verdict AND mail that stranger's
+ * sign-in link to an address the person at the door controls the phone for.
  */
 export async function verifyVisitor(
-  email: string,
   name: string,
+  courseId: string,
   supabase: { rpc: (fn: string, args: Record<string, unknown>) => PromiseLike<{ data: unknown; error: { message?: string } | null }> }
 ): Promise<VerifyOutcome> {
-  const trimmedEmail = email.trim();
   const trimmedName = name.trim();
 
-  if (!trimmedEmail || !trimmedEmail.includes('@')) {
-    return { kind: 'error', message: 'Enter a valid email address.' };
-  }
   if (!trimmedName) {
     return { kind: 'error', message: 'Enter the full name on your record.' };
+  }
+  if (!courseId) {
+    return { kind: 'error', message: 'Select your course.' };
   }
 
   try {
     const { data, error } = await supabase.rpc('verify_visitor', {
-      p_email: trimmedEmail,
       p_name: trimmedName,
+      p_course_id: courseId,
     });
     if (error) {
       return {
@@ -171,9 +189,10 @@ export async function verifyVisitor(
         message: 'Could not check your record. Try again in a moment.',
       };
     }
-    const rows = Array.isArray(data) ? data : [];
-    const row = rows[0] as VerifyRecord | undefined;
-    return row ? { kind: 'found', record: row } : { kind: 'not-found' };
+    const rows = Array.isArray(data) ? (data as VerifyRecord[]) : [];
+    if (rows.length === 0) return { kind: 'not-found' };
+    if (rows.length > 1) return { kind: 'ambiguous', count: rows.length };
+    return { kind: 'found', record: rows[0] };
   } catch {
     return {
       kind: 'error',

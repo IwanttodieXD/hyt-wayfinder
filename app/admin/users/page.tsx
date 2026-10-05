@@ -173,7 +173,11 @@ export default function UsersPage() {
         const matchesSearch =
           !term ||
           u.name.toLowerCase().includes(term) ||
-          u.email.toLowerCase().includes(term) ||
+          // Nullable since migration 20260101000014: roster rows with no address
+          // have NULL here. Calling .toLowerCase() unguarded throws and takes the
+          // ENTIRE list down, not just this row - one keystroke in the search box
+          // would blank the admin page.
+          (u.email ?? '').toLowerCase().includes(term) ||
           (u.company ?? '').toLowerCase().includes(term) ||
           // Still searched even though it is no longer editable: legacy rows may
           // carry a host name, and staff looking someone up should still find them.
@@ -206,7 +210,9 @@ export default function UsersPage() {
     setEditing(target);
     setForm({
       name: target.name,
-      email: target.email,
+      // Nullable since 20260101000014; the form's own field stays a string
+      // because an admin editing this person is expected to supply an address.
+      email: target.email ?? '',
       password: '',
       visitorTypeId: target.visitorType
         ? (visitorTypes.find((t) => t.label === target.visitorType)?.id ?? '')
@@ -502,7 +508,12 @@ if (editing) {
                             </div>
                             <div className='min-w-0'>
                               <p className='text-white font-semibold text-sm'>{u.name}</p>
-                              <p className='text-navy-500 text-xs truncate'>{u.email}</p>
+                              <p className='text-navy-500 text-xs truncate'>
+                            {/* 'No email on file' rather than a blank line: a
+                                silent gap reads as a rendering bug, and this is
+                                the registrar's cue to collect an address. */}
+                            {u.email ?? 'No email on file'}
+                          </p>
                               {u.phone && (
                                 // Tidied on display as well, so rows typed before
                                 // this existed read the same as new ones. The stored

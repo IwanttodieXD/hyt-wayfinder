@@ -5,7 +5,11 @@ import type { UserRole } from '@/store/authStore';
 
 export interface ManagedUser {
   id: string;
-  email: string;
+  /**
+   * Nullable since migration 20260101000014. A cohort member whose roster row
+   * carried no address has NULL here, so anything that reads it must cope.
+   */
+  email: string | null;
   name: string;
   role: UserRole;
   createdAt: Date;

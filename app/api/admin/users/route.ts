@@ -316,7 +316,12 @@ export async function PATCH(request: Request) {
     );
   }
 
-  const previousEmail = existing.email as string;
+  // Nullable since migration 20260101000014: a cohort member with no address on
+  // file has NULL here. It is only read to roll back a failed profile write, and
+  // this branch has already succeeded in setting a real address on the auth
+  // row - so a NULL previous value means there is nothing to put back, not that
+  // the rollback is impossible.
+  const previousEmail = (existing.email as string | null) ?? null;
 
   const { error: authError } = await service.auth.admin.updateUserById(id, {
     email: nextEmail,
@@ -343,6 +348,18 @@ export async function PATCH(request: Request) {
   const { error } = await service.from('users').update(patch).eq('id', id);
 
   if (error) {
+    // There was no address to restore (nullable since 20260101000014), so the
+    // rollback is a no-op rather than a failure. Reporting it as one would send
+    // the admin chasing a split state that does not exist.
+    if (previousEmail === null) {
+      return NextResponse.json(
+        {
+          error: `Could not save the profile: ${error.message}. This account had no email address before, so there was no sign-in address to roll back.`,
+        },
+        { status: 400 }
+      );
+    }
+
     // Best effort. If the rollback also fails the admin needs to know the
     // account is in a split state, so the original error is not swallowed.
     const { error: rollbackError } = await service.auth.admin.updateUserById(id, {

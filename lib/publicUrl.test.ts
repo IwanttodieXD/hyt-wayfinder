@@ -174,36 +174,111 @@ describe('verifyVisitor', () => {
     programme: 'Barista NC II',
     course_id: '11111111-1111-1111-1111-111111111111',
     email: 'gemmaaranda05@gmail.com',
+    has_email: true,
   };
   const stub = (impl: (fn: string, args: Record<string, unknown>) => unknown) =>
     ({ rpc: impl }) as never;
 
-  test('found: returns the record for a matching email and name', async () => {
+  const COURSE = '11111111-1111-1111-1111-111111111111';
+
+  test('found: returns the record for a matching name and course', async () => {
     const out = await verifyVisitor(
-      'gemmaaranda05@gmail.com',
       'Gemmalyn Ocbina Aranda',
+      COURSE,
       stub(() => Promise.resolve({ data: [record], error: null }))
     );
     assert.equal(out.kind, 'found');
     assert.deepEqual(out.kind === 'found' ? out.record : null, record);
   });
 
-  test('not-found: unknown address, and this is NOT an error', async () => {
+  test('the email comes from the matched row, never from the caller', async () => {
+    // The whole point of dropping the email input: the sign-in link must go to
+    // the address on file. If the UI could ever pass an address through to
+    // signInWithOtp, whoever held the phone could redirect a stranger's link.
+    const out = await verifyVisitor(
+      'Gemmalyn Ocbina Aranda',
+      COURSE,
+      stub(() => Promise.resolve({ data: [record], error: null }))
+    );
+    assert.equal(out.kind === 'found' ? out.record.email : null, record.email);
+  });
+
+  test('surfaces a roster row that has no address, rather than pretending', async () => {
+    // Migration 20260101000014 made users.email nullable. The record still comes
+    // back as 'found' - they ARE on the roster and approved - but email is null
+    // and has_email is false, which is the page's cue to send them to the desk
+    // instead of promising a magic link that cannot be delivered.
+    const noEmail = {
+      ...record,
+      email: null,
+      has_email: false,
+    };
+    const out = await verifyVisitor(
+      'Daniella Casiano',
+      COURSE,
+      stub(() => Promise.resolve({ data: [noEmail], error: null }))
+    );
+    assert.equal(out.kind, 'found');
+    assert.equal(out.kind === 'found' ? out.record.has_email : true, false);
+    assert.equal(out.kind === 'found' ? out.record.email : 'x', null);
+    // The verdict still has to survive, or the front desk loses the reason the
+    // person is being turned away.
+    assert.equal(
+      out.kind === 'found' ? out.record.orientation_status : null,
+      'approved'
+    );
+  });
+
+  test('a null email is not mistaken for not-found', async () => {
+    // The distinction the whole nullable-email change rests on: a missing
+    // address must never collapse into "we have no record of you", which would
+    // send a real cohort member off to register a duplicate account.
+    const out = await verifyVisitor(
+      'Daniella Casiano',
+      COURSE,
+      stub(() =>
+        Promise.resolve({
+          data: [{ ...record, email: null, has_email: false }],
+          error: null,
+        })
+      )
+    );
+    assert.notEqual(out.kind, 'not-found');
+    assert.equal(out.kind, 'found');
+  });
+
+  test('not-found: unknown name in that course, and this is NOT an error', async () => {
     // Critical distinction. Reporting this as an error would tell a legitimate
     // member "we could not check you" because of a dropped connection, sending
     // them to re-register and creating the duplicate account we are avoiding.
     const out = await verifyVisitor(
-      'stranger@example.com',
       'A Stranger',
+      COURSE,
       stub(() => Promise.resolve({ data: [], error: null }))
     );
     assert.equal(out.kind, 'not-found');
   });
 
+  test('ambiguous: two people share a name in one course', async () => {
+    // A course holds many people, so this is reachable, not theoretical. It must
+    // NOT resolve to either record - picking one shows somebody a stranger's
+    // verdict and mails that stranger's sign-in link.
+    const twin = { ...record, email: 'other.person@gmail.com' };
+    const out = await verifyVisitor(
+      'Gemmalyn Ocbina Aranda',
+      COURSE,
+      stub(() => Promise.resolve({ data: [record, twin], error: null }))
+    );
+    assert.equal(out.kind, 'ambiguous');
+    assert.equal(out.kind === 'ambiguous' ? out.count : 0, 2);
+    // Crucially, neither record is exposed for the page to act on.
+    assert.ok(!('record' in out));
+  });
+
   test('error: RPC failure is reported separately from not-found', async () => {
     const out = await verifyVisitor(
-      'gemmaaranda05@gmail.com',
       'Gemmalyn Ocbina Aranda',
+      COURSE,
       stub(() => Promise.resolve({ data: null, error: { message: 'boom' } }))
     );
     assert.equal(out.kind, 'error');
@@ -212,8 +287,8 @@ describe('verifyVisitor', () => {
 
   test('error: a thrown transport failure is caught, not propagated', async () => {
     const out = await verifyVisitor(
-      'gemmaaranda05@gmail.com',
       'Gemmalyn Ocbina Aranda',
+      COURSE,
       stub(() => Promise.reject(new Error('offline')))
     );
     assert.equal(out.kind, 'error');
@@ -225,33 +300,35 @@ describe('verifyVisitor', () => {
       called = true;
       return Promise.resolve({ data: [], error: null });
     });
-    assert.equal((await verifyVisitor('', 'A Name', client)).kind, 'error');
-    assert.equal((await verifyVisitor('not-an-email', 'A Name', client)).kind, 'error');
-    assert.equal((await verifyVisitor('a@b.com', '   ', client)).kind, 'error');
+    assert.equal((await verifyVisitor('', COURSE, client)).kind, 'error');
+    assert.equal((await verifyVisitor('   ', COURSE, client)).kind, 'error');
+    assert.equal((await verifyVisitor('A Name', '', client)).kind, 'error');
     assert.equal(called, false);
   });
 
-  test('sends trimmed, lowercased-equivalent arguments', async () => {
+  test('sends the trimmed name and the course id it was given', async () => {
     let args: Record<string, unknown> = {};
     await verifyVisitor(
-      '  gemmaaranda05@gmail.com ',
       '  Gemmalyn Ocbina Aranda  ',
+      COURSE,
       stub((_fn, a) => {
         args = a;
         return Promise.resolve({ data: [], error: null });
       })
     );
     // Trimming is done here; case folding is the database's job via lower().
-    assert.equal(args.p_email, 'gemmaaranda05@gmail.com');
     assert.equal(args.p_name, 'Gemmalyn Ocbina Aranda');
+    assert.equal(args.p_course_id, COURSE);
+    // The address must not be an argument at all.
+    assert.ok(!('p_email' in args));
   });
 
   test('passes a declined verdict through unchanged', async () => {
     // The page branches on this, so it must survive the round trip intact.
     const declined = { ...record, orientation_status: 'declined' as const };
     const out = await verifyVisitor(
-      'gemmaaranda05@gmail.com',
       'Gemmalyn Ocbina Aranda',
+      COURSE,
       stub(() => Promise.resolve({ data: [declined], error: null }))
     );
     assert.equal(out.kind === 'found' ? out.record.orientation_status : null, 'declined');
@@ -260,8 +337,8 @@ describe('verifyVisitor', () => {
   test('preserves pending, which must not be treated as approved', async () => {
     const pending = { ...record, orientation_status: 'pending' as const };
     const out = await verifyVisitor(
-      'gemmaaranda05@gmail.com',
       'Gemmalyn Ocbina Aranda',
+      COURSE,
       stub(() => Promise.resolve({ data: [pending], error: null }))
     );
     assert.equal(out.kind === 'found' ? out.record.orientation_status : null, 'pending');

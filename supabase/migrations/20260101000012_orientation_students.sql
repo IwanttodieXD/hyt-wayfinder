@@ -13,11 +13,14 @@
 --   * public.users.id REFERENCES auth.users(id) ON DELETE CASCADE. A profile
 --     row cannot exist without a matching auth login, so auth.users is
 --     populated first and public.users joins onto it by email.
---   * public.users.email is NOT NULL UNIQUE, and 23 of the
---     131 roster rows had no usable address (blank, or a NAME typed
---     into the column). Those get a *.pending@orientation.hyt.local
---     placeholder so the constraint is satisfied; the audit query at the
---     bottom lists every one, to be replaced before credentials go out.
+--   * public.users.email was NOT NULL UNIQUE when this was generated, and
+--     23 of the 131 rows had no usable address
+--     (blank, or a NAME typed into the column). Those got a
+--     *.pending@orientation.hyt.local placeholder to satisfy the constraint.
+--     Migration 20260101000014 later made the column nullable and retired those
+--     placeholders to NULL. The SQL below is kept verbatim so this migration
+--     stays reproducible against the schema it was written for, but the
+--     CURRENT state of those rows is NULL, not the placeholder.
 --   * There was no orientation verdict anywhere in the schema, so
 --     orientation_status is added here as an enum. 'pending' is the default and
 --     is what self-registration produces.

@@ -16,11 +16,16 @@
 -- check-in record and room access. On a system that tracks who is physically
 -- inside a building, that is an impersonation backdoor, not a convenience.
 --
--- So this function is deliberately IDENTIFICATION ONLY. It resolves an address
--- to a row so the UI can say "we found you, here's your verdict, check your
--- email to continue". The session is then established by Supabase's magic-link
--- email, which proves the visitor controls the mailbox and cannot be replayed
--- by somebody standing at the door.
+-- So this function is deliberately IDENTIFICATION ONLY. It resolves a name and
+-- course to a row so the UI can say "we found you, here's your verdict, check the
+-- email on file to continue". The session is then established by Supabase's
+-- magic-link email, which proves the visitor controls the mailbox and cannot be
+-- replayed by somebody standing at the door.
+--
+-- Note that the email is OUTPUT, never INPUT. The visitor no longer types it -
+-- they pick a course - and the address is read back off the matched row, so the
+-- link always goes to the address on file and cannot be redirected by whoever is
+-- holding the phone.
 --
 -- If you later decide a self-service kiosk genuinely needs to admit someone
 -- without email, that is a different feature with a different threat model.
@@ -29,26 +34,47 @@
 --
 -- SECURITY TRADEOFF
 -- ----------------
--- SECURITY DEFINER bypasses RLS, so callers can enumerate the cohort by
--- guessing addresses. The full reasoning, and the alternative if it stops being
--- acceptable, are in 20260101000013. This function widens that surface slightly
--- by also matching on name, so it is kept to returning the minimum needed to
--- drive the UI.
+-- SECURITY DEFINER bypasses RLS, so callers can enumerate the cohort by guessing
+-- name + course. The full reasoning, and the alternative if it stops being
+-- acceptable, are in 20260101000013. It is kept to returning the minimum needed
+-- to drive the UI.
+--
+-- AMBIGUITY
+-- ---------
+-- A course is not a unique key - a cohort holds many people, and two of them can
+-- share a name. So this returns ALL matching rows and the caller is required to
+-- refuse when there is more than one. Picking the first row would show somebody
+-- another visitor's verdict and send them that stranger's sign-in link.
 --
 -- Safe to re-run: CREATE OR REPLACE.
 -- ============================================================================
 
 
+-- Postgres identifies a function by its argument TYPES, so the (TEXT, TEXT) form
+-- from the email-keyed version is a different function and CREATE OR REPLACE
+-- would leave it in place, still callable. Dropped explicitly rather than left
+-- behind. The (TEXT, UUID) form is replaced in place, so it needs no drop.
+DROP FUNCTION IF EXISTS public.verify_visitor(TEXT, TEXT);
+
+
+DROP FUNCTION IF EXISTS public.verify_visitor(TEXT, UUID);
+
+
 CREATE OR REPLACE FUNCTION public.verify_visitor(
-  p_email TEXT,
-  p_name  TEXT DEFAULT NULL
+  p_name      TEXT,
+  p_course_id UUID
 )
 RETURNS TABLE (
   orientation_status public.orientation_status,
   full_name         TEXT,
   programme         TEXT,
   course_id         UUID,
-  email             TEXT
+  email             TEXT,
+  -- False when the roster gave this person no address (migration
+  -- 20260101000014). The caller MUST NOT offer to email a sign-in link it
+  -- cannot deliver: the visitor would sit in front of a phone waiting for mail
+  -- that was never sent, which is worse than being sent to the front desk.
+  has_email         BOOLEAN
 )
 LANGUAGE sql
 SECURITY DEFINER
@@ -60,44 +86,39 @@ AS $$
     u.name,
     c.label,
     u.course_id,
-    u.email
+    u.email,
+    (u.email IS NOT NULL)
   FROM public.users u
   LEFT JOIN public.courses c ON c.id = u.course_id
-  WHERE lower(u.email) = lower(btrim(p_email))
-    AND u.archived_at IS NULL
-    -- Optional second factor. When a name is supplied it must match the row.
-    -- This is NOT a secret and does not authenticate anybody - it exists to
-    -- catch the case where someone typed the wrong address and to catch a
-    -- mistyped name, not to prove identity.
-    AND (
-      p_name IS NULL
-      OR btrim(p_name) = ''
-      OR lower(u.name) = lower(btrim(p_name))
-    )
-  LIMIT 1;
+  WHERE u.course_id = p_course_id
+    AND lower(u.name) = lower(btrim(p_name))
+    AND u.archived_at IS NULL;
 $$;
 
-COMMENT ON FUNCTION public.verify_visitor(TEXT, TEXT) IS
-  'IDENTIFICATION ONLY - resolves an email to an orientation record so the UI '
-  'can show a verdict. Does not create a session. See the migration header for '
-  'why name+course must never be treated as authentication.';
+COMMENT ON FUNCTION public.verify_visitor(TEXT, UUID) IS
+  'IDENTIFICATION ONLY - resolves a name + course to an orientation record so the '
+  'UI can show a verdict. Does not create a session. Returns EVERY match rather '
+  'than LIMIT 1: two people can share a name in one cohort, and silently picking '
+  'one would show a stranger another visitor''s verdict. has_email is false when '
+  'no address is on file, in which case no magic link can be sent.';
 
-REVOKE ALL ON FUNCTION public.verify_visitor(TEXT, TEXT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.verify_visitor(TEXT, TEXT) TO anon, authenticated;
+REVOKE ALL ON FUNCTION public.verify_visitor(TEXT, UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.verify_visitor(TEXT, UUID) TO anon, authenticated;
 
 
 -- ----------------------------------------------------------------------------
 -- Verify
 -- ----------------------------------------------------------------------------
 --
--- Correct address, correct name -> one row.
---   SELECT * FROM public.verify_visitor('gemmaaranda05@gmail.com', 'Gemmalyn Ocbina Aranda');
+-- Correct name, correct course -> one row.
+--   SELECT * FROM public.verify_visitor('Gemmalyn Ocbina Aranda', '<course uuid>');
 --
--- Correct address, wrong name -> zero rows, NOT an error:
---   SELECT count(*) FROM public.verify_visitor('gemmaaranda05@gmail.com', 'Wrong Name');
+-- Two people sharing a name in one cohort -> TWO rows. The caller must treat
+-- this as ambiguous rather than picking one:
+--   SELECT count(*) FROM public.verify_visitor('Juan Dela Cruz', '<course uuid>');
 --
--- Unknown address -> zero rows:
---   SELECT count(*) FROM public.verify_visitor('nobody@example.com');
+-- Wrong course, or a name not in that course -> zero rows, NOT an error:
+--   SELECT count(*) FROM public.verify_visitor('Wrong Name', '<course uuid>');
 
 
 CREATE OR REPLACE FUNCTION public.orientation_status_for(p_email TEXT)
