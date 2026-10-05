@@ -48,15 +48,22 @@ export function siteOrigin(): string {
 }
 
 /**
- * Absolute URL of the self-registration page.
+ * Absolute URL of the entrance verification page.
  *
- * `/register` and not `/station`: the station is admin-only and bounces
- * non-admins to /admin, so a poster pointing there would dead-end a walk-in
- * with a redirect they cannot follow.
+ * `/verify`, not `/register`: scanning a poster should identify the visitor
+ * first. A cohort member already on file gets their verdict immediately instead
+ * of being sent through a second registration that would collide on their email
+ * and create the duplicate account the flow is meant to prevent. Only somebody
+ * with no record is forwarded on to `/register`.
+ *
+ * Not `/station` either - that is admin-only and redirects non-admins away.
  */
 export function registrationUrl(): string {
-  return `${siteOrigin()}/register`;
+  return `${siteOrigin()}/verify`;
 }
+
+/** Kept as an alias: several call sites and tests read better with this name. */
+export const verificationUrl = registrationUrl;
 
 // ---------------------------------------------------------------------------
 // Orientation verdict lookup
@@ -104,5 +111,73 @@ export async function fetchOrientationStatus(
     return row ?? null;
   } catch {
     return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Entrance verification
+// ---------------------------------------------------------------------------
+
+export interface VerifyRecord {
+  orientation_status: OrientationStatus;
+  full_name: string;
+  programme: string | null;
+  course_id: string | null;
+  email: string;
+}
+
+/**
+ * Outcome of a verification attempt, deliberately richer than a boolean.
+ *
+ * `not-found` and `error` are kept apart on purpose. Conflating them would mean
+ * telling somebody "we have no record of you" when the real problem was a dropped
+ * connection, which sends a legitimate cohort member off to re-register and
+ * creates exactly the duplicate account this flow is meant to avoid.
+ */
+export type VerifyOutcome =
+  | { kind: 'found'; record: VerifyRecord }
+  | { kind: 'not-found' }
+  | { kind: 'error'; message: string };
+
+/**
+ * Resolves who somebody claims to be.
+ *
+ * IDENTIFICATION ONLY - this does not authenticate. See the header of migration
+ * 20260101000013 for why name and course cannot stand in for a credential.
+ */
+export async function verifyVisitor(
+  email: string,
+  name: string,
+  supabase: { rpc: (fn: string, args: Record<string, unknown>) => PromiseLike<{ data: unknown; error: { message?: string } | null }> }
+): Promise<VerifyOutcome> {
+  const trimmedEmail = email.trim();
+  const trimmedName = name.trim();
+
+  if (!trimmedEmail || !trimmedEmail.includes('@')) {
+    return { kind: 'error', message: 'Enter a valid email address.' };
+  }
+  if (!trimmedName) {
+    return { kind: 'error', message: 'Enter the full name on your record.' };
+  }
+
+  try {
+    const { data, error } = await supabase.rpc('verify_visitor', {
+      p_email: trimmedEmail,
+      p_name: trimmedName,
+    });
+    if (error) {
+      return {
+        kind: 'error',
+        message: 'Could not check your record. Try again in a moment.',
+      };
+    }
+    const rows = Array.isArray(data) ? data : [];
+    const row = rows[0] as VerifyRecord | undefined;
+    return row ? { kind: 'found', record: row } : { kind: 'not-found' };
+  } catch {
+    return {
+      kind: 'error',
+      message: 'Could not reach the server. Check your connection and try again.',
+    };
   }
 }

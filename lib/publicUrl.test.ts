@@ -5,6 +5,8 @@ import {
   fetchOrientationStatus,
   registrationUrl,
   siteOrigin,
+  verificationUrl,
+  verifyVisitor,
 } from './publicUrl.ts';
 
 // The QR is printed and scanned by a phone, so the URL it encodes is effectively
@@ -24,7 +26,7 @@ describe('siteOrigin', () => {
     process.env.NEXT_PUBLIC_APP_URL = 'https://hyt.example.com///';
     try {
       assert.equal(siteOrigin(), 'https://hyt.example.com');
-      assert.equal(registrationUrl(), 'https://hyt.example.com/register');
+      assert.equal(registrationUrl(), 'https://hyt.example.com/verify');
     } finally {
       if (before === undefined) delete process.env.NEXT_PUBLIC_APP_URL;
       else process.env.NEXT_PUBLIC_APP_URL = before;
@@ -164,18 +166,129 @@ describe('fetchOrientationStatus', () => {
     assert.equal(result, null);
   });
 });
+
+describe('verifyVisitor', () => {
+  const record = {
+    orientation_status: 'approved' as const,
+    full_name: 'Gemmalyn Ocbina Aranda',
+    programme: 'Barista NC II',
+    course_id: '11111111-1111-1111-1111-111111111111',
+    email: 'gemmaaranda05@gmail.com',
+  };
+  const stub = (impl: (fn: string, args: Record<string, unknown>) => unknown) =>
+    ({ rpc: impl }) as never;
+
+  test('found: returns the record for a matching email and name', async () => {
+    const out = await verifyVisitor(
+      'gemmaaranda05@gmail.com',
+      'Gemmalyn Ocbina Aranda',
+      stub(() => Promise.resolve({ data: [record], error: null }))
+    );
+    assert.equal(out.kind, 'found');
+    assert.deepEqual(out.kind === 'found' ? out.record : null, record);
+  });
+
+  test('not-found: unknown address, and this is NOT an error', async () => {
+    // Critical distinction. Reporting this as an error would tell a legitimate
+    // member "we could not check you" because of a dropped connection, sending
+    // them to re-register and creating the duplicate account we are avoiding.
+    const out = await verifyVisitor(
+      'stranger@example.com',
+      'A Stranger',
+      stub(() => Promise.resolve({ data: [], error: null }))
+    );
+    assert.equal(out.kind, 'not-found');
+  });
+
+  test('error: RPC failure is reported separately from not-found', async () => {
+    const out = await verifyVisitor(
+      'gemmaaranda05@gmail.com',
+      'Gemmalyn Ocbina Aranda',
+      stub(() => Promise.resolve({ data: null, error: { message: 'boom' } }))
+    );
+    assert.equal(out.kind, 'error');
+    assert.ok(out.kind === 'error' && out.message.length > 0);
+  });
+
+  test('error: a thrown transport failure is caught, not propagated', async () => {
+    const out = await verifyVisitor(
+      'gemmaaranda05@gmail.com',
+      'Gemmalyn Ocbina Aranda',
+      stub(() => Promise.reject(new Error('offline')))
+    );
+    assert.equal(out.kind, 'error');
+  });
+
+  test('validates both fields before calling the database', async () => {
+    let called = false;
+    const client = stub(() => {
+      called = true;
+      return Promise.resolve({ data: [], error: null });
+    });
+    assert.equal((await verifyVisitor('', 'A Name', client)).kind, 'error');
+    assert.equal((await verifyVisitor('not-an-email', 'A Name', client)).kind, 'error');
+    assert.equal((await verifyVisitor('a@b.com', '   ', client)).kind, 'error');
+    assert.equal(called, false);
+  });
+
+  test('sends trimmed, lowercased-equivalent arguments', async () => {
+    let args: Record<string, unknown> = {};
+    await verifyVisitor(
+      '  gemmaaranda05@gmail.com ',
+      '  Gemmalyn Ocbina Aranda  ',
+      stub((_fn, a) => {
+        args = a;
+        return Promise.resolve({ data: [], error: null });
+      })
+    );
+    // Trimming is done here; case folding is the database's job via lower().
+    assert.equal(args.p_email, 'gemmaaranda05@gmail.com');
+    assert.equal(args.p_name, 'Gemmalyn Ocbina Aranda');
+  });
+
+  test('passes a declined verdict through unchanged', async () => {
+    // The page branches on this, so it must survive the round trip intact.
+    const declined = { ...record, orientation_status: 'declined' as const };
+    const out = await verifyVisitor(
+      'gemmaaranda05@gmail.com',
+      'Gemmalyn Ocbina Aranda',
+      stub(() => Promise.resolve({ data: [declined], error: null }))
+    );
+    assert.equal(out.kind === 'found' ? out.record.orientation_status : null, 'declined');
+  });
+
+  test('preserves pending, which must not be treated as approved', async () => {
+    const pending = { ...record, orientation_status: 'pending' as const };
+    const out = await verifyVisitor(
+      'gemmaaranda05@gmail.com',
+      'Gemmalyn Ocbina Aranda',
+      stub(() => Promise.resolve({ data: [pending], error: null }))
+    );
+    assert.equal(out.kind === 'found' ? out.record.orientation_status : null, 'pending');
+  });
+});
   describe('registrationUrl', () => {
-  test('is absolute and points at /register', () => {
+  test('is absolute and points at /verify', () => {
     const url = registrationUrl();
     assert.ok(url.startsWith('http://') || url.startsWith('https://'));
-    assert.ok(url.endsWith('/register'));
+    // The poster must land on verification, not straight on registration: a
+    // cohort member sent to /register would collide on their own email.
+    assert.ok(url.endsWith('/verify'));
+  });
+
+  test('verificationUrl is the same target as registrationUrl', () => {
+    // The name changed but several call sites still read the old one. If these
+    // ever diverge, the poster and the tests would be pointing at different
+    // pages, which is exactly the kind of drift nobody notices until a visitor
+    // scans a dead code.
+    assert.equal(verificationUrl(), registrationUrl());
   });
 
   test('contains no doubled slash in the path', () => {
-    // 'https://host//register' would 404 on some hosts, and the mistake is
+    // 'https://host//verify' would 404 on some hosts, and the mistake is
     // invisible in a QR until someone scans it on a real phone.
     const path = registrationUrl().replace(/^https?:\/\/[^/]+/, '');
-    assert.equal(path, '/register');
+    assert.equal(path, '/verify');
   });
 
   test('does not point at the admin-only station', () => {

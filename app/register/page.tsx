@@ -70,9 +70,29 @@ export default function RegisterPage() {
     getActiveCourses,
   } = useRoomsStore();
 
+  // Prefill from /verify. Somebody sent here because we had no record for them has
+  // already typed their name and email once; making them retype it is the kind of
+  // small friction that turns into abandoning the form at the door.
+  //
+  // Read once, in a lazy initializer, rather than via useSearchParams: that hook
+  // needs a Suspense boundary in the App Router, and re-reading on every render
+  // would fight the user's own edits as soon as they start typing.
+  //
+  // The query string is attacker-supplied, so both values are treated as display
+  // text only - the register path already re-validates the address, and nothing
+  // downstream treats these fields as verified.
+  const [prefill] = useState(() => {
+    if (typeof window === 'undefined') return { name: '', email: '' };
+    const params = new URLSearchParams(window.location.search);
+    return {
+      name: (params.get('name') ?? '').slice(0, 120),
+      email: (params.get('email') ?? '').slice(0, 254),
+    };
+  });
+
   const [formData, setFormData] = useState({
-    name: '',
-    email: '',
+    name: prefill.name,
+    email: prefill.email,
     password: '',
     confirmPassword: '',
     destination: '',
@@ -148,6 +168,8 @@ export default function RegisterPage() {
       clearTimeout(timer);
     };
   }, [formData.email]);
+
+  
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
