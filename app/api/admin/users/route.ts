@@ -113,6 +113,7 @@ export async function POST(request: Request) {
     name,
     password,
     visitorTypeId,
+    courseId,
     company,
     hostName,
     phone,
@@ -172,6 +173,11 @@ export async function POST(request: Request) {
       name,
       role,
       visitor_type_id: visitorTypeId || null,
+      // A visitor is enrolled in exactly one course, so this is persisted
+      // rather than left to a later edit. It was previously accepted by the
+      // admin form and then dropped here, which left every new account with a
+      // null course_id and an empty picker on the edit modal.
+      course_id: courseId || null,
       company: company?.trim() || null,
       host_name: hostName?.trim() || null,
       phone: phone?.trim() || null,

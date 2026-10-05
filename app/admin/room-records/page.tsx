@@ -325,7 +325,7 @@ const exportRef = useRef<HTMLDivElement>(null);
 
   return (
     <div className='min-h-screen'>
-      <header className='border-b border-navy-800 bg-navy-900/50 sticky top-0 z-50'>
+      <header className='app-header border-b sticky top-0 z-50'>
         <div className='max-w-7xl mx-auto px-4 py-3 flex items-center justify-between'>
           <Link href='/admin' className='flex items-center gap-3'>
             <div className='w-12 h-12 flex items-center justify-center overflow-hidden'>

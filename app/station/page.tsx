@@ -20,7 +20,7 @@ export default function StationPage() {
     <>
       <div className='w-full min-h-screen flex flex-col'>
         {/* Header */}
-        <header className='flex-shrink-0 border-b border-navy-800 bg-navy-900/50 px-4 py-3 relative z-50'>
+        <header className='flex-shrink-0 app-header border-b px-4 py-3 relative z-50'>
           <div className='max-w-7xl mx-auto flex items-center justify-between'>
             {/* Logo */}
             <div className='flex items-center gap-3'>
@@ -33,10 +33,10 @@ export default function StationPage() {
               </div>
               <div>
                 <h1 className='text-white font-bold text-lg leading-none'>
-                  QR Station
+                  Visitor Registration
                 </h1>
                 <p className='text-navy-300 text-xs mt-0.5'>
-                  {isAuthenticated && user ? `${user.name} - ` : ''}QR Station
+                  {isAuthenticated && user ? `${user.name} - ` : ''}Front Desk
                 </p>
               </div>
             </div>

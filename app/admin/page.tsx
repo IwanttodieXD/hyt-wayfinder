@@ -52,7 +52,7 @@ export default function AdminDashboard() {
     <>
       <div className='min-h-screen'>
         {/* Header */}
-        <header className='border-b border-navy-800 bg-navy-900/50 sticky top-0 z-50'>
+        <header className='app-header border-b sticky top-0 z-50'>
           <div className='max-w-7xl mx-auto px-4 py-3 flex items-center justify-between'>
             <div className='flex items-center gap-3'>
               <Link href='/' className='flex items-center gap-3'>

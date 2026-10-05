@@ -41,6 +41,8 @@ type FormState = {
   pendingRoomId: string;
   /** Purpose id (purposes.id), or '' for none. */
   pendingPurposeId: string;
+  /** Course id (courses.id), or '' for none. Required when creating. */
+  courseId: string;
   /** `yyyy-mm-dd`, the format an `<input type="date">` produces. */
   validUntil: string;
 };
@@ -54,6 +56,7 @@ const EMPTY_FORM: FormState = {
   phone: '',
   pendingRoomId: '',
   pendingPurposeId: '',
+  courseId: '',
   validUntil: '',
 };
 
@@ -86,6 +89,8 @@ export default function UsersPage() {
     getActiveRooms,
     fetchPurposes,
     getActivePurposes,
+    fetchCourses,
+    getActiveCourses,
   } = useRoomsStore();
   const {
     users,
@@ -120,6 +125,7 @@ export default function UsersPage() {
   // the register form. Both are ordered by the store (rooms by floor).
   const rooms = getActiveRooms();
   const purposes = getActivePurposes();
+  const courses = getActiveCourses();
   const typeCounts = getCountByVisitorType();
   const expiredCount = getExpiredCount();
 
@@ -131,6 +137,7 @@ export default function UsersPage() {
       fetchVisitorTypes();
       fetchRooms();
       fetchPurposes();
+      fetchCourses();
     }
   }, [
     isAuthenticated,
@@ -140,6 +147,7 @@ export default function UsersPage() {
     fetchVisitorTypes,
     fetchRooms,
     fetchPurposes,
+    fetchCourses,
   ]);
 
   useEffect(() => {
@@ -207,6 +215,7 @@ export default function UsersPage() {
       phone: target.phone ?? '',
       pendingRoomId: target.pendingRoomId ?? '',
       pendingPurposeId: target.pendingPurposeId ?? '',
+      courseId: target.courseId ?? '',
       validUntil: toDateInputValue(target.validUntil),
     });
     setFormError(null);
@@ -229,6 +238,9 @@ export default function UsersPage() {
     if (!editing && form.password.length < 6) {
       return setFormError('Password must be at least 6 characters.');
     }
+    if (!editing && !form.courseId) {
+      return setFormError('Please select a course.');
+    }
 
     setIsSaving(true);
 
@@ -241,6 +253,7 @@ const profileFields = () => ({
   phone: form.phone,
   pendingRoomId: form.pendingRoomId,
   pendingPurposeId: form.pendingPurposeId,
+  courseId: form.courseId,
   validUntil: form.validUntil,
 });
 
@@ -296,7 +309,7 @@ if (editing) {
   return (
     <>
       <div className='min-h-screen'>
-        <header className='border-b border-navy-800 bg-navy-900/50 sticky top-0 z-40'>
+        <header className='app-header border-b sticky top-0 z-40'>
           <div className='max-w-7xl mx-auto px-4 py-3 flex items-center justify-between'>
             <Link href='/admin' className='flex items-center gap-3'>
               <div className='w-12 h-12 flex items-center justify-center overflow-hidden'>
@@ -790,6 +803,38 @@ if (editing) {
                   Optional. Applied to their first check-in, and they can pick a
                   different reason on later visits.
                 </p>
+              </div>
+
+              {/* Course. Unlike room/purpose, this is a permanent attribute of
+                  the visitor, persisted on users.course_id. Required when
+                  creating; an admin can change it later. */}
+              <div>
+                <label
+                  htmlFor='courseId'
+                  className='block text-sm font-medium text-navy-200 mb-2'
+                >
+                  Course <span className='text-orange-400'>*</span>
+                </label>
+                <div className='relative'>
+                  <select
+                    id='courseId'
+                    value={form.courseId}
+                    onChange={(e) =>
+                      setForm({ ...form, courseId: e.target.value })
+                    }
+                    className={`${INPUT} appearance-none cursor-pointer`}
+                  >
+                    <option value='' className='bg-navy-900'>
+                      Select a course
+                    </option>
+                    {courses.map((course) => (
+                      <option key={course.id} value={course.id} className='bg-navy-900'>
+                        {course.label}
+                      </option>
+                    ))}
+                  </select>
+                  <i className='fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-navy-400 text-xs pointer-events-none'></i>
+                </div>
               </div>
               {/* `host_name` and `notes` are deliberately not editable here any more, so this
                   form matches what the register form collects: a visitor cannot

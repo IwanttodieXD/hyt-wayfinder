@@ -54,9 +54,11 @@ const getRoleIcon = () => {
     <div className='relative' ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className='flex items-center gap-3 px-4 py-2 rounded-lg bg-navy-800/50 hover:bg-navy-800 border border-navy-700 transition-colors'
+        className='flex items-center gap-3 px-3 py-2 rounded-lg bg-white/15 hover:bg-white/25 border border-white/30 transition-colors'
       >
-        <div className='w-10 h-10 rounded-lg bg-orange-500/20 flex items-center justify-center'>
+        {/* Avatar tile. `bg-navy-900/40` rather than a tinted fill so it reads
+            as a recess on the coloured bar instead of a second colour block. */}
+        <div className='w-10 h-10 rounded-lg bg-navy-900/40 flex items-center justify-center'>
           <i className={`fa-solid ${getRoleIcon()} text-orange-400`}></i>
         </div>
         <div className='hidden md:block text-left'>
@@ -73,6 +75,8 @@ const getRoleIcon = () => {
           {/* Profile Header */}
           <div className='p-4 border-b border-navy-700'>
             <div className='flex items-center gap-3 mb-3'>
+              {/* Larger tile in the panel, which is a dark surface in both themes
+                  rather than the coloured header band. */}
               <div className='w-12 h-12 rounded-lg bg-orange-500/20 flex items-center justify-center'>
                 <i className={`fa-solid ${getRoleIcon()} text-orange-400 text-xl`}></i>
               </div>

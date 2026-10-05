@@ -260,6 +260,20 @@ function roomCodeValue(qrValue: string): string {
 }
 
 /**
+ * Turns the encoded part of a room code into a display room number.
+ *
+ * `ROOM-405` -> `Room 405`, `ROOFDECK` -> `Roofdeck`. Returns null for
+ * something that doesn't look like a room identifier, so the parser can
+ * reject it rather than guessing.
+ */
+function encodedToRoomNumber(encoded: string): string | null {
+  const upper = encoded.toUpperCase();
+  if (upper === 'ROOFDECK') return 'Roofdeck';
+  const digits = upper.match(/(\d+)/);
+  return digits ? `Room ${digits[1]}` : null;
+}
+
+/**
  * Works out which of the two kinds of QR code was scanned.
  *
  * Room codes encode the room number (`HYT-ROOM-01:ROOM-304`), which is the
@@ -302,10 +316,17 @@ export function parseQrValue(value: string): ParsedQr {
     const match = DESTINATION_ROUTES.find(
       (r) => normalise(roomCodeValue(r.qrValue)) === normalise(encoded)
     );
-    // An unknown room code is still a room code, but we can't say which room, so
-    // treat it as unrecognised rather than guessing a destination.
-    return match
-      ? { kind: 'room', roomNumber: match.room, routeId: match.id }
+    // A room code not in DESTINATION_ROUTES is still a valid room code: the
+    // `rooms` table is the source of truth, and the admin can add rooms there
+    // without also editing this geometry registry. Resolve the room number
+    // from the code so the scanner can look it up by QR value or room number,
+    // and fall back to the default route for the 3D scene.
+    if (match) {
+      return { kind: 'room', roomNumber: match.room, routeId: match.id };
+    }
+    const roomNumber = encodedToRoomNumber(encoded);
+    return roomNumber
+      ? { kind: 'room', roomNumber, routeId: DEFAULT_ROUTE_ID }
       : null;
   }
 

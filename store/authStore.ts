@@ -56,6 +56,14 @@ export interface User {
    */
   pendingRoomId?: string;
   pendingPurposeId?: string;
+  /**
+   * The course this visitor is enrolled in, from `users.course_id`.
+   *
+   * Persisted on the user row (unlike `destination`/`purpose`, which are
+   * session-only) because a course is a stable attribute of the visitor, not
+   * something that changes per visit.
+   */
+  courseId?: string;
   qrCode?: string;
   createdAt: Date;
 }
@@ -174,6 +182,12 @@ interface AuthState {
      */
     pendingRoomId?: string;
     pendingPurposeId?: string;
+    /**
+     * The course this visitor is enrolled in (courses.id). Persisted as
+     * `users.course_id` by migration 20260101000011. Required by the register
+     * form, but optional here so older callers don't break.
+     */
+    courseId?: string;
   }) => Promise<{
     success: boolean;
     error?: string;
@@ -319,6 +333,7 @@ export const useAuthStore = create<AuthState>()(
             name: userData.name,
             role: userData.role as UserRole,
             ...pendingFromProfile(userData),
+            ...(userData.course_id ? { courseId: userData.course_id } : {}),
             qrCode: `HYT-USER:${userData.id}`,
             createdAt: new Date(userData.created_at),
           };
@@ -444,6 +459,7 @@ export const useAuthStore = create<AuthState>()(
                 ...(data.pendingPurposeId
                   ? { pending_purpose_id: data.pendingPurposeId }
                   : {}),
+                ...(data.courseId ? { course_id: data.courseId } : {}),
               },
               { onConflict: 'id' }
             )
@@ -493,6 +509,7 @@ export const useAuthStore = create<AuthState>()(
             // applied to this user's first attendance record at check-in.
             ...(data.destination ? { destination: data.destination } : {}),
             ...(data.purpose ? { purpose: data.purpose } : {}),
+            ...(userData.course_id ? { courseId: userData.course_id } : {}),
             qrCode: `HYT-USER:${userData.id}`,
             createdAt: new Date(userData.created_at),
           };
@@ -606,6 +623,7 @@ export const useAuthStore = create<AuthState>()(
             name: userData.name,
             role: userData.role as UserRole,
             ...pendingFromProfile(userData),
+            ...(userData.course_id ? { courseId: userData.course_id } : {}),
             qrCode: `HYT-USER:${userData.id}`,
             createdAt: new Date(userData.created_at),
           };

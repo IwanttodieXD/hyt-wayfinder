@@ -31,6 +31,8 @@ export interface ManagedUser {
    */
   pendingRoomId: string | null;
   pendingPurposeId: string | null;
+  /** FK to courses.id. A stable attribute of the visitor, not per-visit. */
+  courseId: string | null;
 }
 
 /**
@@ -63,6 +65,8 @@ export interface NewUserInput {
   pendingRoomId?: string;
   /** FK to purposes.id. Same: an expectation, not a record. */
   pendingPurposeId?: string;
+  /** FK to courses.id. Persisted on users.course_id. */
+  courseId?: string;
 }
 
 export interface UpdateUserInput {
@@ -76,6 +80,7 @@ export interface UpdateUserInput {
   notes?: string;
   pendingRoomId?: string;
   pendingPurposeId?: string;
+  courseId?: string;
 }
 
 interface UsersState {
@@ -130,7 +135,7 @@ const SELECT_COLUMNS_BASE =
 const SELECT_COLUMNS_FULL = `
   id, email, name, role, created_at, archived_at,
   visitor_type_id, company, host_name, phone, valid_until, notes,
-  pending_room_id, pending_purpose_id,
+  pending_room_id, pending_purpose_id, course_id,
   visitor_types ( label )
 `;
 const SELECT_COLUMNS_FALLBACK =
@@ -163,6 +168,7 @@ function mapRow(row: any): ManagedUser {
     notes: row.notes ?? null,
     pendingRoomId: row.pending_room_id ?? null,
     pendingPurposeId: row.pending_purpose_id ?? null,
+    courseId: row.course_id ?? null,
   };
 }
 

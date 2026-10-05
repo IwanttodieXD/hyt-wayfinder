@@ -19,6 +19,8 @@ export default function RegisterPage() {
     getActiveVisitorTypes,
     fetchRooms,
     getActiveRooms,
+    fetchCourses,
+    getActiveCourses,
   } = useRoomsStore();
 
   const [formData, setFormData] = useState({
@@ -39,6 +41,9 @@ export default function RegisterPage() {
     visitorTypeId: '',
     company: '',
     phone: '',
+    // Required: a visitor is enrolled in exactly one course. Persisted as
+    // users.course_id by migration 20260101000011.
+    courseId: '',
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -52,12 +57,14 @@ export default function RegisterPage() {
   const visitorTypes = getActiveVisitorTypes();
   // Already ordered by floor then room number by the store.
   const rooms = getActiveRooms();
+  const courses = getActiveCourses();
 
   useEffect(() => {
     fetchPurposes();
     fetchVisitorTypes();
     fetchRooms();
-  }, [fetchPurposes, fetchVisitorTypes, fetchRooms]);
+    fetchCourses();
+  }, [fetchPurposes, fetchVisitorTypes, fetchRooms, fetchCourses]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,6 +78,11 @@ export default function RegisterPage() {
 
     if (formData.password.length < 6) {
       setError('Password must be at least 6 characters');
+      return;
+    }
+
+    if (!formData.courseId) {
+      setError('Please select a course');
       return;
     }
 
@@ -106,6 +118,7 @@ export default function RegisterPage() {
       visitorTypeId: formData.visitorTypeId || undefined,
       company: formData.company.trim() || undefined,
       phone: formData.phone.trim() || undefined,
+      courseId: formData.courseId,
       validUntil: endOfToday.toISOString(),
     });
 
@@ -434,6 +447,48 @@ export default function RegisterPage() {
 
                 {/* `host_name` is not asked here: a visitor cannot name the person they are
                     meeting. Staff set it on /admin/users. */}
+                {/* Course picker. Required, and persisted on the user row (unlike
+                    destination/purpose which are per-visit). A course is a stable
+                    attribute of the visitor. */}
+                <div>
+                  <label
+                    htmlFor='courseId'
+                    className='block text-sm font-medium text-orange-200 mb-2'
+                  >
+                    Course <span className='text-orange-400'>*</span>
+                  </label>
+                  <div className='relative'>
+                    <select
+                      id='courseId'
+                      value={formData.courseId}
+                      onChange={(e) =>
+                        setFormData({ ...formData, courseId: e.target.value })
+                      }
+                      required
+                      className='
+                        w-full pl-12 pr-4 py-3 rounded-lg appearance-none
+                        bg-navy-900/80 border-2 border-orange-500/30
+                        text-white placeholder-navy-500
+                        focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500
+                        transition-colors cursor-pointer
+                      '
+                    >
+                      <option value='' className='bg-navy-900'>
+                        Select a course
+                      </option>
+                      {courses.map((course) => (
+                        <option key={course.id} value={course.id} className='bg-navy-900'>
+                          {course.label}
+                        </option>
+                      ))}
+                    </select>
+                    <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
+                      <i className='fa-solid fa-graduation-cap text-orange-400'></i>
+                    </div>
+                    <i className='fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-navy-400 text-xs pointer-events-none'></i>
+                  </div>
+                </div>
+
                 {/* Two-up on wider screens, stacked on a phone. */}
                 <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
                   <div>

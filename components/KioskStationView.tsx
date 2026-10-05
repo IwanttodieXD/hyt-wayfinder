@@ -16,6 +16,7 @@ import {
 import { useRoomsStore } from '@/store/roomsStore';
 import { useLiveData } from '@/hooks/useLiveData';
 import LiveBadge from '@/components/LiveBadge';
+import StationRegistrationForm from '@/components/StationRegistrationForm';
 
 // Everything the print window needs, without dragging in the waypoint data.
 type PrintableCode = {
@@ -184,8 +185,8 @@ export default function KioskStationView() {
           <div>
             <h1 className='text-3xl font-bold text-white mb-2'>QR Station</h1>
             <p className='text-navy-300'>
-              Print the attendance code for the ground floor, and a door code for
-              each room.
+              Register visitors at the desk, then print the attendance code for
+              the ground floor and a door code for each room.
             </p>
           </div>
           <LiveBadge lastRefreshed={lastRefreshed} />
@@ -241,6 +242,12 @@ export default function KioskStationView() {
               </div>
             </div>
           </div>
+
+        {/* Registration comes first: the desk needs an account before the
+            attendance code means anything to scan against. */}
+        <div className='mb-8'>
+          <StationRegistrationForm />
+        </div>
 
         {/* Attendance heading. There is exactly one attendance code and it is
             the ground floor one, so it gets its own prominent panel rather than
@@ -573,27 +580,24 @@ export default function KioskStationView() {
           <h3 className='text-white font-bold text-lg mb-4'>How it works</h3>
           <div className='space-y-3'>
             <div className='flex items-start gap-3 text-sm'>
-              <div className='w-6 h-6 rounded-full bg-green-500/20 flex items-center justify-center flex-shrink-0 mt-0.5'>
-                <span className='text-green-400 font-bold text-xs'>1</span>
+              <div className='w-6 h-6 rounded-full bg-orange-500/20 flex items-center justify-center flex-shrink-0 mt-0.5'>
+                <span className='text-orange-400 font-bold text-xs'>1</span>
               </div>
               <p className='text-navy-200'>
-                On arrival, scan the{' '}
-                <span className='text-green-300 font-semibold'>
-                  ground floor attendance code
-                </span>{' '}
-                to check in and receive your 3D route.
+                Register the visitor above. Their account and pass are created on
+                the spot — no QR code is needed to sign up.
               </p>
             </div>
             <div className='flex items-start gap-3 text-sm'>
-              <div className='w-6 h-6 rounded-full bg-navy-700 flex items-center justify-center flex-shrink-0 mt-0.5'>
-                <span className='text-navy-200 font-bold text-xs'>2</span>
+              <div className='w-6 h-6 rounded-full bg-green-500/20 flex items-center justify-center flex-shrink-0 mt-0.5'>
+                <span className='text-green-400 font-bold text-xs'>2</span>
               </div>
               <p className='text-navy-200'>
-                Scan the{' '}
-                <span className='text-navy-100 font-semibold'>
-                  code on your room door
+                On arrival, they scan the{' '}
+                <span className='text-green-300 font-semibold'>
+                  ground floor attendance code
                 </span>{' '}
-                to let the system know you are inside. Attendance is unaffected.
+                to check in and receive their 3D route.
               </p>
             </div>
             <div className='flex items-start gap-3 text-sm'>
@@ -601,7 +605,19 @@ export default function KioskStationView() {
                 <span className='text-green-400 font-bold text-xs'>3</span>
               </div>
               <p className='text-navy-200'>
-                When you leave, scan the{' '}
+                They scan the{' '}
+                <span className='text-navy-100 font-semibold'>
+                  code on their room door
+                </span>{' '}
+                to record where they are. Attendance is unaffected.
+              </p>
+            </div>
+            <div className='flex items-start gap-3 text-sm'>
+              <div className='w-6 h-6 rounded-full bg-navy-700 flex items-center justify-center flex-shrink-0 mt-0.5'>
+                <span className='text-navy-200 font-bold text-xs'>4</span>
+              </div>
+              <p className='text-navy-200'>
+                When they leave, they scan the{' '}
                 <span className='text-green-300 font-semibold'>
                   ground floor code again
                 </span>{' '}

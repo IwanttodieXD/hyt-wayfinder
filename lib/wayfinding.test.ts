@@ -76,9 +76,20 @@ describe('parseQrValue - room presence', () => {
     }
   });
 
-  test('does not guess a room for an unknown or empty room code', () => {
-    assert.equal(parseQrValue('HYT-ROOM-01:ROOM-999'), null);
+  test('does not guess a room for an empty room code', () => {
     assert.equal(parseQrValue('HYT-ROOM-01:'), null);
+  });
+
+  test('resolves a room code that is in the DB but not in DESTINATION_ROUTES', () => {
+    // Room 405 is managed via the admin room management UI and exists in the
+    // `rooms` table, but has no entry in the geometry registry. The parser
+    // must still recognise it as a room so the scanner can resolve it from
+    // the DB; the 3D route falls back to the default.
+    assert.deepEqual(parseQrValue('HYT-ROOM-01:ROOM-405'), {
+      kind: 'room',
+      roomNumber: 'Room 405',
+      routeId: DEFAULT_ROUTE_ID,
+    });
   });
 });
 

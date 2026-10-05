@@ -34,6 +34,17 @@ export interface Purpose {
 }
 
 /**
+ * A course a visitor can be enrolled in. Mirrors `purposes`/`visitor_types`:
+ * a lookup table the register form and admin user modal read from, with a
+ * fallback list so the picker still renders if the fetch fails.
+ */
+export interface Course {
+  id: string;
+  label: string;
+  isActive: boolean;
+}
+
+/**
  * The purposes seeded by the migration, used as a fallback.
  *
  * The `purposes` table is readable only by signed-in users, but the
@@ -102,10 +113,29 @@ export const FALLBACK_VISITOR_TYPES: VisitorType[] = [
   isActive: true,
 }));
 
+/**
+ * Used before `courses` loads, and as the fallback when the table is missing
+ * (i.e. migration 20260101000011 has not been applied yet).
+ *
+ * Mirrors the pattern used for `purposes` and `visitor_types`.
+ */
+export const FALLBACK_COURSES: Course[] = [
+  'Orientation',
+  'Safety Training',
+  'Leadership',
+  'Technical Skills',
+  'Onboarding',
+].map((label) => ({
+  id: `fallback-${label.toLowerCase()}`,
+  label,
+  isActive: true,
+}));
+
 interface RoomsState {
   rooms: Room[];
   purposes: Purpose[];
   visitorTypes: VisitorType[];
+  courses: Course[];
   /**
    * In-flight guards, one per resource.
    *
@@ -118,18 +148,21 @@ interface RoomsState {
   roomsLoading: boolean;
   purposesLoading: boolean;
   visitorTypesLoading: boolean;
+  coursesLoading: boolean;
   /** Guards against refetching on every mount of every consumer. */
   hasFetched: boolean;
 
   fetchRooms: (force?: boolean) => Promise<void>;
   fetchPurposes: (force?: boolean) => Promise<void>;
   fetchVisitorTypes: (force?: boolean) => Promise<void>;
+  fetchCourses: (force?: boolean) => Promise<void>;
 
   /** Active rooms in building order: ground floor, then floors ascending, then roof. */
   getActiveRooms: () => Room[];
   getAllRooms: () => Room[];
   getActivePurposes: () => Purpose[];
   getActiveVisitorTypes: () => VisitorType[];
+  getActiveCourses: () => Course[];
   /** The handful of types worth showing as tiles, in label order. */
   getPrimaryVisitorTypes: () => VisitorType[];
   getRoomById: (id: string | null | undefined) => Room | undefined;
@@ -174,9 +207,11 @@ export const useRoomsStore = create<RoomsState>((set, get) => ({
   rooms: [],
   purposes: [],
   visitorTypes: [],
+  courses: [],
   roomsLoading: false,
   purposesLoading: false,
   visitorTypesLoading: false,
+  coursesLoading: false,
   hasFetched: false,
 
   fetchRooms: async (force = false) => {
@@ -297,11 +332,55 @@ export const useRoomsStore = create<RoomsState>((set, get) => ({
     }
   },
 
+  fetchCourses: async (force = false) => {
+    if (get().coursesLoading) return;
+    // Same rule as purposes: only a real row count blocks the refetch, so
+    // applying migration 20260101000011 takes effect without a hard reload.
+    const hasRealRows = get().courses.some((c) => !c.id.startsWith('fallback-'));
+    if (!force && hasRealRows) return;
+
+    set({ coursesLoading: true });
+
+    try {
+      const { data, error } = await supabase
+        .from('courses')
+        .select('*')
+        .order('label');
+
+      if (error) {
+        // Expected before migration 20260101000011 is applied, and also for
+        // anyone not yet signed in. Fall back to the seeded labels so the
+        // picker still renders instead of silently appearing empty.
+        console.warn(
+          'Could not load courses from the database; using the built-in list. ' +
+            'Apply supabase/migrations/20260101000011_courses.sql to fix this.',
+          error
+        );
+        set({ courses: FALLBACK_COURSES, coursesLoading: false });
+        return;
+      }
+
+      set({
+        courses: (data ?? []).map((row: any) => ({
+          id: row.id,
+          label: row.label,
+          isActive: row.is_active,
+        })),
+        coursesLoading: false,
+      });
+    } catch (error) {
+      console.warn('Could not load courses; using the built-in list.', error);
+      set({ courses: FALLBACK_COURSES, coursesLoading: false });
+    }
+  },
+
   getActiveRooms: () => get().rooms.filter((r) => r.isActive),
   getAllRooms: () => get().rooms,
   getActivePurposes: () => get().purposes.filter((p) => p.isActive),
 
   getActiveVisitorTypes: () => get().visitorTypes.filter((t) => t.isActive),
+
+  getActiveCourses: () => get().courses.filter((c) => c.isActive),
 
   getPrimaryVisitorTypes: () =>
     get()

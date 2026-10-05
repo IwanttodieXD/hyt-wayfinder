@@ -223,7 +223,7 @@ export default function RoomsPage() {
           This page previously used a different bar (icon + text, px-6, not
           sticky), which made it read as a separate app when navigating between
           admin screens. */}
-      <header className='border-b border-navy-800 bg-navy-900/50 sticky top-0 z-50'>
+      <header className='app-header border-b sticky top-0 z-50'>
         <div className='max-w-7xl mx-auto px-4 py-3 flex items-center justify-between'>
           <Link href='/admin' className='flex items-center gap-3'>
             <div className='w-12 h-12 flex items-center justify-center overflow-hidden'>
