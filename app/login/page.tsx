@@ -11,6 +11,7 @@ export default function LoginPage() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -99,24 +100,32 @@ export default function LoginPage() {
 
               {/* Password Field */}
               <div>
-                <label
-                  htmlFor='password'
-                  className='block text-sm font-medium text-orange-200 mb-2'
-                >
-                  Password
-                </label>
+                <div className='flex items-center justify-between mb-2'>
+                  <label
+                    htmlFor='password'
+                    className='block text-sm font-medium text-orange-200'
+                  >
+                    Password
+                  </label>
+                  <Link
+                    href='/forgot-password'
+                    className='text-sm text-orange-400 hover:text-orange-300 transition-colors'
+                  >
+                    Forgot password?
+                  </Link>
+                </div>
                 <div className='relative'>
                   <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
                     <i className='fa-solid fa-lock text-orange-400'></i>
                   </div>
                   <input
-                    type='password'
+                    type={showPassword ? 'text' : 'password'}
                     id='password'
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
                     className='
-                      w-full pl-12 pr-4 py-3 rounded-lg
+                      w-full pl-12 pr-12 py-3 rounded-lg
                       bg-navy-900/80 border-2 border-orange-500/30
                       text-white placeholder-navy-500
                       focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500
@@ -124,6 +133,19 @@ export default function LoginPage() {
                       '
                     placeholder='••••••••'
                   />
+                  {/* type='button' matters: without it this submits the form. */}
+                  <button
+                    type='button'
+                    onClick={() => setShowPassword((v) => !v)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    className='absolute inset-y-0 right-0 pr-4 flex items-center text-orange-400 hover:text-orange-300 transition-colors'
+                  >
+                    <i
+                      className={`fa-solid ${
+                        showPassword ? 'fa-eye-slash' : 'fa-eye'
+                      }`}
+                    ></i>
+                  </button>
                 </div>
               </div>
 

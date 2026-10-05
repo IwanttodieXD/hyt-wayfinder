@@ -42,6 +42,10 @@ export default function RegisterPage() {
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  // Independent toggles: a person usually wants to reveal the field they are
+  // unsure about without also exposing the other one.
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   // Set once the account exists but the email still needs confirming. Drives the
   // "check your inbox" screen instead of an error message.
   const [pendingConfirmation, setPendingConfirmation] = useState<string | null>(
@@ -532,7 +536,7 @@ export default function RegisterPage() {
                     <i className='fa-solid fa-lock text-orange-400'></i>
                   </div>
                   <input
-                    type='password'
+                    type={showPassword ? 'text' : 'password'}
                     id='password'
                     value={formData.password}
                     onChange={(e) =>
@@ -540,7 +544,7 @@ export default function RegisterPage() {
                     }
                     required
                     className='
-                      w-full pl-12 pr-4 py-3 rounded-lg
+                      w-full pl-12 pr-12 py-3 rounded-lg
                       bg-navy-900/80 border-2 border-orange-500/30
                       text-white placeholder-navy-500
                       focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500
@@ -548,6 +552,19 @@ export default function RegisterPage() {
                       '
                     placeholder='••••••••'
                   />
+                  {/* type='button' matters: without it this submits the form. */}
+                  <button
+                    type='button'
+                    onClick={() => setShowPassword((v) => !v)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    className='absolute inset-y-0 right-0 pr-4 flex items-center text-orange-400 hover:text-orange-300 transition-colors'
+                  >
+                    <i
+                      className={`fa-solid ${
+                        showPassword ? 'fa-eye-slash' : 'fa-eye'
+                      }`}
+                    ></i>
+                  </button>
                 </div>
               </div>
 
@@ -564,7 +581,7 @@ export default function RegisterPage() {
                     <i className='fa-solid fa-lock text-orange-400'></i>
                   </div>
                   <input
-                    type='password'
+                    type={showConfirmPassword ? 'text' : 'password'}
                     id='confirmPassword'
                     value={formData.confirmPassword}
                     onChange={(e) =>
@@ -575,7 +592,7 @@ export default function RegisterPage() {
                     }
                     required
                     className='
-                      w-full pl-12 pr-4 py-3 rounded-lg
+                      w-full pl-12 pr-12 py-3 rounded-lg
                       bg-navy-900/80 border-2 border-orange-500/30
                       text-white placeholder-navy-500
                       focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500
@@ -583,6 +600,21 @@ export default function RegisterPage() {
                       '
                     placeholder='••••••••'
                   />
+                  {/* type='button' matters: without it this submits the form. */}
+                  <button
+                    type='button'
+                    onClick={() => setShowConfirmPassword((v) => !v)}
+                    aria-label={
+                      showConfirmPassword ? 'Hide password' : 'Show password'
+                    }
+                    className='absolute inset-y-0 right-0 pr-4 flex items-center text-orange-400 hover:text-orange-300 transition-colors'
+                  >
+                    <i
+                      className={`fa-solid ${
+                        showConfirmPassword ? 'fa-eye-slash' : 'fa-eye'
+                      }`}
+                    ></i>
+                  </button>
                 </div>
               </div>
 
