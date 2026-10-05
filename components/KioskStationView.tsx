@@ -17,6 +17,7 @@ import { useRoomsStore } from '@/store/roomsStore';
 import { useLiveData } from '@/hooks/useLiveData';
 import LiveBadge from '@/components/LiveBadge';
 import StationRegistrationForm from '@/components/StationRegistrationForm';
+import RegistrationQr from '@/components/RegistrationQr';
 
 // Everything the print window needs, without dragging in the waypoint data.
 type PrintableCode = {
@@ -243,10 +244,27 @@ export default function KioskStationView() {
             </div>
           </div>
 
-        {/* Registration comes first: the desk needs an account before the
-            attendance code means anything to scan against. */}
-        <div className='mb-8'>
-          <StationRegistrationForm />
+        {/* Side by side on wide screens, stacked on a phone. The QR belongs
+            beside the form it sends people to, so the desk can print it without
+            hunting for a second panel. */}
+        <div className='grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8'>
+          <div className='flex flex-col justify-center rounded-lg border border-blue-500/30 bg-blue-500/10 p-5'>
+            <h2 className='text-white font-bold text-lg mb-2'>
+              Entrance poster
+            </h2>
+            <p className='text-navy-200 text-sm'>
+              The code below opens the{' '}
+              <span className='text-blue-300 font-semibold'>
+                self-registration page
+              </span>{' '}
+              in the visitor&apos;s phone browser. It is deliberately a{' '}
+              <span className='text-white font-semibold'>separate code</span>{' '}
+              from the attendance QR below: that one is read by this app to
+              clock people in, and replacing it with a link would break
+              check-in for everyone already holding a pass.
+            </p>
+          </div>
+          <RegistrationQr />
         </div>
 
         {/* Attendance heading. There is exactly one attendance code and it is

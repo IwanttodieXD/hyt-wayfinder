@@ -91,13 +91,44 @@ const jsonMeta = (name) => {
   return esc(json);
 };
 
+// `auth.users` is seeded with INSERT ... SELECT ... WHERE NOT EXISTS rather than
+// ON CONFLICT.
+//
+// Supabase's auth.users has NO unique constraint on email: the column is
+// nullable and uniqueness is enforced in the GoTrue service layer, not by an
+// index. So `ON CONFLICT (email) DO NOTHING` cannot resolve a conflict target
+// and Postgres aborts the whole statement with:
+//
+//   42P10: there is no unique or exclusion constraint matching the
+//          ON CONFLICT specification
+//
+// The NOT EXISTS guard is what makes the seed idempotent here, and it works
+// regardless of whether an index exists. It is not atomic against a concurrent
+// second run, which is acceptable for a one-off seed executed from the SQL
+// editor by one operator.
 const authRows = rows
-  .map(
-    (r) =>
-      `  (gen_random_uuid(), ${esc(r.email)}, crypt('HytOrient2026!', gen_salt('bf')), ` +
-      `${jsonMeta(r.fullName)}, NOW(), NOW(), ${esc(r.email)})`
-  )
+  .map((r) => `  (${esc(r.email)}, ${jsonMeta(r.fullName)})`)
   .join(',\n');
+
+// The SELECT must supply exactly as many expressions as the INSERT's column
+// list: id, email, encrypted_password, raw_user_meta_data, created_at,
+// updated_at, email_confirmed_at. A mismatch here is what produced 22007 and,
+// before that, a 42P10 - so the arity check in check-roster-migration.cjs
+// compares this expression count against the declared column count.
+const authValues = `SELECT
+  gen_random_uuid(),
+  s.email,
+  crypt('HytOrient2026!', gen_salt('bf')),
+  s.meta,
+  NOW(),
+  NOW(),
+  NOW()
+FROM (VALUES
+${authRows}
+) AS s(email, meta)
+WHERE NOT EXISTS (
+  SELECT 1 FROM auth.users existing WHERE existing.email = s.email
+)`;
 
 const seedRows = rows
   .map(
@@ -109,7 +140,7 @@ const seedRows = rows
 
 module.exports = {
   rows, counts, programmes, pending, list,
-  authRows, seedRows, esc, nm,
+  authRows, authValues, seedRows, esc, nm,
 };
 
 const S = module.exports;
@@ -212,13 +243,24 @@ const authBlock = `
 --
 -- crypt()/gen_salt() come from pgcrypto, which Supabase enables by default.
 -- The password is bcrypt-hashed here and never stored in plain text.
+--
+-- No ON CONFLICT here, unlike the other two inserts. Supabase's auth.users has
+-- no unique constraint on the email column - it is nullable and uniqueness is
+-- enforced by the GoTrue service layer rather than by an index - so
+-- ON CONFLICT (email) has nothing to match and aborts the statement:
+--
+--   42P10: there is no unique or exclusion constraint matching the
+--          ON CONFLICT specification
+--
+-- The WHERE NOT EXISTS guard is what makes this re-runnable instead, and it
+-- behaves the same whether or not an index happens to exist. It is not atomic
+-- against a concurrent second run, which is fine for a one-off seed.
 
 INSERT INTO auth.users (
   id, email, encrypted_password, raw_user_meta_data,
   created_at, updated_at, email_confirmed_at
-) VALUES
-${S.authRows}
-ON CONFLICT (email) DO NOTHING;
+)
+${S.authValues};
 `;
 
 const userBlock = `

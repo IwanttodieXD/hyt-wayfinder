@@ -5,7 +5,54 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import { useRoomsStore } from '@/store/roomsStore';
 import { formatPhone, sanitisePhone, isAllowedPhoneKey } from '@/lib/phone';
+import { supabase } from '@/lib/supabase';
+import {
+  fetchOrientationStatus,
+  type OrientationRecord,
+} from '@/lib/publicUrl';
 import Link from 'next/link';
+
+/**
+ * Joins class names, dropping falsy entries.
+ *
+ * Local rather than a dependency: `classnames`/`clsx` are not in package.json,
+ * and this is the only place in the app that needs it. Everything else composes
+ * class strings with template literals.
+ */
+function cn(...parts: Array<string | false | null | undefined>): string {
+  return parts.filter(Boolean).join(' ');
+}
+
+/**
+ * Banner styling per verdict.
+ *
+ * `null` (not in the cohort) is deliberately absent: a first-time walk-in has no
+ * verdict, and showing them "pending" would be inventing a status they do not
+ * have. Only the three real states are styled here.
+ */
+const VERDICT_STYLE: Record<
+  NonNullable<OrientationRecord['orientation_status']>,
+  { box: string; icon: string; label: string; text: string }
+> = {
+  approved: {
+    box: 'border-green-500/30 bg-green-500/10',
+    icon: 'fa-circle-check',
+    label: 'Approved',
+    text: 'text-green-300',
+  },
+  declined: {
+    box: 'border-red-500/30 bg-red-500/10',
+    icon: 'fa-circle-xmark',
+    label: 'Not approved',
+    text: 'text-red-300',
+  },
+  pending: {
+    box: 'border-orange-500/30 bg-orange-500/10',
+    icon: 'fa-clock',
+    label: 'Awaiting review',
+    text: 'text-orange-300',
+  },
+};
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -47,6 +94,13 @@ export default function RegisterPage() {
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Orientation verdict for whoever is typing this email, once it resolves to a
+  // cohort member. `undefined` = still looking (or not looking), `null` = not in
+  // the cohort. Only a non-null record produces a banner.
+  const [orientation, setOrientation] = useState<OrientationRecord | null | undefined>(
+    undefined
+  );
   // Set once the account exists but the email still needs confirming. Drives the
   // "check your inbox" screen instead of an error message.
   const [pendingConfirmation, setPendingConfirmation] = useState<string | null>(
@@ -65,6 +119,35 @@ export default function RegisterPage() {
     fetchRooms();
     fetchCourses();
   }, [fetchPurposes, fetchVisitorTypes, fetchRooms, fetchCourses]);
+
+  // Orientation lookup, debounced.
+  //
+  // Fires once the address looks like an address AND the typing pauses, rather
+  // than on every keystroke - the naive version sends a request per character.
+  // 500ms is long enough that a full address is typed in one go before the first
+  // lookup, short enough to feel instant on a phone.
+  //
+  // The `cancelled` flag guards the response ordering: without it, a slow lookup
+  // for an earlier address can land after a fast one for a later address and
+  // overwrite the banner with somebody else's verdict.
+  useEffect(() => {
+    const email = formData.email.trim();
+    if (!email.includes('@')) {
+      setOrientation(undefined);
+      return;
+    }
+
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      const record = await fetchOrientationStatus(email, supabase);
+      if (!cancelled) setOrientation(record);
+    }, 500);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [formData.email]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -297,6 +380,45 @@ export default function RegisterPage() {
                     placeholder='you@example.com'
                   />
                 </div>
+
+                {/* Orientation verdict, shown only once the address matches a
+                    member of the last cohort. A null result renders nothing: a
+                    first-time walk-in has no verdict, and inventing one - or
+                    worse, defaulting to 'declined' - would be actively wrong. */}
+                {orientation && (
+                  <div
+                    role='status'
+                    aria-live='polite'
+                    className={cn(
+                      'mt-3 rounded-lg border px-4 py-3',
+                      VERDICT_STYLE[orientation.orientation_status].box
+                    )}
+                  >
+                    <p
+                      className={cn(
+                        'text-sm font-semibold flex items-center gap-2',
+                        VERDICT_STYLE[orientation.orientation_status].text
+                      )}
+                    >
+                      <i
+                        className={cn(
+                          'fa-solid',
+                          VERDICT_STYLE[orientation.orientation_status].icon
+                        )}
+                      ></i>
+                      Orientation: {VERDICT_STYLE[orientation.orientation_status].label}
+                    </p>
+                    <p className='text-navy-300 text-xs mt-1'>
+                      Found you from the last orientation
+                      {orientation.programme ? ' (' + orientation.programme + ')' : ''}.{' '}
+                      {orientation.orientation_status === 'approved'
+                        ? 'You are cleared to enter - continue below to finish creating your account.'
+                        : orientation.orientation_status === 'declined'
+                          ? 'Please speak to the front desk before entering.'
+                          : 'Your result is still being processed. Please speak to the front desk.'}
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Assigned room. Not saved to the account: the new schema has no
