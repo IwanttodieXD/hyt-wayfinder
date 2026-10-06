@@ -192,7 +192,7 @@ export default function VerifyPage() {
                     className={INPUT}
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder='As it appears on your record'
+                    placeholder='Juan C. Dela Cruz'
                     autoComplete='name'
                     required
                   />
