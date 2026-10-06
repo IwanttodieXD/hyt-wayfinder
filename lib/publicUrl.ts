@@ -134,7 +134,7 @@ export async function fetchOrientationStatus(
  * to carry a boolean. It is read and then stripped by
  * `useAutoCheckInAfterVerify`.
  */
-export const VERIFIED_CHECKIN_PATH = '/check-in?verified=1';
+export const VERIFIED_CHECKIN_PATH = '/successfully-registered?verified=1';
 
 export interface VerifyRecord {
   orientation_status: OrientationStatus;
