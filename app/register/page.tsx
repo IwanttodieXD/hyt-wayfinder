@@ -240,7 +240,11 @@ export default function RegisterPage() {
         // Self-registration only ever produces a visitor: the database trigger
         // hardcodes role='visitor' and ignores anything the client sends. Admins
         // are provisioned by hand through /admin/users.
-        router.push('/check-in');
+        //
+        // The ?verified=1 marker is the same one /verify appends, so the
+        // auto-check-in hook on /successfully-registered fires once the visitor
+        // lands - matching that page's "You are now checked in" text.
+        router.push('/successfully-registered?verified=1');
       } else {
         setError(result.error || 'Registration failed');
         setLoading(false);
