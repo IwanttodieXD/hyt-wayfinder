@@ -371,12 +371,23 @@ export default function VerifyPage() {
               </div>
               <h2 className='text-xl font-bold text-white mb-2'>No record found</h2>
               <p className='text-navy-300 text-sm mb-6'>
-                We have no orientation record for that name in this course. Register
-                as a new visitor and the front desk will review it.
+                We have no orientation record for that name in this course. You may
+                have mistyped your name, or you may not have attended orientation.
+                Try again, or register as a new visitor and the front desk will
+                review it.
               </p>
               <button
-                onClick={() => router.push(registerHref)}
+                onClick={() => {
+                  setStage('form');
+                  setError('');
+                }}
                 className='w-full px-4 py-3 rounded-lg bg-yellow-500 hover:bg-yellow-600 text-yellow-950 font-semibold text-sm'
+              >
+                Authenticate Again
+              </button>
+              <button
+                onClick={() => router.push(registerHref)}
+                className='w-full px-4 py-3 mt-3 rounded-lg bg-navy-800 hover:bg-navy-700 text-yellow-200 font-semibold text-sm border border-navy-600'
               >
                 Register as new visitor
               </button>
