@@ -115,12 +115,12 @@ export default function AdminDashboard() {
             {/* Attendance Today */}
             <div className='glass-panel border-navy-800 p-6 rounded-lg'>
               <div className='flex items-center justify-between mb-4'>
-                <div className='w-12 h-12 rounded-lg bg-orange-500/20 flex items-center justify-center'>
-                  <i className='fa-solid fa-user-check text-orange-400 text-xl'></i>
+                <div className='w-12 h-12 rounded-lg bg-yellow-500/20 flex items-center justify-center'>
+                  <i className='fa-solid fa-user-check text-yellow-400 text-xl'></i>
                 </div>
                 <Link
                   href='/admin/records'
-                  className='text-navy-400 hover:text-orange-300 transition-colors'
+                  className='text-navy-400 hover:text-yellow-300 transition-colors'
                 >
                   <i className='fa-solid fa-arrow-right'></i>
                 </Link>
@@ -134,11 +134,11 @@ export default function AdminDashboard() {
           <div className='grid grid-cols-1 md:grid-cols-2 gap-3 mb-8'>
             <Link
               href='/admin/records'
-              className='glass-panel border-navy-800 p-6 rounded-lg hover:border-orange-500/50 transition-colors group'
+              className='glass-panel border-navy-800 p-6 rounded-lg hover:border-yellow-500/50 transition-colors group'
             >
               <div className='flex items-center gap-3'>
-                <div className='w-14 h-14 rounded-lg bg-orange-500/20 flex items-center justify-center group-hover:bg-orange-500/30 transition-colors'>
-                  <i className='fa-solid fa-table text-orange-400 text-2xl'></i>
+                <div className='w-14 h-14 rounded-lg bg-yellow-500/20 flex items-center justify-center group-hover:bg-yellow-500/30 transition-colors'>
+                  <i className='fa-solid fa-table text-yellow-400 text-2xl'></i>
                 </div>
                 <div>
                   <h3 className='text-white font-semibold text-lg mb-1'>
@@ -153,11 +153,11 @@ export default function AdminDashboard() {
 
             <Link
               href='/admin/room-records'
-              className='glass-panel border-navy-800 p-6 rounded-lg hover:border-orange-500/50 transition-colors group'
+              className='glass-panel border-navy-800 p-6 rounded-lg hover:border-yellow-500/50 transition-colors group'
             >
               <div className='flex items-center gap-3'>
-                <div className='w-14 h-14 rounded-lg bg-orange-500/20 flex items-center justify-center group-hover:bg-orange-500/30 transition-colors'>
-                  <i className='fa-solid fa-table text-orange-400 text-2xl'></i>
+                <div className='w-14 h-14 rounded-lg bg-yellow-500/20 flex items-center justify-center group-hover:bg-yellow-500/30 transition-colors'>
+                  <i className='fa-solid fa-table text-yellow-400 text-2xl'></i>
                 </div>
                 <div>
                   <h3 className='text-white font-semibold text-lg mb-1'>
@@ -172,11 +172,11 @@ export default function AdminDashboard() {
 
             <Link
               href='/admin/rooms'
-              className='glass-panel border-navy-800 p-6 rounded-lg hover:border-orange-500/50 transition-colors group'
+              className='glass-panel border-navy-800 p-6 rounded-lg hover:border-yellow-500/50 transition-colors group'
             >
               <div className='flex items-center gap-3'>
-                <div className='w-14 h-14 rounded-lg bg-orange-500/20 flex items-center justify-center group-hover:bg-orange-500/30 transition-colors'>
-                  <i className='fa-solid fa-door-closed text-orange-400 text-2xl'></i>
+                <div className='w-14 h-14 rounded-lg bg-yellow-500/20 flex items-center justify-center group-hover:bg-yellow-500/30 transition-colors'>
+                  <i className='fa-solid fa-door-closed text-yellow-400 text-2xl'></i>
                 </div>
                 <div>
                   <h3 className='text-white font-semibold text-lg mb-1'>
@@ -191,11 +191,11 @@ export default function AdminDashboard() {
 
             <Link
               href='/occupancy'
-              className='glass-panel border-navy-800 p-6 rounded-lg hover:border-orange-500/50 transition-colors group'
+              className='glass-panel border-navy-800 p-6 rounded-lg hover:border-yellow-500/50 transition-colors group'
             >
               <div className='flex items-center gap-3'>
-                <div className='w-14 h-14 rounded-lg bg-orange-500/20 flex items-center justify-center group-hover:bg-orange-500/30 transition-colors'>
-                  <i className='fa-solid fa-door-open text-orange-400 text-2xl'></i>
+                <div className='w-14 h-14 rounded-lg bg-yellow-500/20 flex items-center justify-center group-hover:bg-yellow-500/30 transition-colors'>
+                  <i className='fa-solid fa-door-open text-yellow-400 text-2xl'></i>
                 </div>
                 <div>
                   <h3 className='text-white font-semibold text-lg mb-1'>Room Occupancy</h3>
@@ -206,11 +206,11 @@ export default function AdminDashboard() {
 	
 	    <Link
               href='/admin/users'
-              className='glass-panel border-navy-800 p-6 rounded-lg hover:border-orange-500/50 transition-colors group'
+              className='glass-panel border-navy-800 p-6 rounded-lg hover:border-yellow-500/50 transition-colors group'
             >
               <div className='flex items-center gap-3'>
-                <div className='w-14 h-14 rounded-lg bg-orange-500/20 flex items-center justify-center group-hover:bg-orange-500/30 transition-colors'>
-                  <i className='fa-solid fa-users-gear text-orange-400 text-2xl'></i>
+                <div className='w-14 h-14 rounded-lg bg-yellow-500/20 flex items-center justify-center group-hover:bg-yellow-500/30 transition-colors'>
+                  <i className='fa-solid fa-users-gear text-yellow-400 text-2xl'></i>
                 </div>
                 <div>
                   <h3 className='text-white font-semibold text-lg mb-1'>Manage Users</h3>
@@ -221,11 +221,11 @@ export default function AdminDashboard() {
           
             <Link
               href='/station'
-              className='glass-panel border-navy-800 p-6 rounded-lg hover:border-orange-500/50 transition-colors group'
+              className='glass-panel border-navy-800 p-6 rounded-lg hover:border-yellow-500/50 transition-colors group'
             >
               <div className='flex items-center gap-3'>
-                <div className='w-14 h-14 rounded-lg bg-orange-500/20 flex items-center justify-center group-hover:bg-orange-500/30 transition-colors'>
-                  <i className='fa-solid fa-qrcode text-orange-400 text-2xl'></i>
+                <div className='w-14 h-14 rounded-lg bg-yellow-500/20 flex items-center justify-center group-hover:bg-yellow-500/30 transition-colors'>
+                  <i className='fa-solid fa-qrcode text-yellow-400 text-2xl'></i>
                 </div>
                 <div>
                   <h3 className='text-white font-semibold text-lg mb-1'>QR Station</h3>
@@ -249,7 +249,7 @@ export default function AdminDashboard() {
               </div>
               <Link
                 href='/occupancy'
-                className='text-orange-400 hover:text-orange-300 text-sm font-semibold flex items-center gap-2 transition-colors'
+                className='text-yellow-400 hover:text-yellow-300 text-sm font-semibold flex items-center gap-2 transition-colors'
               >
                 View All Occupancy
                 <i className='fa-solid fa-arrow-right'></i>
@@ -324,7 +324,7 @@ export default function AdminDashboard() {
               <h3 className='text-xl font-bold text-white'>Recent Activity</h3>
               <Link
                 href='/admin/records'
-                className='text-orange-400 hover:text-orange-300 text-sm font-semibold flex items-center gap-2 transition-colors'
+                className='text-yellow-400 hover:text-yellow-300 text-sm font-semibold flex items-center gap-2 transition-colors'
               >
                 View All Attendance
                 <i className='fa-solid fa-arrow-right'></i>

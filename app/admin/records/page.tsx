@@ -290,7 +290,7 @@ export default function RecordsPage() {
             <div className='relative' ref={exportRef}>
               <button
                 onClick={() => setExportOpen((v) => !v)}
-                className='px-4 py-2 rounded-lg bg-orange-500/20 text-orange-300 border border-orange-500/30 hover:bg-orange-500/30 transition-colors flex items-center gap-2'
+                className='px-4 py-2 rounded-lg bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 hover:bg-yellow-500/30 transition-colors flex items-center gap-2'
               >
                 <i className='fa-solid fa-download'></i>
                 Export
@@ -349,7 +349,7 @@ export default function RecordsPage() {
                       w-full pl-12 pr-4 py-3 rounded-lg
                       bg-navy-900/50 border border-navy-700
                       text-white placeholder-navy-500
-                      focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500
+                      focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500
                       transition-colors
                       '
                   />
@@ -370,7 +370,7 @@ export default function RecordsPage() {
                   flex-1 px-4 py-3 rounded-lg font-semibold text-sm transition-colors
                   ${
                     statusFilter === status
-                      ? 'bg-orange-500/20 text-orange-300 border-2 border-orange-500'
+                      ? 'bg-yellow-500/20 text-yellow-300 border-2 border-yellow-500'
                       : 'bg-navy-900/50 text-navy-300 border-2 border-navy-700 hover:border-navy-600'
                   }
                       `}
@@ -408,7 +408,7 @@ export default function RecordsPage() {
                         w-full px-4 py-3 rounded-lg appearance-none
                         bg-navy-900/50 border border-navy-700
                         text-white font-semibold text-sm
-                        focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500
+                        focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500
                         transition-colors cursor-pointer
                         '
                     >
@@ -441,7 +441,7 @@ export default function RecordsPage() {
                         w-full px-4 py-3 rounded-lg appearance-none
                         bg-navy-900/50 border border-navy-700
                         text-white font-semibold text-sm
-                        focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500
+                        focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500
                         transition-colors cursor-pointer
                         '
                     >
@@ -463,7 +463,7 @@ export default function RecordsPage() {
                         w-full px-4 py-3 rounded-lg appearance-none
                         bg-navy-900/50 border border-navy-700
                         text-white font-semibold text-sm
-                        focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500
+                        focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500
                         transition-colors cursor-pointer
                         '
                     >
@@ -527,8 +527,8 @@ export default function RecordsPage() {
                     >
                       <td className='px-4 py-3 whitespace-nowrap'>
                         <div className='flex items-center gap-3'>
-                          <div className='w-10 h-10 rounded-lg bg-orange-500/20 flex items-center justify-center'>
-                            <i className='fa-solid fa-user text-orange-400'></i>
+                          <div className='w-10 h-10 rounded-lg bg-yellow-500/20 flex items-center justify-center'>
+                            <i className='fa-solid fa-user text-yellow-400'></i>
                           </div>
                           <div>
                             <p className='text-white font-semibold'>

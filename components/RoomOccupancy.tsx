@@ -160,7 +160,7 @@ export default function RoomOccupancy() {
     <div className='glass-panel border-navy-800 p-6 rounded-lg'>
       <div className='flex items-center justify-between mb-4'>
         <h2 className='text-white font-bold text-lg flex items-center gap-2'>
-          <i className='fa-solid fa-door-open text-orange-400'></i>
+          <i className='fa-solid fa-door-open text-yellow-400'></i>
           Inside Right Now
         </h2>
         <div className='text-right'>
@@ -195,7 +195,7 @@ export default function RoomOccupancy() {
           return (
             <section key={group.floor || 'unknown'}>
               <div className='flex items-center gap-3 mb-2'>
-                <h3 className='text-orange-300 font-semibold text-sm uppercase tracking-wider flex-shrink-0'>
+                <h3 className='text-yellow-300 font-semibold text-sm uppercase tracking-wider flex-shrink-0'>
                   {group.floor ? floorLabel(group.floor) : 'Other Rooms'}
                 </h3>
                 <div className='flex-1 h-px bg-navy-800' />

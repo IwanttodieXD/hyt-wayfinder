@@ -42,7 +42,7 @@ export default class ThreeErrorBoundary extends Component<
         </p>
         <button
           onClick={() => this.setState({ hasError: false, message: null })}
-          className='px-4 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 text-paper font-semibold text-sm transition-colors'
+          className='px-4 py-2 rounded-lg bg-yellow-500 hover:bg-yellow-600 text-yellow-950 font-semibold text-sm transition-colors'
         >
           <i className='fa-solid fa-rotate-right mr-2' />
           Try Again

@@ -366,7 +366,7 @@ const exportRef = useRef<HTMLDivElement>(null);
                   ? 'No room visits match the current filters'
                   : 'Export the filtered visits'
               }
-              className='px-4 py-2 rounded-lg bg-orange-500/20 text-orange-300 border border-orange-500/30 hover:bg-orange-500/30 transition-colors flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-orange-500/20'
+              className='px-4 py-2 rounded-lg bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 hover:bg-yellow-500/30 transition-colors flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-yellow-500/20'
             >
               <i className='fa-solid fa-download'></i>
               Export
@@ -442,7 +442,7 @@ const exportRef = useRef<HTMLDivElement>(null);
                     w-full pl-12 pr-4 py-3 rounded-lg
                     bg-navy-900/50 border border-navy-700
                     text-white placeholder-navy-500
-                    focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500
+                    focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500
                     transition-colors
                   '
                 />
@@ -461,7 +461,7 @@ const exportRef = useRef<HTMLDivElement>(null);
                     w-full px-4 py-3 rounded-lg appearance-none
                     bg-navy-900/50 border border-navy-700
                     text-white font-semibold text-sm
-                    focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500
+                    focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500
                     transition-colors cursor-pointer
                   '
                 >
@@ -491,7 +491,7 @@ const exportRef = useRef<HTMLDivElement>(null);
                       w-full px-4 py-3 rounded-lg appearance-none
                       bg-navy-900/50 border border-navy-700
                       text-white font-semibold text-sm
-                      focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500
+                      focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500
                       transition-colors cursor-pointer
                     '
                   >
@@ -512,7 +512,7 @@ const exportRef = useRef<HTMLDivElement>(null);
                       w-full px-4 py-3 rounded-lg appearance-none
                       bg-navy-900/50 border border-navy-700
                       text-white font-semibold text-sm
-                      focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500
+                      focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500
                       transition-colors cursor-pointer
                     '
                   >
@@ -533,7 +533,7 @@ const exportRef = useRef<HTMLDivElement>(null);
                       w-full px-4 py-3 rounded-lg appearance-none
                       bg-navy-900/50 border border-navy-700
                       text-white font-semibold text-sm
-                      focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500
+                      focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500
                       transition-colors cursor-pointer
                     '
                   >

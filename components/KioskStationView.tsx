@@ -213,8 +213,8 @@ export default function KioskStationView() {
 
             <div className='glass-panel border-navy-800 p-6 rounded-lg'>
               <div className='flex items-center gap-4'>
-                <div className='w-14 h-14 rounded-lg bg-orange-500/20 flex items-center justify-center flex-shrink-0'>
-                  <i className='fa-solid fa-sign-out-alt text-orange-400 text-2xl'></i>
+                <div className='w-14 h-14 rounded-lg bg-yellow-500/20 flex items-center justify-center flex-shrink-0'>
+                  <i className='fa-solid fa-sign-out-alt text-yellow-400 text-2xl'></i>
                 </div>
                 <div className='min-w-0'>
                   <p className='text-navy-300 text-sm mb-1'>Checked Out Today</p>
@@ -397,7 +397,7 @@ export default function KioskStationView() {
                 className={`
                   mt-3 w-full px-3 py-2 rounded-lg border text-center
                   transition-colors duration-150 cursor-pointer
-                  focus:outline-none focus:ring-2 focus:ring-orange-500/60
+                  focus:outline-none focus:ring-2 focus:ring-yellow-500/60
                   ${
                     roomCounts(room.id) > 0
                       ? 'bg-green-500/10 border-green-500/30 hover:bg-green-500/20'
@@ -431,7 +431,7 @@ export default function KioskStationView() {
                 }
                 className='
                   mt-4 w-full px-4 py-2.5 rounded-lg font-semibold text-sm
-                  bg-orange-500 hover:bg-orange-600 text-paper
+                  bg-yellow-500 hover:bg-yellow-600 text-yellow-950
                   transition-colors duration-150
                   flex items-center justify-center gap-2
                 '
@@ -583,7 +583,7 @@ export default function KioskStationView() {
               <div className='px-6 py-3 border-t border-navy-800 bg-navy-900/50 flex-shrink-0'>
                 <Link
                   href='/admin/room-records'
-                  className='text-orange-400 hover:text-orange-300 text-sm font-semibold flex items-center gap-2 transition-colors'
+                  className='text-yellow-400 hover:text-yellow-300 text-sm font-semibold flex items-center gap-2 transition-colors'
                 >
                   View full room visit history
                   <i className='fa-solid fa-arrow-right'></i>
@@ -598,8 +598,8 @@ export default function KioskStationView() {
           <h3 className='text-white font-bold text-lg mb-4'>How it works</h3>
           <div className='space-y-3'>
             <div className='flex items-start gap-3 text-sm'>
-              <div className='w-6 h-6 rounded-full bg-orange-500/20 flex items-center justify-center flex-shrink-0 mt-0.5'>
-                <span className='text-orange-400 font-bold text-xs'>1</span>
+              <div className='w-6 h-6 rounded-full bg-yellow-500/20 flex items-center justify-center flex-shrink-0 mt-0.5'>
+                <span className='text-yellow-400 font-bold text-xs'>1</span>
               </div>
               <p className='text-navy-200'>
                 Register the visitor above. Their account and pass are created on

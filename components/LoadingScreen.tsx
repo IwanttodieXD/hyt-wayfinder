@@ -16,7 +16,7 @@ export default function LoadingScreen() {
         {/* Spinner */}
         <div className='mx-auto w-14 h-14 relative'>
           <div className='absolute inset-0 rounded-full border-2 border-navy-700' />
-          <div className='absolute inset-0 rounded-full border-2 border-transparent border-t-orange-400 animate-spin' />
+          <div className='absolute inset-0 rounded-full border-2 border-transparent border-t-yellow-400 animate-spin' />
           <div
             className='absolute inset-2 rounded-full border-2 border-transparent border-t-blue-400 animate-spin'
             style={{

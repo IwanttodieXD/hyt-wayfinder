@@ -35,14 +35,14 @@ export default function PerformanceStats() {
     <>
       <button
         onClick={() => setShowStats(!showStats)}
-        className='absolute top-8 left-8 bg-black/50 px-4 py-2 rounded text-white text-sm hover:bg-black/70 transition-colors'
+        className='theme-fixed-dark absolute top-8 left-8 bg-black/50 px-4 py-2 rounded text-white text-sm hover:bg-black/70 transition-colors'
       >
         {showStats ? 'Hide Stats' : 'Show Stats'}
       </button>
 
       {showStats && (
-        <div className='absolute top-20 left-8 bg-black/70 px-4 py-3 rounded text-white text-sm space-y-1'>
-          <p className='font-semibold text-orange-300'>Performance</p>
+        <div className='theme-fixed-dark absolute top-20 left-8 bg-black/70 px-4 py-3 rounded text-white text-sm space-y-1'>
+          <p className='font-semibold text-yellow-300'>Performance</p>
           <p>
             FPS:{' '}
             <span className={fps >= 30 ? 'text-green-400' : 'text-red-400'}>{fps}</span>

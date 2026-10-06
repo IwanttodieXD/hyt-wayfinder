@@ -198,8 +198,8 @@ function RouteMarkers({ waypoints }: { waypoints: Waypoints }) {
                 <mesh rotation={[0, 0, Math.PI / 4]}>
                   <boxGeometry args={[0.8, 0.8, 0.8]} />
                   <meshStandardMaterial
-                    color='#f59e0b'
-                    emissive='#f59e0b'
+                    color='#facc15'
+                    emissive='#facc15'
                     emissiveIntensity={isActive ? 1 : 0.5}
                   />
                 </mesh>
@@ -286,8 +286,8 @@ function BuildingStructure() {
       <mesh position={[17.5, 11, 8]}>
         <boxGeometry args={[0.2, 2, 1]} />
         <meshStandardMaterial
-          color='#f59e0b'
-          emissive='#f59e0b'
+          color='#facc15'
+          emissive='#facc15'
           emissiveIntensity={0.3}
         />
       </mesh>
@@ -430,7 +430,7 @@ export default function RouteVisualization() {
           <pointLight
             position={[20, 12, 10]}
             intensity={0.6}
-            color='#f59e0b'
+            color='#facc15'
             distance={15}
           />
           <pointLight position={[0, 2, 0]} intensity={0.4} color='#0891b2' distance={10} />
@@ -461,7 +461,7 @@ export default function RouteVisualization() {
             claimed the top-right corner and overlapped on a narrow phone. */}
         <div className='absolute top-3 left-3 right-3 flex items-center justify-between gap-2 pointer-events-none'>
           <div className='glass-panel border-navy-700 px-3 py-2 rounded-lg pointer-events-auto flex items-center gap-2 min-w-0'>
-            <i className='fa-solid fa-route text-orange-400 text-sm flex-shrink-0'></i>
+            <i className='fa-solid fa-route text-yellow-400 text-sm flex-shrink-0'></i>
             <div className='min-w-0'>
               <p className='text-white font-semibold text-xs leading-tight truncate'>
                 {route.label}
@@ -494,7 +494,7 @@ export default function RouteVisualization() {
               `aria-label` carry the wording for anyone who cannot see the icon. */}
           <button
             onClick={resetRoute}
-            className='pointer-events-auto flex-shrink-0 w-9 h-9 rounded-lg bg-orange-500 hover:bg-orange-600 text-paper flex items-center justify-center transition-colors'
+            className='pointer-events-auto flex-shrink-0 w-9 h-9 rounded-lg bg-yellow-500 hover:bg-yellow-600 text-yellow-950 flex items-center justify-center transition-colors'
             title='Back to scanner'
             aria-label='Back to scanner'
           >
@@ -525,7 +525,7 @@ export default function RouteVisualization() {
           onClick={handlePlayPause}
           className='
             w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-semibold
-            bg-orange-500 text-paper hover:bg-orange-600 transition-colors
+            bg-yellow-500 text-yellow-950 hover:bg-yellow-600 transition-colors
           '
         >
           <i className={`fa-solid ${isRouteAnimating ? 'fa-pause' : 'fa-play'}`}></i>

@@ -1,8 +1,8 @@
 export default function Controls() {
   return (
-    <div className='absolute bottom-6 left-6 z-20 bg-black/40 border border-white/10 rounded-lg px-4 py-3 w-52 select-none'>
+    <div className='theme-fixed-dark absolute bottom-6 left-6 z-20 bg-black/40 border border-white/10 rounded-lg px-4 py-3 w-52 select-none'>
       {/* Header */}
-      <p className='text-[10px] font-bold text-orange-400 uppercase tracking-widest mb-2.5'>
+      <p className='text-[10px] font-bold text-yellow-400 uppercase tracking-widest mb-2.5'>
         Controls
       </p>
 

@@ -47,10 +47,10 @@ const VERDICT_STYLE: Record<
     text: 'text-red-300',
   },
   pending: {
-    box: 'border-orange-500/30 bg-orange-500/10',
+    box: 'border-yellow-500/30 bg-yellow-500/10',
     icon: 'fa-clock',
     label: 'Awaiting review',
-    text: 'text-orange-300',
+    text: 'text-yellow-300',
   },
 };
 
@@ -256,8 +256,8 @@ export default function RegisterPage() {
         <div className='min-h-screen flex items-center justify-center p-4'>
           <div className='w-full max-w-md text-center'>
             <div className='glass-panel border-navy-700 rounded-lg p-8'>
-              <div className='w-16 h-16 mx-auto mb-5 rounded-full bg-orange-500/20 flex items-center justify-center'>
-                <i className='fa-solid fa-envelope-open-text text-orange-400 text-2xl'></i>
+              <div className='w-16 h-16 mx-auto mb-5 rounded-full bg-yellow-500/20 flex items-center justify-center'>
+                <i className='fa-solid fa-envelope-open-text text-yellow-400 text-2xl'></i>
               </div>
               <h1 className='text-2xl font-bold text-white mb-3'>
                 Check your email
@@ -276,7 +276,7 @@ export default function RegisterPage() {
                 href='/login'
                 className='
                   inline-block w-full px-4 py-3 rounded-lg
-                  bg-orange-500 hover:bg-orange-600 text-paper
+                  bg-yellow-500 hover:bg-yellow-600 text-yellow-950
                   font-semibold text-sm transition-colors
                 '
               >
@@ -315,11 +315,11 @@ export default function RegisterPage() {
             <h1 className='text-2xl sm:text-3xl font-bold text-white mb-2'>
               Create Account
             </h1>
-            <p className='text-orange-300'>Join HYT Wayfinder</p>
+            <p className='text-yellow-300'>Join HYT Wayfinder</p>
           </div>
 
           {/* Register Form */}
-          <div className='border border-orange-400/30 rounded-lg p-5 sm:p-8 bg-navy-900/60'>
+          <div className='border border-yellow-400/30 rounded-lg p-5 sm:p-8 bg-navy-900/60'>
             <form onSubmit={handleSubmit} className='space-y-5'>
               {/* Error Message */}
               {error && (
@@ -335,7 +335,7 @@ export default function RegisterPage() {
                   {/already has an account|already registered/i.test(error) && (
                     <Link
                       href='/login'
-                      className='mt-3 inline-flex items-center gap-2 text-orange-300 hover:text-orange-200 font-semibold transition-colors'
+                      className='mt-3 inline-flex items-center gap-2 text-yellow-300 hover:text-yellow-200 font-semibold transition-colors'
                     >
                       <i className='fa-solid fa-right-to-bracket'></i>
                       Go to sign in
@@ -348,13 +348,13 @@ export default function RegisterPage() {
               <div>
                 <label
                   htmlFor='name'
-                  className='block text-sm font-medium text-orange-200 mb-2'
+                  className='block text-sm font-medium text-yellow-200 mb-2'
                 >
                   Full Name
                 </label>
                 <div className='relative'>
                   <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
-                    <i className='fa-solid fa-user text-orange-400'></i>
+                    <i className='fa-solid fa-user text-yellow-400'></i>
                   </div>
                   <input
                     type='text'
@@ -364,9 +364,9 @@ export default function RegisterPage() {
                     required
                     className='
                       w-full pl-12 pr-4 py-3 rounded-lg
-                      bg-navy-900/80 border-2 border-orange-500/30
+                      bg-navy-900/80 border-2 border-yellow-500/30
                       text-white placeholder-navy-500
-                      focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500
+                      focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500
                       transition-colors
                       '
                     placeholder='Juan C. Dela Cruz'
@@ -378,13 +378,13 @@ export default function RegisterPage() {
               <div>
                 <label
                   htmlFor='email'
-                  className='block text-sm font-medium text-orange-200 mb-2'
+                  className='block text-sm font-medium text-yellow-200 mb-2'
                 >
                   Email Address
                 </label>
                 <div className='relative'>
                   <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
-                    <i className='fa-solid fa-envelope text-orange-400'></i>
+                    <i className='fa-solid fa-envelope text-yellow-400'></i>
                   </div>
                   <input
                     type='email'
@@ -394,9 +394,9 @@ export default function RegisterPage() {
                     required
                     className='
                       w-full pl-12 pr-4 py-3 rounded-lg
-                      bg-navy-900/80 border-2 border-orange-500/30
+                      bg-navy-900/80 border-2 border-yellow-500/30
                       text-white placeholder-navy-500
-                      focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500
+                      focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500
                       transition-colors
                       '
                     placeholder='you@example.com'
@@ -450,13 +450,13 @@ export default function RegisterPage() {
               <div>
                 <label
                   htmlFor='destination'
-                  className='block text-sm font-medium text-orange-200 mb-2'
+                  className='block text-sm font-medium text-yellow-200 mb-2'
                 >
                   Assigned room
                 </label>
                 <div className='relative'>
                   <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
-                    <i className='fa-solid fa-location-dot text-orange-400'></i>
+                    <i className='fa-solid fa-location-dot text-yellow-400'></i>
                   </div>
                   <select
                     id='destination'
@@ -466,9 +466,9 @@ export default function RegisterPage() {
                     }
                     className='
                       w-full pl-12 pr-4 py-3 rounded-lg appearance-none
-                      bg-navy-900/80 border-2 border-orange-500/30
+                      bg-navy-900/80 border-2 border-yellow-500/30
                       text-white placeholder-navy-500
-                      focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500
+                      focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500
                       transition-colors
                       '
                   >
@@ -498,13 +498,13 @@ export default function RegisterPage() {
               <div>
                 <label
                   htmlFor='purpose'
-                  className='block text-sm font-medium text-orange-200 mb-2'
+                  className='block text-sm font-medium text-yellow-200 mb-2'
                 >
                   Purpose
                 </label>
                 <div className='relative'>
                   <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
-                    <i className='fa-solid fa-clipboard-question text-orange-400'></i>
+                    <i className='fa-solid fa-clipboard-question text-yellow-400'></i>
                   </div>
                   <select
                     id='purpose'
@@ -514,9 +514,9 @@ export default function RegisterPage() {
                     }
                     className='
                       w-full pl-12 pr-4 py-3 rounded-lg appearance-none
-                      bg-navy-900/80 border-2 border-orange-500/30
+                      bg-navy-900/80 border-2 border-yellow-500/30
                       text-white placeholder-navy-500
-                      focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500
+                      focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500
                       transition-colors cursor-pointer
                     '
                   >
@@ -544,7 +544,7 @@ export default function RegisterPage() {
               {/* Visitor profile. Optional, and asked here so the front desk has it before the
                   person reaches the desk. An admin can correct any of it later. */}
               <div className='rounded-lg border border-navy-700 bg-navy-950/40 p-4 space-y-4'>
-                <p className='text-sm font-semibold text-orange-200'>
+                <p className='text-sm font-semibold text-yellow-200'>
                   About your visit
                   <span className='ml-2 text-xs font-normal text-navy-400'>
                     all optional
@@ -554,7 +554,7 @@ export default function RegisterPage() {
                 <div>
                   <label
                     htmlFor='visitorTypeId'
-                    className='block text-sm font-medium text-orange-200 mb-2'
+                    className='block text-sm font-medium text-yellow-200 mb-2'
                   >
                     Visitor type
                   </label>
@@ -567,9 +567,9 @@ export default function RegisterPage() {
                       }
                       className='
                         w-full pl-12 pr-4 py-3 rounded-lg appearance-none
-                        bg-navy-900/80 border-2 border-orange-500/30
+                        bg-navy-900/80 border-2 border-yellow-500/30
                         text-white placeholder-navy-500
-                        focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500
+                        focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500
                         transition-colors cursor-pointer
                       '
                     >
@@ -583,7 +583,7 @@ export default function RegisterPage() {
                       ))}
                     </select>
                     <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
-                      <i className='fa-solid fa-id-card text-orange-400'></i>
+                      <i className='fa-solid fa-id-card text-yellow-400'></i>
                     </div>
                     <i className='fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-navy-400 text-xs pointer-events-none'></i>
                   </div>
@@ -597,9 +597,9 @@ export default function RegisterPage() {
                 <div>
                   <label
                     htmlFor='courseId'
-                    className='block text-sm font-medium text-orange-200 mb-2'
+                    className='block text-sm font-medium text-yellow-200 mb-2'
                   >
-                    Course <span className='text-orange-400'>*</span>
+                    Course <span className='text-yellow-400'>*</span>
                   </label>
                   <div className='relative'>
                     <select
@@ -611,9 +611,9 @@ export default function RegisterPage() {
                       required
                       className='
                         w-full pl-12 pr-4 py-3 rounded-lg appearance-none
-                        bg-navy-900/80 border-2 border-orange-500/30
+                        bg-navy-900/80 border-2 border-yellow-500/30
                         text-white placeholder-navy-500
-                        focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500
+                        focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500
                         transition-colors cursor-pointer
                       '
                     >
@@ -627,7 +627,7 @@ export default function RegisterPage() {
                       ))}
                     </select>
                     <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
-                      <i className='fa-solid fa-graduation-cap text-orange-400'></i>
+                      <i className='fa-solid fa-graduation-cap text-yellow-400'></i>
                     </div>
                     <i className='fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-navy-400 text-xs pointer-events-none'></i>
                   </div>
@@ -638,13 +638,13 @@ export default function RegisterPage() {
                   <div>
                     <label
                       htmlFor='company'
-                      className='block text-sm font-medium text-orange-200 mb-2'
+                      className='block text-sm font-medium text-yellow-200 mb-2'
                     >
                       Company / school
                     </label>
                     <div className='relative'>
                       <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
-                        <i className='fa-solid fa-building text-orange-400'></i>
+                        <i className='fa-solid fa-building text-yellow-400'></i>
                       </div>
                       <input
                         type='text'
@@ -656,9 +656,9 @@ export default function RegisterPage() {
                         placeholder='Optional'
                         className='
                           w-full pl-12 pr-4 py-3 rounded-lg
-                          bg-navy-900/80 border-2 border-orange-500/30
+                          bg-navy-900/80 border-2 border-yellow-500/30
                           text-white placeholder-navy-500
-                          focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500
+                          focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500
                           transition-colors
                         '
                       />
@@ -668,13 +668,13 @@ export default function RegisterPage() {
                   <div>
                     <label
                       htmlFor='phone'
-                      className='block text-sm font-medium text-orange-200 mb-2'
+                      className='block text-sm font-medium text-yellow-200 mb-2'
                     >
                       Phone
                     </label>
                     <div className='relative'>
                       <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
-                        <i className='fa-solid fa-phone text-orange-400'></i>
+                        <i className='fa-solid fa-phone text-yellow-400'></i>
                       </div>
                       <input
                         type='tel'
@@ -707,9 +707,9 @@ export default function RegisterPage() {
                         placeholder='Optional'
                         className='
                           w-full pl-12 pr-4 py-3 rounded-lg
-                          bg-navy-900/80 border-2 border-orange-500/30
+                          bg-navy-900/80 border-2 border-yellow-500/30
                           text-white placeholder-navy-500
-                          focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500
+                          focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500
                           transition-colors
                         '
                       />
@@ -722,13 +722,13 @@ export default function RegisterPage() {
               <div>
                 <label
                   htmlFor='password'
-                  className='block text-sm font-medium text-orange-200 mb-2'
+                  className='block text-sm font-medium text-yellow-200 mb-2'
                 >
                   Password
                 </label>
                 <div className='relative'>
                   <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
-                    <i className='fa-solid fa-lock text-orange-400'></i>
+                    <i className='fa-solid fa-lock text-yellow-400'></i>
                   </div>
                   <input
                     type='password'
@@ -740,9 +740,9 @@ export default function RegisterPage() {
                     required
                     className='
                       w-full pl-12 pr-4 py-3 rounded-lg
-                      bg-navy-900/80 border-2 border-orange-500/30
+                      bg-navy-900/80 border-2 border-yellow-500/30
                       text-white placeholder-navy-500
-                      focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500
+                      focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500
                       transition-colors
                       '
                     placeholder='••••••••'
@@ -754,13 +754,13 @@ export default function RegisterPage() {
               <div>
                 <label
                   htmlFor='confirmPassword'
-                  className='block text-sm font-medium text-orange-200 mb-2'
+                  className='block text-sm font-medium text-yellow-200 mb-2'
                 >
                   Confirm Password
                 </label>
                 <div className='relative'>
                   <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
-                    <i className='fa-solid fa-lock text-orange-400'></i>
+                    <i className='fa-solid fa-lock text-yellow-400'></i>
                   </div>
                   <input
                     type='password'
@@ -775,9 +775,9 @@ export default function RegisterPage() {
                     required
                     className='
                       w-full pl-12 pr-4 py-3 rounded-lg
-                      bg-navy-900/80 border-2 border-orange-500/30
+                      bg-navy-900/80 border-2 border-yellow-500/30
                       text-white placeholder-navy-500
-                      focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500
+                      focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500
                       transition-colors
                       '
                     placeholder='••••••••'
@@ -793,12 +793,12 @@ export default function RegisterPage() {
                 disabled={loading}
                 className='
                   sticky bottom-4 z-10 sm:static sm:z-auto
-                  w-full py-3 rounded-lg font-semibold text-paper
-                  bg-orange-600 hover:bg-orange-700
+                  w-full py-3 rounded-lg font-semibold text-yellow-950
+                  bg-yellow-500 hover:bg-yellow-600
                   transition-colors duration-150
                   disabled:opacity-50 disabled:cursor-not-allowed
                   flex items-center justify-center gap-2
-                  border border-orange-500/50
+                  border border-yellow-500/50
                   shadow-lg shadow-black/40 sm:static sm:shadow-none
                   '
               >
@@ -821,7 +821,7 @@ export default function RegisterPage() {
               Already have an account?{' '}
               <Link
                 href='/login'
-                className='text-orange-400 hover:text-orange-300 font-semibold transition-colors'
+                className='text-yellow-400 hover:text-yellow-300 font-semibold transition-colors'
               >
                 Sign in
               </Link>

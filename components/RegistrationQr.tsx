@@ -108,7 +108,7 @@ export default function RegistrationQr() {
           type='button'
           onClick={handlePrint}
           disabled={!url}
-          className='flex-1 px-4 py-2.5 rounded-lg font-semibold text-sm bg-orange-500 hover:bg-orange-600 text-paper transition-colors duration-150 flex items-center justify-center gap-2 disabled:opacity-50'
+          className='flex-1 px-4 py-2.5 rounded-lg font-semibold text-sm bg-yellow-500 hover:bg-yellow-600 text-yellow-950 transition-colors duration-150 flex items-center justify-center gap-2 disabled:opacity-50'
         >
           <i className='fa-solid fa-print'></i>
           Print Registration QR
