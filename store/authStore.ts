@@ -64,6 +64,15 @@ export interface User {
    * something that changes per visit.
    */
   courseId?: string;
+  /**
+   * Resolved label from `visitor_types` (e.g. "Trainee"), looked up from
+   * `users.visitor_type_id`. Null when the visitor is unclassified.
+   *
+   * Carried on the session so the UserProfile badge can show the visitor's
+   * classification without a second round trip. The raw id is never needed
+   * client-side; only its label is displayed.
+   */
+  visitorType?: string | null;
   qrCode?: string;
   createdAt: Date;
 }
@@ -99,6 +108,26 @@ function pendingFromProfile(row: any): Partial<User> {
     ...(room ? { destination: room.roomNumber } : {}),
     ...(purpose ? { purpose: purpose.label } : {}),
   };
+}
+
+/**
+ * Resolves a `visitor_type_id` from a `users` row to its label.
+ *
+ * Same pattern as `pendingFromProfile`: a plain id is useless to the UI, so it
+ * is turned into the human-readable label the `visitor_types` table holds.
+ * `fetchVisitorTypes` is idempotent and cached, so callers in `login`/
+ * `register`/`checkAuth` can invoke it before resolving. Returns `null` when
+ * the id is absent or the lookup table has not loaded yet, in which case the
+ * badge falls back to the neutral "visitor" style.
+ */
+function visitorTypeLabelFromId(
+  id: string | null | undefined
+): { visitorType: string | null } {
+  if (!id) return { visitorType: null };
+  const match = useRoomsStore
+    .getState()
+    .visitorTypes.find((t) => t.id === id);
+  return { visitorType: match?.label ?? null };
 }
 
 /**
@@ -327,6 +356,14 @@ export const useAuthStore = create<AuthState>()(
             await useRoomsStore.getState().fetchPurposes();
           }
 
+          // Load `visitor_types` so the UserProfile badge can show the
+          // visitor's classification ("Trainee", "VIP", ...). Skipped when
+          // the visitor has no classification, so a login without it does not
+          // pay for the round trip.
+          if (userData.visitor_type_id) {
+            await useRoomsStore.getState().fetchVisitorTypes();
+          }
+
           const user: User = {
             id: userData.id,
             email: userData.email,
@@ -334,6 +371,7 @@ export const useAuthStore = create<AuthState>()(
             role: userData.role as UserRole,
             ...pendingFromProfile(userData),
             ...(userData.course_id ? { courseId: userData.course_id } : {}),
+            ...visitorTypeLabelFromId(userData.visitor_type_id),
             qrCode: `HYT-USER:${userData.id}`,
             createdAt: new Date(userData.created_at),
           };
@@ -499,6 +537,12 @@ export const useAuthStore = create<AuthState>()(
             return { success: false, error: 'No profile data returned' };
           }
 
+          // Load `visitor_types` so the badge on the new session shows the
+          // classification the person just chose. Only when they picked one.
+          if (userData.visitor_type_id) {
+            await useRoomsStore.getState().fetchVisitorTypes();
+          }
+
           const user: User = {
             id: userData.id,
             email: userData.email,
@@ -510,6 +554,7 @@ export const useAuthStore = create<AuthState>()(
             ...(data.destination ? { destination: data.destination } : {}),
             ...(data.purpose ? { purpose: data.purpose } : {}),
             ...(userData.course_id ? { courseId: userData.course_id } : {}),
+            ...visitorTypeLabelFromId(userData.visitor_type_id),
             qrCode: `HYT-USER:${userData.id}`,
             createdAt: new Date(userData.created_at),
           };
@@ -617,6 +662,12 @@ export const useAuthStore = create<AuthState>()(
             await useRoomsStore.getState().fetchPurposes();
           }
 
+          // Resolve the visitor's classification so the UserProfile badge
+          // shows it on a cold reload. Same lazy-load rule as above.
+          if (userData.visitor_type_id) {
+            await useRoomsStore.getState().fetchVisitorTypes();
+          }
+
           const user: User = {
             id: userData.id,
             email: userData.email,
@@ -624,6 +675,7 @@ export const useAuthStore = create<AuthState>()(
             role: userData.role as UserRole,
             ...pendingFromProfile(userData),
             ...(userData.course_id ? { courseId: userData.course_id } : {}),
+            ...visitorTypeLabelFromId(userData.visitor_type_id),
             qrCode: `HYT-USER:${userData.id}`,
             createdAt: new Date(userData.created_at),
           };

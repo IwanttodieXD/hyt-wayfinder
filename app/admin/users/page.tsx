@@ -11,24 +11,11 @@ import {
   isPassExpired,
   type ManagedUser,
 } from '@/store/usersStore';
+import { visitorTypeStyle } from '@/lib/visitorTypeStyles';
 import UserProfile from '@/components/UserProfile';
 
 const INPUT =
   'w-full px-4 py-2.5 rounded-lg bg-navy-950/60 border border-navy-700 text-white placeholder-navy-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500 transition-colors';
-
-/** Badge colours per visitor type. Unknown labels fall back to neutral. */
-const TYPE_STYLES: Record<string, string> = {
-  Trainee: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
-  Trainer: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30',
-  VIP: 'bg-amber-400/20 text-amber-300 border-amber-400/30',
-  Guest: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
-  Contractor: 'bg-navy-600/20 text-navy-300 border-navy-600/30',
-  Intern: 'bg-teal-500/20 text-teal-300 border-teal-500/30',
-  Observer: 'bg-navy-600/20 text-navy-300 border-navy-600/30',
-};
-
-const typeStyle = (label: string | null) =>
-  (label && TYPE_STYLES[label]) || 'bg-navy-600/20 text-navy-300 border-navy-600/30';
 
 type FormState = {
   name: string;
@@ -527,7 +514,7 @@ if (editing) {
                         </td>
                         <td className='px-4 py-3'>
                           <span
-                            className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${typeStyle(u.visitorType)}`}
+                            className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${visitorTypeStyle(u.visitorType)}`}
                           >
                             {u.visitorType ?? 'Unclassified'}
                           </span>

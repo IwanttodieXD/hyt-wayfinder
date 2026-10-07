@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
+import { visitorTypeStyle } from '@/lib/visitorTypeStyles';
 import ThemeToggle from '@/components/ThemeToggle';
 
 // Shared menu-item styling. Kept in one place so the six admin links, the theme
@@ -10,6 +11,12 @@ import ThemeToggle from '@/components/ThemeToggle';
 // treatment instead of drifting apart.
 const MENU_ITEM =
   'w-full px-4 py-2.5 rounded-lg text-left text-navy-200 hover:bg-yellow-500/10 hover:text-white active:bg-yellow-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-500/60 transition-colors flex items-center gap-3';
+
+// Visitors with no visitor_type fall back to this, mirroring the "Guest" colour
+// the register form picks by default. Keeps the chip readable when
+// `visitor_types` has not loaded yet.
+const DEFAULT_VISITOR_STYLE =
+  'bg-purple-500/20 text-purple-300 border-purple-500/30';
 
 export default function UserProfile() {
   const router = useRouter();
@@ -35,26 +42,18 @@ export default function UserProfile() {
     router.push('/login');
   };
 
-  // Only two roles exist, so these two helpers are exhaustive rather than a
-  // lookup table. `default` is unreachable in practice but keeps the return type
-  // total if a retired role ever resurfaces in an old database row.
-  const getRoleColor = () => {
-    switch (user.role) {
-      case 'admin':
-        return 'bg-red-500/20 text-red-300 border-red-500/30';
-      default:
-        return 'bg-purple-500/20 text-purple-300 border-purple-500/30';
-    }
-  };
-
-  const getRoleIcon = () => {
-    switch (user.role) {
-      case 'admin':
-        return 'fa-user-shield';
-      default:
-        return 'fa-id-card';
-    }
-  };
+  // Admin keeps the red shield badge. Visitors wear the colour of their
+  // `visitor_type_id` label (Trainee/Trainer/VIP/...), falling back to the
+  // neutral purple "visitor" chip when unclassified. The label shown next to
+  // the avatar mirrors the same choice.
+  const isAdmin = user.role === 'admin';
+  const badgeLabel = isAdmin ? 'admin' : user.visitorType ?? 'visitor';
+  const badgeClasses = isAdmin
+    ? 'bg-red-500/20 text-red-300 border-red-500/30'
+    : user.visitorType
+      ? visitorTypeStyle(user.visitorType)
+      : DEFAULT_VISITOR_STYLE;
+  const badgeIcon = isAdmin ? 'fa-user-shield' : 'fa-id-card';
 
   return (
     <div className='relative' ref={dropdownRef}>
@@ -66,11 +65,11 @@ export default function UserProfile() {
         {/* Avatar tile. `bg-navy-900/40` reads as a recess on the trigger in
             both themes instead of a second colour block. */}
         <div className='w-10 h-10 rounded-lg bg-navy-900/40 flex items-center justify-center'>
-          <i className={`fa-solid ${getRoleIcon()} text-yellow-400`}></i>
+          <i className={`fa-solid ${badgeIcon} text-yellow-400`}></i>
         </div>
         <div className='hidden md:block text-left'>
           <p className='text-white font-semibold text-sm leading-tight'>{user.name}</p>
-          <p className='text-navy-300 text-xs capitalize'>{user.role}</p>
+          <p className='text-navy-300 text-xs capitalize'>{badgeLabel}</p>
         </div>
         <i
           className={`fa-solid fa-chevron-down text-navy-300 text-xs transition-transform ${isOpen ? 'rotate-180' : ''}`}
@@ -83,7 +82,7 @@ export default function UserProfile() {
           <div className='p-4 border-b border-yellow-500/20 bg-yellow-500/10'>
             <div className='flex items-center gap-3 mb-3'>
               <div className='w-12 h-12 rounded-lg bg-yellow-500/20 flex items-center justify-center'>
-                <i className={`fa-solid ${getRoleIcon()} text-yellow-400 text-xl`}></i>
+                <i className={`fa-solid ${badgeIcon} text-yellow-400 text-xl`}></i>
               </div>
               <div className='flex-1'>
                 <p className='text-white font-semibold'>{user.name}</p>
@@ -91,10 +90,10 @@ export default function UserProfile() {
               </div>
             </div>
             <div
-              className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold border ${getRoleColor()}`}
+              className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold border ${badgeClasses}`}
             >
-              <i className={`fa-solid ${getRoleIcon()}`}></i>
-              <span className='capitalize'>{user.role}</span>
+              <i className={`fa-solid ${badgeIcon}`}></i>
+              <span className='capitalize'>{badgeLabel}</span>
             </div>
           </div>
 
