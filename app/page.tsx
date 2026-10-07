@@ -6,7 +6,7 @@ import { useAuthStore } from '@/store/authStore';
 
 export default function HomePage() {
   const router = useRouter();
-  const { isAuthenticated, user, authResolved } = useAuthStore();
+  const { isAuthenticated, user, authResolved, passExpired } = useAuthStore();
 
   // The session is restored once, app-wide, by <AuthGate>. Here we only route on
   // the resolved state - never on the pre-check value, which is what used to
@@ -15,11 +15,20 @@ export default function HomePage() {
     if (!authResolved) return;
 
     if (isAuthenticated && user) {
-      router.replace(user.role === 'admin' ? '/admin' : '/check-in');
+      if (user.role === 'admin') {
+        router.replace('/admin');
+      } else if (passExpired) {
+        // An expired visitor reloads to the pass-expired page rather than
+        // /check-in. `passExpired` is recomputed by checkAuth on every load,
+        // so a renewed pass lands them on /check-in again.
+        router.replace('/pass-expired');
+      } else {
+        router.replace('/check-in');
+      }
     } else {
       router.replace('/login');
     }
-  }, [authResolved, isAuthenticated, user, router]);
+  }, [authResolved, isAuthenticated, user, passExpired, router]);
 
   // Show loading while the session check finishes and the redirect lands.
   return (

@@ -486,9 +486,25 @@ if (editing) {
                     return (
                       <tr
                         key={u.id}
-                        className={`hover:bg-navy-900/30 transition-colors ${expired ? 'opacity-60' : ''}`}
+                        className={`transition-colors ${
+                          expired
+                            ? 'bg-black/60 hover:bg-blue-500/20'
+                            : // Brighter blue hover on valid rows so they
+                              // stand out against the dimmed expired ones.
+                              'hover:bg-blue-500/20'
+                        }`}
                       >
-                        <td className='px-4 py-3'>
+                        {/* Expired rows are dimmed as a unit via the row
+                            background and dimmed text on the info cells, NOT
+                            via `opacity` on the <tr>. CSS opacity stacks, so a
+                            child's `opacity:1` cannot undo a parent's
+                            `opacity:0.6` — using opacity on the row would dim
+                            the action buttons too, with no way to un-dim them.
+                            The buttons below keep their own colours and stay
+                            full-bright on the dimmed row. */}
+                        <td
+                          className={`px-4 py-3 ${expired ? 'opacity-30' : ''}`}
+                        >
                           <div className='flex items-center gap-3'>
                             <div className='w-9 h-9 rounded-lg bg-yellow-500/20 flex items-center justify-center flex-shrink-0'>
                               <i className='fa-solid fa-user text-yellow-400'></i>
@@ -512,7 +528,9 @@ if (editing) {
                             </div>
                           </div>
                         </td>
-                        <td className='px-4 py-3'>
+                        <td
+                          className={`px-4 py-3 ${expired ? 'opacity-30' : ''}`}
+                        >
                           <span
                             className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${visitorTypeStyle(u.visitorType)}`}
                           >
@@ -524,7 +542,9 @@ if (editing) {
                             in the primary slot; company is secondary context.
                             Resolved from the rooms/purposes lists already loaded on
                             this page. */}
-                        <td className='px-4 py-3 text-sm'>
+                        <td
+                          className={`px-4 py-3 text-sm ${expired ? 'opacity-30' : ''}`}
+                        >
                           {(() => {
                             const room = rooms.find((r) => r.id === u.pendingRoomId);
                             const purpose = purposes.find(
@@ -560,7 +580,9 @@ if (editing) {
                             </p>
                           )}
                         </td>
-                        <td className='px-4 py-3 whitespace-nowrap text-sm'>
+                        <td
+                          className={`px-4 py-3 whitespace-nowrap text-sm ${expired ? 'opacity-30' : ''}`}
+                        >
                           {u.validUntil ? (
                             <span className={expired ? 'text-red-400' : 'text-navy-300'}>
                               {expired ? 'Expired ' : ''}
@@ -570,9 +592,14 @@ if (editing) {
                             <span className='text-navy-500'>No expiry</span>
                           )}
                         </td>
-                        <td className='px-4 py-3 whitespace-nowrap text-navy-300 text-sm'>
+                        <td
+                          className={`px-4 py-3 whitespace-nowrap text-navy-300 text-sm ${expired ? 'opacity-30' : ''}`}
+                        >
                           {formatDate(u.createdAt)}
                         </td>
+                        {/* Actions cell is deliberately NOT dimmed. The buttons
+                            keep their own colours so they stay readable and
+                            clickable on the dimmed row. */}
                         <td className='px-4 py-3'>
                           <div className='flex items-center gap-2'>
                             <button

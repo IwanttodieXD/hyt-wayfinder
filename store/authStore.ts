@@ -73,6 +73,14 @@ export interface User {
    * client-side; only its label is displayed.
    */
   visitorType?: string | null;
+  /**
+   * ISO timestamp from `users.valid_until`. Null when the pass never expires.
+   *
+   * Carried on the session so the `/pass-expired` page can show *when* the
+   * pass expired without a second round trip. The boolean `passExpired` on
+   * the auth state is the source of truth for branching; this is for display.
+   */
+  validUntil?: string | null;
   qrCode?: string;
   createdAt: Date;
 }
@@ -372,6 +380,9 @@ export const useAuthStore = create<AuthState>()(
             ...pendingFromProfile(userData),
             ...(userData.course_id ? { courseId: userData.course_id } : {}),
             ...visitorTypeLabelFromId(userData.visitor_type_id),
+            ...(userData.valid_until
+              ? { validUntil: userData.valid_until }
+              : {}),
             qrCode: `HYT-USER:${userData.id}`,
             createdAt: new Date(userData.created_at),
           };
@@ -555,6 +566,9 @@ export const useAuthStore = create<AuthState>()(
             ...(data.purpose ? { purpose: data.purpose } : {}),
             ...(userData.course_id ? { courseId: userData.course_id } : {}),
             ...visitorTypeLabelFromId(userData.visitor_type_id),
+            ...(userData.valid_until
+              ? { validUntil: userData.valid_until }
+              : {}),
             qrCode: `HYT-USER:${userData.id}`,
             createdAt: new Date(userData.created_at),
           };
@@ -676,6 +690,9 @@ export const useAuthStore = create<AuthState>()(
             ...pendingFromProfile(userData),
             ...(userData.course_id ? { courseId: userData.course_id } : {}),
             ...visitorTypeLabelFromId(userData.visitor_type_id),
+            ...(userData.valid_until
+              ? { validUntil: userData.valid_until }
+              : {}),
             qrCode: `HYT-USER:${userData.id}`,
             createdAt: new Date(userData.created_at),
           };

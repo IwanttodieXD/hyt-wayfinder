@@ -23,11 +23,16 @@ export default function LoginPage() {
 
     if (result.success) {
       // Get user info to determine redirect
-      const user = useAuthStore.getState().user;
+      const { user, passExpired } = useAuthStore.getState();
 
       // Role-based redirect
       if (user?.role === 'admin') {
         router.push('/admin');
+      } else if (passExpired) {
+        // An expired visitor is turned away from /check-in. The pass-expired
+        // page shows their expiry date and tells them to ask for a renewal;
+        // the session stays intact so the page can read their identity.
+        router.push('/pass-expired');
       } else {
         // Everyone else is a visitor and goes to the mobile check-in page
         router.push('/check-in');
