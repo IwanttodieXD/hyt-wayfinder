@@ -82,6 +82,16 @@ export default function StationRegistrationForm() {
   const rooms = getActiveRooms();
   const courses = getActiveCourses();
 
+  // Only trainees and trainers are enrolled in a course. Everyone else is
+  // visiting for another reason, so the picker is disabled for them instead of
+  // forcing an irrelevant choice.
+  const selectedVisitorType = visitorTypes.find(
+    (type) => type.id === form.visitorTypeId
+  );
+  const courseRequired = ['trainee', 'trainer'].includes(
+    (selectedVisitorType?.label ?? '').trim().toLowerCase()
+  );
+
   useEffect(() => {
     fetchPurposes();
     fetchVisitorTypes();
@@ -130,7 +140,7 @@ export default function StationRegistrationForm() {
       setError('Password must be at least 6 characters');
       return;
     }
-    if (!form.courseId) {
+    if (courseRequired && !form.courseId) {
       setError('Please select a course');
       return;
     }
@@ -287,15 +297,22 @@ export default function StationRegistrationForm() {
         <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
           <div>
             <label className={LABEL} htmlFor='reg-course'>
-              Course <span className='text-red-400'>*</span>
+              Course{' '}
+              {courseRequired && <span className='text-red-400'>*</span>}
             </label>
             <select
               id='reg-course'
-              className={INPUT}
+              className={`${INPUT} disabled:cursor-not-allowed disabled:opacity-60`}
               value={form.courseId}
               onChange={(e) => set('courseId', e.target.value)}
+              required={courseRequired}
+              disabled={!courseRequired}
             >
-              <option value=''>Select a course</option>
+              <option value=''>
+                {courseRequired
+                  ? 'Select a course'
+                  : 'Not applicable for this visitor type'}
+              </option>
               {courses.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.label}
@@ -311,7 +328,22 @@ export default function StationRegistrationForm() {
               id='reg-type'
               className={INPUT}
               value={form.visitorTypeId}
-              onChange={(e) => set('visitorTypeId', e.target.value)}
+              onChange={(e) => {
+                const visitorTypeId = e.target.value;
+                const nextType = visitorTypes.find(
+                  (type) => type.id === visitorTypeId
+                );
+                const needsCourse = ['trainee', 'trainer'].includes(
+                  (nextType?.label ?? '').trim().toLowerCase()
+                );
+                setForm((prev) => ({
+                  ...prev,
+                  visitorTypeId,
+                  // Drop a course that no longer applies. The room effect
+                  // follows courseId, so the auto-assigned room clears too.
+                  courseId: needsCourse ? prev.courseId : '',
+                }));
+              }}
             >
               <option value=''>Not specified</option>
               {visitorTypes.map((t) => (

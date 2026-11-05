@@ -121,8 +121,8 @@ export default function RegisterPage() {
     visitorTypeId: '',
     company: '',
     phone: '',
-    // Required: a visitor is enrolled in exactly one course. Persisted as
-    // users.course_id by migration 20260101000011.
+    // Required only for trainees and trainers; everyone else is not enrolled
+    // in a course. Persisted as users.course_id by migration 20260101000011.
     courseId: '',
   });
   const [error, setError] = useState('');
@@ -145,6 +145,18 @@ export default function RegisterPage() {
   // Already ordered by floor then room number by the store.
   const rooms = getActiveRooms();
   const courses = getActiveCourses();
+
+  // Only trainees and trainers are enrolled in a course. Everyone else is here
+  // for another reason (meeting, delivery, VIP visit, ...), so the course
+  // picker is disabled for them rather than forcing an irrelevant choice.
+  // Matched on the label so this works with both the fallback list and the real
+  // visitor_types table.
+  const selectedVisitorType = visitorTypes.find(
+    (type) => type.id === formData.visitorTypeId
+  );
+  const courseRequired = ['trainee', 'trainer'].includes(
+    (selectedVisitorType?.label ?? '').trim().toLowerCase()
+  );
 
   useEffect(() => {
     fetchPurposes();
@@ -229,7 +241,7 @@ export default function RegisterPage() {
     //   return;
     // }
 
-    if (!formData.courseId) {
+    if (courseRequired && !formData.courseId) {
       setError('Please select a course');
       return;
     }
@@ -638,9 +650,22 @@ export default function RegisterPage() {
                     <select
                       id='visitorTypeId'
                       value={formData.visitorTypeId}
-                      onChange={(e) =>
-                        setFormData({ ...formData, visitorTypeId: e.target.value })
-                      }
+                      onChange={(e) => {
+                        const visitorTypeId = e.target.value;
+                        const nextType = visitorTypes.find(
+                          (type) => type.id === visitorTypeId
+                        );
+                        const needsCourse = ['trainee', 'trainer'].includes(
+                          (nextType?.label ?? '').trim().toLowerCase()
+                        );
+                        setFormData((prev) => ({
+                          ...prev,
+                          visitorTypeId,
+                          // Drop a course that no longer applies. The destination
+                          // effect follows courseId, so the room clears too.
+                          courseId: needsCourse ? prev.courseId : '',
+                        }));
+                      }}
                       className='
                         w-full pl-12 pr-4 py-3 rounded-lg appearance-none
                         bg-navy-900/80 border-2 border-yellow-500/30
@@ -667,15 +692,17 @@ export default function RegisterPage() {
 
                 {/* `host_name` is not asked here: a visitor cannot name the person they are
                     meeting. Staff set it on /admin/users. */}
-                {/* Course picker. Required, and persisted on the user row (unlike
-                    destination/purpose which are per-visit). A course is a stable
-                    attribute of the visitor. */}
+                {/* Course picker. Required only for trainees and trainers, and
+                    persisted on the user row (unlike destination/purpose which
+                    are per-visit). A course is a stable attribute of the visitor,
+                    but only one that applies to people actually taking a class. */}
                 <div>
                   <label
                     htmlFor='courseId'
                     className='block text-sm font-medium text-yellow-200 mb-2'
                   >
-                    Course <span className='text-yellow-400'>*</span>
+                    Course{' '}
+                    {courseRequired && <span className='text-yellow-400'>*</span>}
                   </label>
                   <div className='relative'>
                     <select
@@ -684,17 +711,21 @@ export default function RegisterPage() {
                       onChange={(e) =>
                         setFormData({ ...formData, courseId: e.target.value })
                       }
-                      required
+                      required={courseRequired}
+                      disabled={!courseRequired}
                       className='
                         w-full pl-12 pr-4 py-3 rounded-lg appearance-none
                         bg-navy-900/80 border-2 border-yellow-500/30
                         text-white placeholder-navy-500
                         focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500
                         transition-colors cursor-pointer
+                        disabled:cursor-not-allowed disabled:opacity-60
                       '
                     >
                       <option value='' className='bg-navy-900'>
-                        Select a course
+                        {courseRequired
+                          ? 'Select a course'
+                          : 'Not applicable for this visitor type'}
                       </option>
                       {courses.map((course) => (
                         <option key={course.id} value={course.id} className='bg-navy-900'>
@@ -703,9 +734,19 @@ export default function RegisterPage() {
                       ))}
                     </select>
                     <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
-                      <i className='fa-solid fa-graduation-cap text-yellow-400'></i>
+                      <i
+                        className={cn(
+                          'fa-solid fa-graduation-cap',
+                          courseRequired ? 'text-yellow-400' : 'text-navy-500'
+                        )}
+                      ></i>
                     </div>
-                    <i className='fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-navy-400 text-xs pointer-events-none'></i>
+                    <i
+                      className={cn(
+                        'fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-xs pointer-events-none',
+                        courseRequired ? 'text-navy-400' : 'text-navy-600'
+                      )}
+                    ></i>
                   </div>
 		
 		  <div>

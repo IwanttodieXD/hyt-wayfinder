@@ -19,6 +19,20 @@ type SortKey =
   | 'status';
 
 /**
+ * Visitor types that are enrolled in a course. For every other type the Course
+ * column and Course filter are hidden, because a course is not part of their
+ * visit.
+ */
+const COURSE_VISITOR_TYPES = ['trainee', 'trainer'];
+
+function isCourseVisitorType(label: string): boolean {
+  return (
+    label === 'all' ||
+    COURSE_VISITOR_TYPES.includes(label.trim().toLowerCase())
+  );
+}
+
+/**
  * Reduces a record to a value the comparator can order.
  *
  * Nullable fields collapse to +Infinity so an unset value (no time out, no
@@ -50,6 +64,10 @@ export default function RecordsPage() {
   const { records } = useRecordsStore();
 
   const [searchTerm, setSearchTerm] = useState('');
+  // Visitor type is joined from the visitor's profile, like the course. Course
+  // only applies to trainees and trainers, so the Course column and filter are
+  // hidden for every other type.
+  const [visitorTypeFilter, setVisitorTypeFilter] = useState('all');
   // Course is joined from the visitor's profile, so the filter matches the
   // label already shown in the Course column rather than a separate id.
   const [courseFilter, setCourseFilter] = useState('all');
@@ -157,6 +175,25 @@ export default function RecordsPage() {
       .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
   })();
 
+  // Visitor type tally for the filter buttons. Same rule as the course tally:
+  // counted from every loaded record, not from the current search/status view.
+  const visitorTypeCounts = (() => {
+    const counts = new Map<string, number>();
+
+    for (const record of records) {
+      if (!record.visitorType) continue;
+      counts.set(record.visitorType, (counts.get(record.visitorType) ?? 0) + 1);
+    }
+
+    return [...counts.entries()]
+      .map(([label, count]) => ({ label, count }))
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+  })();
+
+  // Course is a trainee/trainer attribute, so it is only shown while the
+  // visitor-type filter is "all", "Trainee" or "Trainer".
+  const showCourse = isCourseVisitorType(visitorTypeFilter);
+
   const filteredRecords = records.filter((record) => {
     const term = searchTerm.toLowerCase();
     const matchesSearch =
@@ -168,8 +205,15 @@ export default function RecordsPage() {
       (record.courseLabel?.toLowerCase().includes(term) ?? false) ||
       record.room.toLowerCase().includes(term);
 
+    const matchesVisitorType =
+      visitorTypeFilter === 'all' || record.visitorType === visitorTypeFilter;
+
+    // Ignored while the Course filter is hidden, so a filter chosen for trainees
+    // cannot silently keep excluding records after switching to another type.
     const matchesCourse =
-      courseFilter === 'all' || record.courseLabel === courseFilter;
+      !showCourse ||
+      courseFilter === 'all' ||
+      record.courseLabel === courseFilter;
 
     const matchesStatus = statusFilter === 'all' || record.status === statusFilter;
 
@@ -179,7 +223,13 @@ export default function RecordsPage() {
       timeIn.getMonth() + 1 === Number(selectedMonth) &&
       (selectedDay === 'all' || timeIn.getDate() === Number(selectedDay));
 
-    return matchesSearch && matchesCourse && matchesStatus && matchesDate;
+    return (
+      matchesSearch &&
+      matchesVisitorType &&
+      matchesCourse &&
+      matchesStatus &&
+      matchesDate
+    );
   });
 
   // Clicking a header sorts by it; clicking the active header flips direction.
@@ -191,6 +241,17 @@ export default function RecordsPage() {
     } else {
       setSortKey(key);
       setSortDir('asc');
+    }
+  };
+
+  // Selecting a type that has no course clears the now-hidden course filter and
+  // moves sorting off the hidden Course column, so neither keeps affecting the
+  // table invisibly.
+  const selectVisitorType = (label: string) => {
+    setVisitorTypeFilter(label);
+    if (!isCourseVisitorType(label)) {
+      setCourseFilter('all');
+      if (sortKey === 'courseLabel') setSortKey('timeIn');
     }
   };
 
@@ -234,10 +295,12 @@ export default function RecordsPage() {
   // --- Export helpers -------------------------------------------------------
   // Shared tabular view of the currently filtered records.
   const buildExportData = () => {
+    // Match the on-screen table: the Course column is only present when the
+    // current visitor-type filter is all/trainee/trainer.
     const headers = [
       'User',
       'User ID',
-      'Course',
+      ...(showCourse ? ['Course'] : []),
       'Purpose',
       'Building',
       'Room',
@@ -251,7 +314,7 @@ export default function RecordsPage() {
     const rows = sortedRecords.map((record) => [
       record.userName || 'User ' + record.userId.slice(0, 8),
       record.userId,
-      record.courseLabel ?? '',
+      ...(showCourse ? [record.courseLabel ?? ''] : []),
       record.purposeLabel ?? '',
       record.building ?? '',
       record.room,
@@ -453,58 +516,61 @@ export default function RecordsPage() {
             </div>
           </div>
 
+          {/* Search - its own panel above the filters so the input spans the
+              full width instead of sharing a column with the filter buttons. */}
+          <div className='glass-panel border-navy-800 rounded-lg p-6 mb-6'>
+            <label className='block text-sm font-medium text-navy-200 mb-2'>
+              Search
+            </label>
+            <div className='relative'>
+              <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
+                <i className='fa-solid fa-magnifying-glass text-navy-500'></i>
+              </div>
+              <input
+                type='text'
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder='Search by name, course, purpose, or room...'
+                className='
+                  w-full pl-12 pr-4 py-3 rounded-lg
+                  bg-navy-900/50 border border-navy-700
+                  text-white placeholder-navy-500
+                  focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500
+                  transition-colors
+                  '
+              />
+            </div>
+          </div>
+
           {/* Filters */}
           <div className='glass-panel border-navy-800 rounded-lg p-6 mb-6'>
             <div className='grid grid-cols-1 md:grid-cols-3 gap-3'>
-              {/* Search */}
+              {/* Visitor type and course. Buttons rather than a select so each
+                  option's record count is visible at a glance, matching the
+                  filter on Manage Users. */}
               <div>
                 <label className='block text-sm font-medium text-navy-200 mb-2'>
-                  Search
-                </label>
-                <div className='relative'>
-                  <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
-                    <i className='fa-solid fa-magnifying-glass text-navy-500'></i>
-                  </div>
-                  <input
-                    type='text'
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder='Search by name, course, purpose, or room...'
-                    className='
-                      w-full pl-12 pr-4 py-3 rounded-lg
-                      bg-navy-900/50 border border-navy-700
-                      text-white placeholder-navy-500
-                      focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500
-                      transition-colors
-                      '
-                  />
-                </div>
-
-                {/* Course Filter - sits below Search. Buttons rather than a
-                    select so each course's record count is visible at a glance,
-                    matching the visitor-type filter on Manage Users. */}
-                <label className='block text-sm font-medium text-navy-200 mt-3 mb-2'>
-                  Course
+                  Visitor type
                 </label>
                 <div className='flex flex-wrap gap-2'>
                   <button
                     type='button'
-                    onClick={() => setCourseFilter('all')}
+                    onClick={() => selectVisitorType('all')}
                     className={`px-4 py-2.5 rounded-lg font-semibold text-sm transition-colors border-2 ${
-                      courseFilter === 'all'
+                      visitorTypeFilter === 'all'
                         ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500'
                         : 'bg-navy-900/50 text-navy-300 border-navy-700 hover:border-navy-600'
                     }`}
                   >
                     All ({records.length})
                   </button>
-                  {courseCounts.map(({ label, count }) => (
+                  {visitorTypeCounts.map(({ label, count }) => (
                     <button
                       type='button'
                       key={label}
-                      onClick={() => setCourseFilter(label)}
+                      onClick={() => selectVisitorType(label)}
                       className={`px-4 py-2.5 rounded-lg font-semibold text-sm transition-colors border-2 ${
-                        courseFilter === label
+                        visitorTypeFilter === label
                           ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500'
                           : 'bg-navy-900/50 text-navy-300 border-navy-700 hover:border-navy-600'
                       }`}
@@ -513,6 +579,45 @@ export default function RecordsPage() {
                     </button>
                   ))}
                 </div>
+
+                {/* Course only applies to trainees and trainers, so the whole
+                    filter disappears for every other visitor type. Buttons
+                    rather than a select so each course's record count is visible
+                    at a glance. */}
+                {showCourse && (
+                  <>
+                    <label className='block text-sm font-medium text-navy-200 mt-3 mb-2'>
+                      Course
+                    </label>
+                    <div className='flex flex-wrap gap-2'>
+                      <button
+                        type='button'
+                        onClick={() => setCourseFilter('all')}
+                        className={`px-4 py-2.5 rounded-lg font-semibold text-sm transition-colors border-2 ${
+                          courseFilter === 'all'
+                            ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500'
+                            : 'bg-navy-900/50 text-navy-300 border-navy-700 hover:border-navy-600'
+                        }`}
+                      >
+                        All ({records.length})
+                      </button>
+                      {courseCounts.map(({ label, count }) => (
+                        <button
+                          type='button'
+                          key={label}
+                          onClick={() => setCourseFilter(label)}
+                          className={`px-4 py-2.5 rounded-lg font-semibold text-sm transition-colors border-2 ${
+                            courseFilter === label
+                              ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500'
+                              : 'bg-navy-900/50 text-navy-300 border-navy-700 hover:border-navy-600'
+                          }`}
+                        >
+                          {label} ({count})
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* Status Filter */}
@@ -600,9 +705,11 @@ export default function RecordsPage() {
                     <th className='px-4 py-3 text-left text-xs font-semibold text-navy-300'>
                       {sortHeader('User', 'userName')}
                     </th>
-                    <th className='px-4 py-3 text-left text-xs font-semibold text-navy-300'>
-                      {sortHeader('Course', 'courseLabel')}
-                    </th>
+                    {showCourse && (
+                      <th className='px-4 py-3 text-left text-xs font-semibold text-navy-300'>
+                        {sortHeader('Course', 'courseLabel')}
+                      </th>
+                    )}
                     <th className='px-4 py-3 text-left text-xs font-semibold text-navy-300'>
                       {sortHeader('Purpose / Room', 'purposeLabel')}
                     </th>
@@ -639,15 +746,17 @@ export default function RecordsPage() {
                           </div>
                         </div>
                       </td>
-                      <td className='px-4 py-3 whitespace-nowrap'>
-                        {record.courseLabel ? (
-                          <span className='px-2.5 py-1 rounded-md bg-yellow-500/10 text-yellow-300 border border-yellow-500/20 text-xs font-medium'>
-                            {record.courseLabel}
-                          </span>
-                        ) : (
-                          <span className='text-navy-500 text-sm'>—</span>
-                        )}
-                      </td>
+                      {showCourse && (
+                        <td className='px-4 py-3 whitespace-nowrap'>
+                          {record.courseLabel ? (
+                            <span className='px-2.5 py-1 rounded-md bg-yellow-500/10 text-yellow-300 border border-yellow-500/20 text-xs font-medium'>
+                              {record.courseLabel}
+                            </span>
+                          ) : (
+                            <span className='text-navy-500 text-sm'>—</span>
+                          )}
+                        </td>
+                      )}
                       <td className='px-4 py-3'>
                         <p className='text-white font-medium'>
                           {record.purposeLabel || 'No purpose recorded'}

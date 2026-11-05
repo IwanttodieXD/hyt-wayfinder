@@ -137,6 +137,12 @@ export default function RoomOccupancy() {
 
   const trackedCount = entries.reduce((sum, r) => sum + r.people.length, 0);
 
+  // The two headline figures: active people who have scanned into a room, and
+  // active people who have not (still in the lobby, a corridor, or on their way
+  // to one). Clamped because a stale presence row could otherwise push the
+  // "not in a room" figure below zero.
+  const notInRoomCount = Math.max(0, insideCount - trackedCount);
+
   // Bucket into floors. `entries` is already floor-ordered by the store, and Map
   // preserves insertion order, so the groups come out ground-first without a
   // second sort. Retired rooms are appended last by the spread above, so they
@@ -181,6 +187,33 @@ export default function RoomOccupancy() {
         {insideCount === 1 ? 'person has' : 'people have'} scanned a room door
         code. Anyone in the building without a room is in a corridor or the lobby.
       </p>
+
+      {/* Two headline totals, split by whether the active visitor has scanned a
+          room door. They add up to the "in the building" figure above. */}
+      <div className='grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5'>
+        <div className='rounded-lg border border-green-500/30 bg-green-500/10 p-4'>
+          <p className='text-green-300 text-xs font-semibold uppercase tracking-wider flex items-center gap-2'>
+            <i className='fa-solid fa-door-closed'></i>
+            In a room
+          </p>
+          <p className='text-white text-3xl font-bold mt-1'>{trackedCount}</p>
+          <p className='text-navy-300 text-xs mt-1'>
+            Active {trackedCount === 1 ? 'user' : 'users'} inside a room
+          </p>
+        </div>
+
+        <div className='rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-4'>
+          <p className='text-yellow-300 text-xs font-semibold uppercase tracking-wider flex items-center gap-2'>
+            <i className='fa-solid fa-person-walking'></i>
+            Not in a room
+          </p>
+          <p className='text-white text-3xl font-bold mt-1'>{notInRoomCount}</p>
+          <p className='text-navy-300 text-xs mt-1'>
+            Active {notInRoomCount === 1 ? 'user' : 'users'} in the lobby or
+            corridors
+          </p>
+        </div>
+      </div>
 
       {/* One container per floor, so the page reads as a building rather than a flat
           list of cards. Each heading carries that floor's headcount, which is the

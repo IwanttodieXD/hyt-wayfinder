@@ -100,6 +100,9 @@ export default function UsersPage() {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('all');
+  // Course only applies to trainees and trainers, so the Course column and
+  // filter are hidden for every other type.
+  const [courseFilter, setCourseFilter] = useState('all');
   const [showArchived, setShowArchived] = useState(false);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -125,6 +128,21 @@ export default function UsersPage() {
   const courses = getActiveCourses();
   const typeCounts = getCountByVisitorType();
   const expiredCount = getExpiredCount();
+
+  // Course is a trainee/trainer attribute. For every other visitor type the
+  // Course column and filter are hidden.
+  const showCourse =
+    typeFilter === 'all' ||
+    ['trainee', 'trainer'].includes(typeFilter.trim().toLowerCase());
+
+  const selectTypeFilter = (label: string) => {
+    setTypeFilter(label);
+    // A course chosen for trainees must not keep filtering invisibly after
+    // switching to a type that has no course.
+    if (label !== 'all' && !['trainee', 'trainer'].includes(label.trim().toLowerCase())) {
+      setCourseFilter('all');
+    }
+  };
 
   useEffect(() => {
     if (!isAuthenticated || currentUser?.role !== 'admin') {
@@ -168,6 +186,39 @@ export default function UsersPage() {
   // two views cannot drift apart.
   const source = showArchived ? archivedUsers : users;
 
+  // Course tally for the filter buttons. Only courses actually used by the
+  // current type view are listed, so the counts stay meaningful when the
+  // Visitor type filter is Trainee or Trainer.
+  const courseCounts = useMemo(() => {
+    const relevant = source.filter(
+      (u) => typeFilter === 'all' || u.visitorType === typeFilter
+    );
+    const counts = new Map<string, number>();
+
+    for (const u of relevant) {
+      if (!u.courseId) continue;
+      counts.set(u.courseId, (counts.get(u.courseId) ?? 0) + 1);
+    }
+
+    return courses
+      .map((course) => ({
+        id: course.id,
+        label: course.label,
+        count: counts.get(course.id) ?? 0,
+      }))
+      .filter((course) => course.count > 0)
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+  }, [source, courses, typeFilter]);
+
+  // Number of people the course filter is choosing between: the current type
+  // view, not the whole user list.
+  const courseScopeCount = useMemo(
+    () =>
+      source.filter((u) => typeFilter === 'all' || u.visitorType === typeFilter)
+        .length,
+    [source, typeFilter]
+  );
+
   const filteredUsers = useMemo(
     () =>
       source.filter((u) => {
@@ -197,9 +248,16 @@ export default function UsersPage() {
         const matchesType =
           typeFilter === 'all' || u.visitorType === typeFilter;
 
-        return matchesSearch && matchesType;
+        // Ignored while the Course filter is hidden, so a course chosen for
+        // trainees cannot silently keep excluding rows after switching types.
+        const matchesCourse =
+          !showCourse ||
+          courseFilter === 'all' ||
+          u.courseId === courseFilter;
+
+        return matchesSearch && matchesType && matchesCourse;
       }),
-    [source, searchTerm, typeFilter, rooms, purposes]
+    [source, searchTerm, typeFilter, showCourse, courseFilter, rooms, purposes]
   );
 
   if (!isAuthenticated || currentUser?.role !== 'admin') {
@@ -453,32 +511,36 @@ if (editing) {
             </div>
           )}
 
+          {/* Search - its own panel above the filters so the input spans the
+              full width instead of sharing a column with the filter buttons. */}
+          <div className='glass-panel border-navy-800 rounded-lg p-4 mb-6'>
+            <label className='block text-sm font-medium text-navy-200 mb-2'>
+              Search
+            </label>
+            <div className='relative'>
+              <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
+                <i className='fa-solid fa-magnifying-glass text-navy-500'></i>
+              </div>
+              <input
+                type='text'
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder='Search name, email, room, or purpose...'
+                className='w-full pl-12 pr-4 py-2.5 rounded-lg bg-navy-900/50 border border-navy-700 text-white placeholder-navy-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500 transition-colors'
+              />
+            </div>
+          </div>
+
+          {/* Filters */}
           <div className='glass-panel border-navy-800 rounded-lg p-4 mb-6'>
             <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
-              <div>
-                <label className='block text-sm font-medium text-navy-200 mb-2'>
-                  Search
-                </label>
-                <div className='relative'>
-                  <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
-                    <i className='fa-solid fa-magnifying-glass text-navy-500'></i>
-                  </div>
-                  <input
-                    type='text'
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder='Search name, email, room, or purpose...'
-                    className='w-full pl-12 pr-4 py-2.5 rounded-lg bg-navy-900/50 border border-navy-700 text-white placeholder-navy-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500 transition-colors'
-                  />
-                </div>
-              </div>
               <div>
                 <label className='block text-sm font-medium text-navy-200 mb-2'>
                   Visitor type
                 </label>
                 <div className='flex flex-wrap gap-2'>
                   <button
-                    onClick={() => setTypeFilter('all')}
+                    onClick={() => selectTypeFilter('all')}
                     className={`px-4 py-2.5 rounded-lg font-semibold text-sm capitalize transition-colors border-2 ${typeFilter === 'all' ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500' : 'bg-navy-900/50 text-navy-300 border-navy-700 hover:border-navy-600'}`}
                   >
                     All ({users.length})
@@ -486,13 +548,41 @@ if (editing) {
                   {typeCounts.map(({ label, count }) => (
                     <button
                       key={label}
-                      onClick={() => setTypeFilter(label)}
+                      onClick={() => selectTypeFilter(label)}
                       className={`px-4 py-2.5 rounded-lg font-semibold text-sm capitalize transition-colors border-2 ${typeFilter === label ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500' : 'bg-navy-900/50 text-navy-300 border-navy-700 hover:border-navy-600'}`}
                     >
                       {label} ({count})
                     </button>
                   ))}
                 </div>
+
+                {/* Course filter. Only rendered for visitor types that take a
+                    course, so VIPs, contractors and the rest are not asked to
+                    choose one. */}
+                {showCourse && (
+                  <>
+                    <label className='block text-sm font-medium text-navy-200 mt-3 mb-2'>
+                      Course
+                    </label>
+                    <div className='flex flex-wrap gap-2'>
+                      <button
+                        onClick={() => setCourseFilter('all')}
+                        className={`px-4 py-2.5 rounded-lg font-semibold text-sm transition-colors border-2 ${courseFilter === 'all' ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500' : 'bg-navy-900/50 text-navy-300 border-navy-700 hover:border-navy-600'}`}
+                      >
+                        All ({courseScopeCount})
+                      </button>
+                      {courseCounts.map(({ id, label, count }) => (
+                        <button
+                          key={id}
+                          onClick={() => setCourseFilter(id)}
+                          className={`px-4 py-2.5 rounded-lg font-semibold text-sm transition-colors border-2 ${courseFilter === id ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500' : 'bg-navy-900/50 text-navy-300 border-navy-700 hover:border-navy-600'}`}
+                        >
+                          {label} ({count})
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
               <div>
                 <label className='block text-sm font-medium text-navy-200 mb-2'>
@@ -521,7 +611,15 @@ if (editing) {
               <table className='w-full'>
                 <thead className='bg-navy-900/50 border-b border-navy-800'>
                   <tr>
-                    {['Visitor', 'Type', 'Assigned / Purpose', 'Pass', 'Joined', 'Actions'].map(
+                    {[
+                      'Visitor',
+                      'Type',
+                      ...(showCourse ? ['Course'] : []),
+                      'Assigned / Purpose',
+                      'Pass',
+                      'Joined',
+                      'Actions',
+                    ].map(
                       (heading) => (
                         <th
                           key={heading}
@@ -597,6 +695,26 @@ if (editing) {
                             <span className='text-navy-500 text-xs'>&mdash;</span>
                           )}
                         </td>
+                        {showCourse && (
+                          <td
+                            className={`px-4 py-3 whitespace-nowrap ${expired ? 'opacity-30' : ''}`}
+                          >
+                            {(() => {
+                              const course = courses.find(
+                                (c) => c.id === u.courseId
+                              );
+                              return course ? (
+                                <span className='px-2.5 py-1 rounded-md bg-yellow-500/10 text-yellow-300 border border-yellow-500/20 text-xs font-medium'>
+                                  {course.label}
+                                </span>
+                              ) : (
+                                <span className='text-navy-500 text-xs'>
+                                  &mdash;
+                                </span>
+                              );
+                            })()}
+                          </td>
+                        )}
                         {/* What this person is expected to be here for. Room and purpose are the two
                             things staff now assign, so they are what the list shows
                             in the primary slot; company is secondary context.
