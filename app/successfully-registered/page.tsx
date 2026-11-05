@@ -203,8 +203,8 @@ export default function SuccessfullyRegisteredPage() {
                   </div>
 
                   {/* Continue to /check-in - the existing page still works and
-                      is where the visitor goes for anything else (scanning room
-                      QR codes, viewing the route, etc.). */}
+                      is where the visitor goes for anything else (scanning
+                      room QR codes, checking out, etc.). */}
 		  {/*remove the bracket below for the check in button redirect*/}
 		  {/*<button
                     onClick={() => router.push('/check-in')}

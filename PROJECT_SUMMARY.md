@@ -1,4 +1,4 @@
-# HYT Wayfinder — Project Summary
+# HYT Global — Project Summary
 
 What this project does, how it is put together, and what you can do with it.
 
@@ -6,8 +6,8 @@ What this project does, how it is put together, and what you can do with it.
 
 ## 1. What it does
 
-A visitor management and 3D wayfinding system for the HYT Global Institute
-building. It replaces a paper sign-in sheet with two separate things:
+A visitor management system for the HYT Global Institute building. It replaces
+a paper sign-in sheet with two separate things:
 
 **1. Attendance — who is in the building.**
 One QR code at the ground floor entrance. Visitors scan it on their phone to
@@ -23,9 +23,6 @@ Keeping these two apart matters. If a single code did both jobs, a visitor
 standing at the wrong poster could clock themselves out, and "who is in Room
 304 right now" would be a guess. As built, attendance is trustworthy and the
 occupancy view is based on real scans rather than assumptions.
-
-On top of that, the app gives every visitor an animated 3D route to their
-assigned room, drawn with Three.js.
 
 ---
 
@@ -53,7 +50,7 @@ after the fact, not just "who is there now".
 
 | Role | Can do |
 | --- | --- |
-| `visitor` | Register, scan in/out, view their 3D route |
+| `visitor` | Register, scan in/out, record room presence |
 | `admin` | Everything: station, occupancy, attendance records, room visits, user management |
 
 Public registration can only ever produce a `visitor`: the `handle_new_user`
@@ -97,7 +94,7 @@ Admin-only pages are enforced with `useRoleGuard`, which redirects non-admins to
 | `/` | Anyone | Redirects by auth state and role |
 | `/login` | Anyone | Sign in |
 | `/register` | Anyone | Create a visitor account |
-| `/check-in` | visitor | Mobile scanner: check in/out, scan room doors, view 3D route |
+| `/check-in` | visitor | Mobile scanner: check in/out, scan room doors |
 | `/visitor` | visitor | Visitor view |
 | `/station` | admin | Print the attendance code and each room's door code. Room posters show a live headcount. Live occupancy moved to `/admin` |
 | `/occupancy` | admin | Who is inside which room right now |
@@ -113,11 +110,11 @@ Admin-only pages are enforced with `useRoleGuard`, which redirects non-admins to
 
 ```
 app/                    Pages (Next.js App Router)
-components/             3D scene, QR scanner, kiosk, route animation
+components/             QR scanner, kiosk, registration, navigation
 store/                  Zustand state: auth, users, records, roomPresence, clockIn
-lib/wayfinding.ts       QR registry + parser — the single source of truth for rooms
+lib/wayfinding.ts       QR code parser
 lib/supabase.ts         Supabase client
-hooks/                  First-person/mobile controls, role guard, profile sync
+hooks/                  Role guard, profile sync, live data
 supabase/migrations/    SQL migrations
 scripts/                next-with-canonical-path.js (Windows path-casing fix)
 ```
@@ -127,10 +124,10 @@ Roughly 7,600 lines across ~40 source files. The largest are the kiosk view
 
 ### The two stores worth knowing about
 
-`lib/wayfinding.ts` is the single source of truth for rooms. Both the kiosk
-(which prints codes) and the scanner (which reads them) derive everything from
-it, so **adding a room is a one-entry change** — add a route here, plus the
-destination to `DESTINATIONS` in `store/authStore.ts`.
+`lib/wayfinding.ts` is the QR parser: it decides whether a scanned value is an
+attendance code or a room door code. Rooms themselves come from the `rooms`
+table via `store/roomsStore.ts`, so adding a room is a data change in
+`/admin/rooms`, not a code change.
 
 `store/roomPresenceStore.ts` owns all room-presence reads and writes. Nothing
 else touches the `room_presence` table.
@@ -179,13 +176,10 @@ variables into new builds.
 
 **Small changes, in the files named:**
 
-- **Add a room** — add an entry to `lib/wayfinding.ts` with its waypoints, and to
-  `DESTINATIONS` in `store/authStore.ts`. The kiosk, scanner, occupancy view and
-  room-records page all pick it up automatically.
-- **Change the route animation** — waypoints are plain coordinates in
-  `lib/wayfinding.ts`; the 3D draw is in `components/RouteVisualization.tsx`.
-- **Swap in a real building model** — load a `.glb` in `components/Building.tsx`
-  and adjust collision bounds in `hooks/useFirstPersonControls.ts`.
+- **Add a room** — use `/admin/rooms`. The kiosk, scanner, occupancy view and
+  room-records page all pick it up from the `rooms` table automatically.
+- **Change QR parsing** — the prefixes and parser live in
+  `lib/wayfinding.ts`; `lib/wayfinding.test.ts` pins the behaviour.
 - **Rebrand the colours** — the palette lives in `tailwind.config.ts` and
   `app/globals.css`.
 - **Change what a role can see** — `useRoleGuard` in each page, plus the
@@ -220,8 +214,8 @@ Worth knowing before you rely on this:
   `HYT-ROOM-01:<ROOM>` format is optional.
 - **Account create/delete returns `501`** until `SUPABASE_SERVICE_ROLE_KEY` is
   set. Read and update still work.
-- **No automated tests.** The QR parser and presence logic have been tested
-  manually; there is no test runner configured.
+- **Limited automated tests.** `npm test` covers the QR parser and shared
+  helpers; the presence logic is still tested manually.
 - **`prisma:*` scripts in `package.json` are dead** — they point at a Prisma
   setup that was replaced by Supabase. Safe to delete.
 - **Demo credentials were shown on the login page.** They were removed from the

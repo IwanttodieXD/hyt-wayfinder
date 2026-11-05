@@ -7,7 +7,7 @@ section depends on the one before it.
 
 ## Context you need
 
-HYT Wayfinder is a visitor management system with **two separate kinds of QR
+HYT Global is a visitor management system with **two separate kinds of QR
 scan**:
 
 - **Attendance** — one code at the ground floor entrance. The only thing that
@@ -85,7 +85,7 @@ The system already knows where they are, so don't ask them to report it.
 
 ### The flow
 
-1. **Arrive** → scan the **entrance** code. Clocked in, route shown.
+1. **Arrive** → scan the **entrance** code. Clocked in.
 2. **Enter a room** → scan the **room** code. Presence recorded.
 3. **Leave the building** → scan the **entrance** code again. Clocked out, and
    any open `room_visits` row is closed automatically.
@@ -133,12 +133,12 @@ lobby"*.
 
 | File | Change |
 | --- | --- |
-| `lib/wayfinding.ts` | Replace the 6 hardcoded rooms with the 11 new ones. Match on `room_number` instead of a local `room` string. Keep the prefix scheme (`HYT-KIOSK-`, `HYT-ROOM-01-`). |
+| `lib/wayfinding.ts` | QR parser only. Keep the prefix scheme (`HYT-KIOSK-`, `HYT-ROOM-01-`); rooms come from the `rooms` table. |
 | `store/roomPresenceStore.ts` | Table → `room_visits`. Columns → `room_id`, `entered_at`, `exited_at`. Join `rooms` for names. Drop `room_label`. Add `clock_in_id`. Add clock-out-closes-room. |
 | `store/recordsStore.ts` | Insert without `status` / `duration`. Read `duration_minutes`. Write `room_id` + `purpose_id` instead of `destination` / `building`. |
-| `store/authStore.ts` | `DESTINATIONS` should come from `rooms` (or be validated against it), not a hardcoded list of 6 old names. |
+| `store/authStore.ts` | Resolve `destination` from `rooms` (or validate against it), not a hardcoded list of old room names. |
 | `components/QRScanner.tsx` | Implement R1–R4. Add the state line. |
-| `components/RoomOccupancy.tsx` | Match on `room_id`. Rooms now come from `rooms`, not the registry. |
+| `components/RoomOccupancy.tsx` | Match on `room_id`. Rooms now come from `rooms`, not a hardcoded list. |
 | `components/KioskStationView.tsx` | Print all 11 room codes. |
 | `app/admin/room-records/page.tsx` | Update to `room_visits` + `rooms` join. |
 | `app/admin/records/page.tsx` | Read generated `duration_minutes` / `status`. |

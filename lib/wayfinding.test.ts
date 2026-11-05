@@ -3,11 +3,6 @@ import assert from 'node:assert/strict';
 
 import {
   parseQrValue,
-  routeIdForDestination,
-  getRouteByRoom,
-  getRoute,
-  DESTINATION_ROUTES,
-  DEFAULT_ROUTE_ID,
   ATTENDANCE_QR_VALUE,
   ROOM_PREFIX_FACTORY,
 } from './wayfinding.ts';
@@ -24,7 +19,9 @@ import {
 describe('parseQrValue - attendance', () => {
   test('recognises the ground floor check-in code', () => {
     assert.deepEqual(parseQrValue(ATTENDANCE_QR_VALUE), { kind: 'attendance' });
-    assert.deepEqual(parseQrValue('HYT-KIOSK-CHECKIN-STATION'), { kind: 'attendance' });
+    assert.deepEqual(parseQrValue('HYT-KIOSK-CHECKIN-STATION'), {
+      kind: 'attendance',
+    });
   });
 
   test('accepts a padded code', () => {
@@ -42,11 +39,10 @@ describe('parseQrValue - attendance', () => {
 });
 
 describe('parseQrValue - room presence', () => {
-  test('resolves a canonical room door code to its room number and route id', () => {
+  test('resolves a canonical room door code to its room number', () => {
     assert.deepEqual(parseQrValue('HYT-ROOM-01:ROOM-304'), {
       kind: 'room',
       roomNumber: 'Room 304',
-      routeId: 'room-304',
     });
   });
 
@@ -54,7 +50,6 @@ describe('parseQrValue - room presence', () => {
     assert.deepEqual(parseQrValue('HYT-ROOM-01-ROOM-304'), {
       kind: 'room',
       roomNumber: 'Room 304',
-      routeId: 'room-304',
     });
   });
 
@@ -62,16 +57,24 @@ describe('parseQrValue - room presence', () => {
     assert.deepEqual(parseQrValue('HYT-ROOM-01:ROOM 304'), {
       kind: 'room',
       roomNumber: 'Room 304',
-      routeId: 'room-304',
     });
   });
 
   test('round-trips every registered room code', () => {
-    for (const route of DESTINATION_ROUTES) {
+    const rooms = [
+      ['ROOM-201', 'Room 201'],
+      ['ROOM-202', 'Room 202'],
+      ['ROOM-301', 'Room 301'],
+      ['ROOM-304', 'Room 304'],
+      ['ROOM-405', 'Room 405'],
+      ['ROOFDECK', 'Roofdeck'],
+    ];
+
+    for (const [encoded, roomNumber] of rooms) {
       assert.deepEqual(
-        parseQrValue(route.qrValue),
-        { kind: 'room', roomNumber: route.room, routeId: route.id },
-        `failed for ${route.qrValue}`
+        parseQrValue(ROOM_PREFIX_FACTORY(encoded)),
+        { kind: 'room', roomNumber },
+        `failed for ${encoded}`
       );
     }
   });
@@ -80,15 +83,13 @@ describe('parseQrValue - room presence', () => {
     assert.equal(parseQrValue('HYT-ROOM-01:'), null);
   });
 
-  test('resolves a room code that is in the DB but not in DESTINATION_ROUTES', () => {
-    // Room 405 is managed via the admin room management UI and exists in the
-    // `rooms` table, but has no entry in the geometry registry. The parser
-    // must still recognise it as a room so the scanner can resolve it from
-    // the DB; the 3D route falls back to the default.
+  test('resolves a room code that is in the DB but not in a hardcoded list', () => {
+    // Rooms are managed via the admin room management UI and come from the
+    // `rooms` table. The parser must still recognise a well-formed code so the
+    // scanner can resolve it from the DB.
     assert.deepEqual(parseQrValue('HYT-ROOM-01:ROOM-405'), {
       kind: 'room',
       roomNumber: 'Room 405',
-      routeId: DEFAULT_ROUTE_ID,
     });
   });
 });
@@ -100,12 +101,10 @@ describe('parseQrValue - legacy room codes', () => {
     assert.deepEqual(parseQrValue('HYT-KIOSK-01-CHECKIN-STATION:ROOM-304'), {
       kind: 'room',
       roomNumber: 'Room 304',
-      routeId: 'room-304',
     });
     assert.deepEqual(parseQrValue('HYT-KIOSK-01-CHECKIN-STATION-ROOM-304'), {
       kind: 'room',
       roomNumber: 'Room 304',
-      routeId: 'room-304',
     });
   });
 
@@ -113,7 +112,6 @@ describe('parseQrValue - legacy room codes', () => {
     assert.deepEqual(parseQrValue('HYT-KIOSK-01-CHECKIN-STATION:ROOFDECK'), {
       kind: 'room',
       roomNumber: 'Roofdeck',
-      routeId: 'roofdeck',
     });
   });
 
@@ -127,14 +125,15 @@ describe('parseQrValue - legacy room codes', () => {
 
 describe('parseQrValue - case-insensitive codes', () => {
   test('accepts a lowercased attendance code', () => {
-    assert.deepEqual(parseQrValue('hyt-kiosk-checkin-station'), { kind: 'attendance' });
+    assert.deepEqual(parseQrValue('hyt-kiosk-checkin-station'), {
+      kind: 'attendance',
+    });
   });
 
   test('accepts a lowercased room code', () => {
     assert.deepEqual(parseQrValue('hyt-room-01:room-304'), {
       kind: 'room',
       roomNumber: 'Room 304',
-      routeId: 'room-304',
     });
   });
 });
@@ -154,52 +153,28 @@ describe('parseQrValue - not ours', () => {
  * ever fails, a visitor scanning a room poster gets clocked into the building.
  */
 describe('invariant: room codes never parse as attendance', () => {
-  test('every registered room code parses as a room', () => {
-    for (const route of DESTINATION_ROUTES) {
-      const parsed = parseQrValue(route.qrValue);
-      assert.equal(parsed?.kind, 'room', `${route.qrValue} parsed as ${parsed?.kind}`);
+  test('every supported room code parses as a room', () => {
+    const codes = [
+      ROOM_PREFIX_FACTORY('ROOM-201'),
+      ROOM_PREFIX_FACTORY('ROOM-304'),
+      ROOM_PREFIX_FACTORY('ROOM-405'),
+      ROOM_PREFIX_FACTORY('ROOFDECK'),
+      'HYT-KIOSK-01-CHECKIN-STATION:ROOM-304',
+    ];
+
+    for (const code of codes) {
+      const parsed = parseQrValue(code);
+      assert.equal(parsed?.kind, 'room', `${code} parsed as ${parsed?.kind}`);
     }
   });
 });
 
-describe('routeIdForDestination', () => {
-  test('falls back to the default route when nothing is assigned', () => {
-    assert.equal(routeIdForDestination(null), DEFAULT_ROUTE_ID);
-    assert.equal(routeIdForDestination(undefined), DEFAULT_ROUTE_ID);
-    assert.equal(routeIdForDestination(''), DEFAULT_ROUTE_ID);
-  });
-
-  test('resolves a room number, a display label, or an id to the same route', () => {
-    assert.equal(routeIdForDestination('Room 304'), 'room-304');
-    assert.equal(routeIdForDestination('room-304'), 'room-304');
-    assert.equal(routeIdForDestination('Tech Room 201'), 'room-201');
-  });
-
-  test('falls back to the default for an unknown destination', () => {
-    assert.equal(routeIdForDestination('Narnia'), DEFAULT_ROUTE_ID);
-  });
-});
-
-describe('registry lookups', () => {
-  test('finds a route by its room number', () => {
-    assert.equal(getRouteByRoom('Room 304')?.id, 'room-304');
-  });
-
-  test('returns undefined for a room that is not registered', () => {
-    assert.equal(getRouteByRoom('Room 999'), undefined);
-  });
-
-  test('falls back to the first route for an unknown id', () => {
-    assert.equal(getRoute('does-not-exist'), DESTINATION_ROUTES[0]);
-    assert.equal(getRoute(null), DESTINATION_ROUTES[0]);
-  });
-
+describe('ROOM_PREFIX_FACTORY', () => {
   test('builds door codes in the format the parser expects', () => {
     assert.equal(ROOM_PREFIX_FACTORY('ROOM-304'), 'HYT-ROOM-01:ROOM-304');
     assert.deepEqual(parseQrValue(ROOM_PREFIX_FACTORY('ROOM-304')), {
       kind: 'room',
       roomNumber: 'Room 304',
-      routeId: 'room-304',
     });
   });
 });

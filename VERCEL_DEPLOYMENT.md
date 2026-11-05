@@ -1,10 +1,10 @@
-# Vercel Deployment Guide - HYT Wayfinder
+# Vercel Deployment Guide - HYT Global
 
 ## ✅ Pre-Deployment Checklist
 
 Your app is ready for Vercel! Here's what's already configured:
 
-- ✅ Next.js 14 with App Router
+- ✅ Next.js App Router
 - ✅ All dependencies in package.json
 - ✅ TypeScript configured
 - ✅ Tailwind CSS configured
@@ -96,12 +96,11 @@ Your app is ready for Vercel! Here's what's already configured:
 ## 📦 What Gets Deployed
 
 ### Included:
-- ✅ All pages (login, register, admin, check-in, tour)
-- ✅ Components (QR scanner, 3D visualization, etc.)
+- ✅ All pages (login, register, admin, check-in)
+- ✅ Components (QR scanner, kiosk, registration, navigation)
 - ✅ State stores (auth, records, clock-in)
 - ✅ Assets (logo, images)
 - ✅ Styles (Tailwind CSS)
-- ✅ Three.js 3D engine
 - ✅ Font Awesome icons (CDN)
 
 ### Excluded:
@@ -140,7 +139,7 @@ Preview: https://hyt-wayfinder-xxx.vercel.app (per commit)
 
 4. **Verify Features**
    - ✅ QR scanner loads
-   - ✅ 3D route visualization works
+   - ✅ Room door scans record presence
    - ✅ Admin dashboard displays
    - ✅ Records table functions
    - ✅ Session persists on refresh
@@ -232,13 +231,6 @@ npm run build
 npm run build
 # TypeScript strict mode is on
 ```
-
-### 3D Not Loading
-
-**Three.js Performance**
-- Vercel serves optimized bundles
-- 3D loads slower on first visit (caching improves it)
-- Check browser WebGL support
 
 ### Session Not Persisting
 
@@ -335,14 +327,13 @@ Before you deploy, verify:
 - [ ] `.gitignore` includes `.env.local`, `node_modules`, `.next`
 - [ ] Test login flow locally
 - [ ] Test QR scanner locally
-- [ ] Test 3D visualization locally
 - [ ] Test admin dashboard locally
 
 ---
 
 ## 🎉 You're Ready!
 
-Your HYT Wayfinder is production-ready for Vercel:
+Your HYT Global app is production-ready for Vercel:
 
 1. **Build verified** ✅
 2. **No environment secrets needed** ✅
@@ -369,4 +360,4 @@ Or use the Vercel Dashboard for GUI deployment.
 
 **Status**: ✅ **READY FOR DEPLOYMENT**  
 **Estimated Build Time**: 2-3 minutes  
-**Estimated Bundle Size**: ~2-3 MB (with Three.js)
+**Estimated Bundle Size**: ~2-3 MB

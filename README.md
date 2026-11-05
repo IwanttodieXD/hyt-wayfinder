@@ -1,8 +1,8 @@
-# HYT Wayfinder
+# HYT Global
 
-A visitor management and 3D wayfinding system for the HYT Global Institute
-building. Visitors register, check in by scanning the QR code at their lobby
-station, and are shown an animated 3D route to their destination. Staff get
+A visitor management system for the HYT Global Institute building. Visitors
+register, check in by scanning the QR code at the lobby station, and record
+which room they are in by scanning the code on that room's door. Staff get
 occupancy and check-in record dashboards.
 
 > **Looking for an overview?** See [PROJECT_SUMMARY.md](./PROJECT_SUMMARY.md) for
@@ -20,8 +20,6 @@ occupancy and check-in record dashboards.
 - Lobby kiosk station that prints the ground floor attendance code and one room door code per room
 - QR scanning on mobile (`html5-qrcode`): the ground floor code clocks in/out, room door codes track who is inside which room
 - **Option D scan flow** — nobody has to remember to check out of a room; scanning a different room is a move, and checking out of the building closes any open room visit
-- Animated 3D route visualization per destination (Three.js / React Three Fiber)
-- First-person 3D building exploration with collision detection
 - Live occupancy where every room is clickable and drops down who is inside it
 - Room management CRUD (`/admin/rooms`) — add, rename and deactivate rooms
 - Admin dashboard, attendance records, room visit history, and user management
@@ -29,8 +27,7 @@ occupancy and check-in record dashboards.
 
 ## Tech Stack
 
-- Next.js 14 (App Router) + React 18 + TypeScript (strict)
-- Three.js / React Three Fiber / Drei
+- Next.js (App Router) + React 18 + TypeScript (strict)
 - Supabase (Auth + Postgres + Row Level Security)
 - Zustand for client state (with `persist`)
 - Tailwind CSS
@@ -157,8 +154,8 @@ There are two kinds of QR code, and they are deliberately different things.
 
 **Attendance — exactly one, on the ground floor.** `HYT-KIOSK-CHECKIN-STATION`.
 This is the only code that records attendance. Scanning it clocks you in;
-scanning it again clocks you out. It carries no room, so the 3D route you get
-is resolved from your assigned destination instead of from the code.
+scanning it again clocks you out. It carries no room, so your assigned room
+comes from your visitor profile instead of from the code.
 
 **Room presence — one per room, on the door.** `HYT-ROOM-01:<ROOM_ID>`.
 Scanning one records that you are inside that room right now. It never touches
@@ -175,7 +172,7 @@ The goal is that **nobody has to remember to check out of a room**. The system
 already knows where they are, so it does not ask them to report it.
 
 1. **Arrive** — scan the ground floor code. Opens a `clock_in_records` row with
-   `time_in` and shows the 3D route to your assigned destination.
+   `time_in`.
 2. **Enter a room** — scan that room's door code. Opens a `room_visits` row.
    Attendance is untouched.
 3. **Leave the building** — scan the ground floor code again. Sets `time_out` and
@@ -232,16 +229,7 @@ The two are reported separately on purpose:
 
 To add a room, use `/admin/rooms` — it writes to the `rooms` table, which every
 consumer reads. The register form's room picker, `/station`, `/occupancy` and the
-scanner all pick it up from there. `lib/wayfinding.ts` additionally needs a route entry
-if the new room should get a 3D walkthrough; without one, a visitor assigned to it
-falls back to the default route.
-
-## Controls
-
-**Desktop** — `W`/`A`/`S`/`D` or arrow keys to move, mouse to look (click to
-lock the pointer), `Space` to jump.
-
-**Mobile** — drag on the left half to move, drag on the right half to look.
+scanner all pick it up from there.
 
 ## Project structure
 
@@ -254,9 +242,9 @@ app/
   visitor/, occupancy/
   admin/                    # Dashboard, records, room-records, rooms, users
   api/admin/users/route.ts  # Server-only user create/delete
-components/                 # 3D scene, camera, building, QR scanner, route
-hooks/                      # First-person + mobile controls, role guard, profile
-lib/                        # Supabase client, wayfinding registry, WebGL check
+components/                 # QR scanner, kiosk, registration, navigation
+hooks/                      # Role guard, profile sync, live data
+lib/                        # Supabase client, QR parser, URL helpers
 store/                      # Zustand: auth, users, records, roomPresence, rooms, clockIn, theme
 scripts/                    # next-with-canonical-path.js (Windows casing fix)
 supabase/migrations/        # Ordered SQL migrations
@@ -273,8 +261,9 @@ npm start       # serve the production build
 npm run lint    # ESLint
 ```
 
-There is no test runner configured. The QR parser (`parseQrValue` in
-`lib/wayfinding.ts`) is pure and would be the natural first target.
+`npm test` runs Node's built-in test runner. The QR parser
+(`parseQrValue` in `lib/wayfinding.ts`) and the shared helpers have tests in
+`lib/*.test.ts`.
 
 ## Security notes
 

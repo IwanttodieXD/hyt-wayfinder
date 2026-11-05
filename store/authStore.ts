@@ -90,8 +90,8 @@ export interface User {
  * Turns the pending columns on a `users` row into the fields `QRScanner` reads.
  *
  * `destination` is the room NUMBER rather than the id, because that is what
- * `getRoomByNumber` and `routeIdForDestination` resolve. `purpose` is the label,
- * because `QRScanner` matches the purpose chosen at the scanner by label.
+ * `getRoomByNumber` resolves. `purpose` is the label, because `QRScanner`
+ * matches the purpose chosen at the scanner by label.
  *
  * Both are resolved through `useRoomsStore.getState()` rather than passed in, so
  * every sign-in path can call this identically. When no pending room is set, the

@@ -33,7 +33,7 @@ export default function StationPage() {
               </div>
               <div>
                 <h1 className='text-white font-bold text-lg leading-none'>
-                  Visitor Registration
+                  Visitor Verification
                 </h1>
                 <p className='text-navy-300 text-xs mt-0.5'>
                   {isAuthenticated && user ? `${user.name} - ` : ''}Front Desk

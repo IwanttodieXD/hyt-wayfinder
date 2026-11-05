@@ -1,7 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: false,
-  transpilePackages: ['three'],
+  // Next.js 16 enables Turbopack by default. The webpack hook below predates
+  // that and only externalizes two optional native `ws` dependencies, so we
+  // keep it for anyone building with --webpack while acknowledging Turbopack
+  // explicitly. Without this key Next 16 refuses to build at all.
+  turbopack: {},
   // The check-in page was renamed from /clock-in to /check-in so the URL matches
   // the wording shown in the app. The permanent redirect keeps any existing
   // links, bookmarks or QR posters pointing at the old path working.

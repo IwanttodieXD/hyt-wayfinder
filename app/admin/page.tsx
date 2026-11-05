@@ -65,7 +65,7 @@ export default function AdminDashboard() {
                 </div>
                 <div>
                   <h1 className='text-white font-bold text-lg leading-none'>
-                    HYT Wayfinder
+                    HYT Global
                   </h1>
                   <p className='text-navy-300 text-xs mt-0.5'>Admin Dashboard</p>
                 </div>

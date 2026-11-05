@@ -4,7 +4,6 @@ import type { User } from '@/store/authStore';
 import { useClockInStore } from '@/store/clockInStore';
 import { useRecordsStore } from '@/store/recordsStore';
 import { useRoomsStore } from '@/store/roomsStore';
-import { getRoute, routeIdForDestination } from '@/lib/wayfinding';
 
 export interface CheckInResult {
   success: boolean;
@@ -17,8 +16,8 @@ export interface CheckInResult {
  *
  * Opening a visit is a single INSERT into `clock_in_records` (with `time_out`
  * left null) plus mirroring the result into the clock-in store so the scanner
- * and the route button see it. Both the manual scan (QRScanner) and the
- * automatic post-verification check-in go through here, so the two paths cannot
+ * sees it. Both the manual scan (QRScanner) and the automatic
+ * post-verification check-in go through here, so the two paths cannot
  * drift: same room, same purpose, same record shape.
  *
  * `room_id` and `purpose_id` are the visitor's assigned room and declared
@@ -35,7 +34,7 @@ export interface CheckInResult {
  */
 export async function performVisitorCheckIn(user: User): Promise<CheckInResult> {
   const { addRecord } = useRecordsStore.getState();
-  const { clockIn, setActiveRoute } = useClockInStore.getState();
+  const { clockIn } = useClockInStore.getState();
   const { getRoomByNumber, getActivePurposes, getRoomForCourse } =
     useRoomsStore.getState();
 
@@ -45,12 +44,6 @@ export async function performVisitorCheckIn(user: User): Promise<CheckInResult> 
   // room still lands where their course meets.
   const assigned =
     getRoomByNumber(user.destination) ?? getRoomForCourse(user.courseId);
-
-  // Draw the route to the visitor's assigned destination from the start, the
-  // same as a manual check-in, so the "View 3D Route" button is reachable.
-  setActiveRoute(
-    getRoute(routeIdForDestination(assigned?.roomNumber ?? user.destination)).id
-  );
 
   const purpose = getActivePurposes().find((p) => p.label === user.purpose);
   const purposeIdToWrite =

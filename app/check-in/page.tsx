@@ -18,8 +18,7 @@ export default function CheckInPage() {
   useClockInProfile();
 
   // Reconciles check-in state with the database, so a refresh doesn't report
-  // "not checked in" for someone who is genuinely inside - and so the 3D route
-  // button is reachable after a refresh.
+  // "not checked in" for someone who is genuinely inside.
   useAttendanceStatus(user?.id);
 
   // When the visitor arrives signed in from /verify, check them in
@@ -78,8 +77,7 @@ export default function CheckInPage() {
         )}
 
         {/* Main Content - Full Screen Mobile View. `min-h-0` lets this flex child
-            shrink so the taller route frame fits without pushing the header
-            off screen. */}
+            shrink so the mobile frame fits without pushing the header off screen. */}
         <main className='flex-1 min-h-0 overflow-hidden'>
           <StudentMobileView />
         </main>

@@ -4,7 +4,12 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import { useRoomsStore } from '@/store/roomsStore';
-import { formatPhone, sanitisePhone, isAllowedPhoneKey } from '@/lib/phone';
+import {
+  formatPhone,
+  sanitisePhone,
+  isAllowedPhoneKey,
+  isReasonablePhone,
+} from '@/lib/phone';
 import { supabase } from '@/lib/supabase';
 import {
   fetchOrientationStatus,
@@ -106,7 +111,8 @@ export default function RegisterPage() {
     purpose: '',
     // Visitor profile. Asked here so the front desk has it before the person
     // reaches the desk, and so an orientation attendee is classified once
-    // instead of being tidied up afterwards. All optional.
+    // instead of being tidied up afterwards. Phone is required because it is
+    // how the desk reaches someone after they leave; the rest are optional.
     //
     // Deliberately NOT asked here: `host_name` and `notes`. A visitor cannot
     // meaningfully supply either - they do not know who they are meeting by
@@ -196,6 +202,16 @@ export default function RegisterPage() {
     // Validation
     if (!formData.firstName.trim() || !formData.lastName.trim()) {
       setError('First name and last name are required');
+      return;
+    }
+
+    if (!formData.phone.trim()) {
+      setError('Phone number is required');
+      return;
+    }
+
+    if (!isReasonablePhone(formData.phone)) {
+      setError('Please enter a valid phone number');
       return;
     }
 
@@ -363,7 +379,7 @@ export default function RegisterPage() {
             <h1 className='text-2xl sm:text-3xl font-bold text-white mb-2'>
               Create Account
             </h1>
-            <p className='text-yellow-300'>Join HYT Wayfinder</p>
+            <p className='text-yellow-300'>Join HYT Global</p>
           </div>
 
           {/* Register Form */}
@@ -769,7 +785,7 @@ export default function RegisterPage() {
                       htmlFor='phone'
                       className='block text-sm font-medium text-yellow-200 mb-2'
                     >
-                      Phone
+                      Phone <span className='text-yellow-400'>*</span>
                     </label>
                     <div className='relative'>
                       <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
@@ -780,6 +796,7 @@ export default function RegisterPage() {
                         id='phone'
                         inputMode='tel'
                         autoComplete='tel'
+                        required
                         value={formData.phone}
                         onChange={(e) =>
                           setFormData((prev) => ({
@@ -803,7 +820,7 @@ export default function RegisterPage() {
                             phone: formatPhone(prev.phone),
                           }))
                         }
-                        placeholder='Optional'
+                        placeholder='09xx xxx xxxx'
                         className='
                           w-full pl-12 pr-4 py-3 rounded-lg
                           bg-navy-900/80 border-2 border-yellow-500/30

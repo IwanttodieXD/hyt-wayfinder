@@ -4,8 +4,6 @@ import { useClockInStore } from '@/store/clockInStore';
 import { useAuthStore } from '@/store/authStore';
 import { useRoomsStore } from '@/store/roomsStore';
 import QRScanner from './QRScanner';
-import RouteVisualization from './RouteVisualization';
-import ThreeErrorBoundary from './ThreeErrorBoundary';
 
 export default function StudentMobileView() {
   const { status, student, clockInTime } = useClockInStore();
@@ -27,11 +25,6 @@ export default function StudentMobileView() {
 
   const isCheckedIn = status !== 'not-clocked-in';
 
-  // The 3D canvas is a full-width square, so its size is driven by the frame
-  // width. A taller/wider frame during the route is what actually makes the
-  // 3D window bigger - on the scanner the frame keeps its phone dimensions.
-  const showingRoute = status === 'viewing-route';
-
   return (
     <div className='w-full h-full flex items-center justify-center'>
       {/* Mobile Device Frame.
@@ -40,13 +33,7 @@ export default function StudentMobileView() {
           viewport of a small phone once the page header is counted, so the frame
           overflowed and pushed the scan area below the fold. `min-h-0` lets this
           flex child shrink instead. */}
-      <div
-        className={`relative w-full h-full bg-navy-900 rounded-lg border-4 border-navy-800 overflow-hidden flex flex-col transition-all duration-300 ${
-          showingRoute
-            ? 'max-w-2xl max-h-[min(1150px,calc(100dvh-9rem))]'
-            : 'max-w-md max-h-[calc(100dvh-7rem)]'
-        }`}
-      >
+      <div className='relative w-full h-full bg-navy-900 rounded-lg border-4 border-navy-800 overflow-hidden flex flex-col transition-all duration-300 max-w-md max-h-[calc(100dvh-7rem)]'>
         {/* App Header. One row of identity + one status pill, rather than the
             previous stack, so the destination card below gets the space. */}
         <div className='bg-navy-900 px-4 py-3 border-b border-navy-800/50'>
@@ -125,26 +112,17 @@ export default function StudentMobileView() {
               says what to do, which is the part a first-time visitor needs. */}
           <p className='text-navy-400 text-xs mt-2.5 leading-relaxed'>
             {isCheckedIn
-              ? showingRoute
-                ? 'Scan the QR code on your next room door to record where you are.'
-                : 'Scan a room door code to record where you are, or the entrance code again to check out.'
-              : 'Scan the QR code at the entrance to check in and see your route.'}
+              ? 'Scan a room door code to record where you are, or the entrance code again to check out.'
+              : 'Scan the QR code at the entrance to check in.'}
           </p>
         </div>
 
         {/* Main Content Area */}
         <div className='flex-1 min-h-0 overflow-hidden relative bg-navy-950'>
-          {status === 'not-clocked-in' || status === 'clocked-in' ? (
-            <QRScanner />
-          ) : (
-            <ThreeErrorBoundary>
-              <RouteVisualization />
-            </ThreeErrorBoundary>
-          )}
+          <QRScanner />
         </div>
 
-        {/* Check-out happens by scanning the check-in QR code again, or with the
-            Check Out button on the 3D route screen. */}
+        {/* Check-out happens by scanning the check-in QR code again. */}
 
         {/* Home Indicator (iOS style) */}
         <div className='bg-navy-950 py-2 flex items-center justify-center'>

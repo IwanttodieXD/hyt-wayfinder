@@ -356,12 +356,6 @@ export default function VerifyPage() {
               >
                 Try again
               </button>
-              <Link
-                href='/login'
-                className='inline-block mt-3 text-navy-400 hover:text-navy-200 text-sm'
-              >
-                Use the normal sign-in instead
-              </Link>
             </div>
           )}
 

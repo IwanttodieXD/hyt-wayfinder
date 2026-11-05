@@ -4,6 +4,7 @@ import RoomOccupancy from '@/components/RoomOccupancy';
 import UserProfile from '@/components/UserProfile';
 import { useAuthStore } from '@/store/authStore';
 import { useRoleGuard } from '@/hooks/useRoleGuard';
+import Link from 'next/link';
 
 // Who is inside each room right now. Admin-only: it exposes who is inside the
 // building and where, so it must not be reachable by a visitor or staff member.
@@ -48,6 +49,15 @@ export default function OccupancyPage() {
         {/* Main Content */}
         <main className='flex-1 overflow-y-auto'>
           <div className='max-w-7xl mx-auto px-4 py-6'>
+            <div className='mb-6 flex items-center justify-between gap-4'>
+              <Link
+                href='/admin'
+                className='text-navy-300 hover:text-navy-200 flex items-center gap-2 transition-colors'
+              >
+                <i className='fa-solid fa-arrow-left'></i>
+                <span>Back to Dashboard</span>
+              </Link>
+            </div>
             <RoomOccupancy />
           </div>
         </main>

@@ -46,18 +46,16 @@ export function useClockInProfile() {
 /**
  * Keeps the visitor's check-in state honest, by reading the database.
  *
- * This fixes three symptoms at once:
+ * This fixes two symptoms at once:
  *
  * 1. Refreshing `/check-in` said "not checked in" for someone who was actually
  *    inside, because the state was only ever in memory (`clockInStore` has no
  *    `persist`).
  * 2. That made the scanner treat them as not clocked in, so scanning the
  *    entrance code would have CLOCKED THEM OUT mid-visit.
- * 3. The "View 3D Route" button is gated on being checked in, so the route was
- *    unreachable after a refresh.
  *
- * Polls so the badge and the route button reflect a check-out done at the kiosk,
- * or an archive by an admin, without the visitor having to reload.
+ * Polls so the badge reflects a check-out done at the kiosk, or an archive by an
+ * admin, without the visitor having to reload.
  */
 export function useAttendanceStatus(userId: string | undefined) {
   const { fetchOpenRecord } = useRecordsStore();

@@ -50,9 +50,12 @@ export default function RecordsPage() {
   const { records } = useRecordsStore();
 
   const [searchTerm, setSearchTerm] = useState('');
+  // Course is joined from the visitor's profile, so the filter matches the
+  // label already shown in the Course column rather than a separate id.
+  const [courseFilter, setCourseFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'completed'>('all');
-  // Date selection. Year + month are always applied; the day is optional —
-  // leaving it on 'All days' shows the whole selected month.
+  // Date selection. The calendar picks a specific day; "All month" switches the
+  // filter to the whole selected month instead.
   const now = new Date();
   const [selectedYear, setSelectedYear] = useState(String(now.getFullYear()));
   const [selectedMonth, setSelectedMonth] = useState(String(now.getMonth() + 1));
@@ -112,22 +115,47 @@ export default function RecordsPage() {
     'December',
   ];
 
-  // Number of days in the selected month/year (0 = all days of the month)
-  const daysInSelectedMonth = new Date(
-    Number(selectedYear),
-    Number(selectedMonth),
-    0
-  ).getDate();
+  // `yyyy-mm-dd`, the value a native date input expects. When the whole month
+  // is selected, the input shows the first of that month as an anchor for the
+  // calendar header while the filter ignores the day.
+  const selectedDateValue = [
+    selectedYear,
+    String(selectedMonth).padStart(2, '0'),
+    String(selectedDay === 'all' ? 1 : Number(selectedDay)).padStart(2, '0'),
+  ].join('-');
 
-  // Years available to pick from: any year present in the records, plus the current year
-  const availableYears = Array.from(
-    new Set([
-      String(now.getFullYear()),
-      ...records.map((r) => String(new Date(r.timeIn).getFullYear())),
-    ])
-  )
-    .map(Number)
-    .sort((a, b) => b - a);
+  const handleDateChange = (value: string) => {
+    const [year, month, day] = value.split('-');
+    if (!year || !month || !day) return;
+
+    setSelectedYear(String(Number(year)));
+    setSelectedMonth(String(Number(month)));
+    setSelectedDay(String(Number(day)));
+  };
+
+  // Switching back to a specific day anchors on the 1st of the visible month;
+  // the admin can then pick any day from the calendar.
+  const toggleWholeMonth = () =>
+    setSelectedDay((day) => (day === 'all' ? '1' : 'all'));
+
+  // Course tally for the filter buttons. Counted from every loaded record, the
+  // same way the Manage Users visitor-type buttons count users: the number is a
+  // property of the course, not of the current search or status selection.
+  const courseCounts = (() => {
+    const counts = new Map<string, number>();
+
+    for (const record of records) {
+      if (!record.courseLabel) continue;
+      counts.set(
+        record.courseLabel,
+        (counts.get(record.courseLabel) ?? 0) + 1
+      );
+    }
+
+    return [...counts.entries()]
+      .map(([label, count]) => ({ label, count }))
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+  })();
 
   const filteredRecords = records.filter((record) => {
     const term = searchTerm.toLowerCase();
@@ -140,6 +168,9 @@ export default function RecordsPage() {
       (record.courseLabel?.toLowerCase().includes(term) ?? false) ||
       record.room.toLowerCase().includes(term);
 
+    const matchesCourse =
+      courseFilter === 'all' || record.courseLabel === courseFilter;
+
     const matchesStatus = statusFilter === 'all' || record.status === statusFilter;
 
     const timeIn = new Date(record.timeIn);
@@ -148,7 +179,7 @@ export default function RecordsPage() {
       timeIn.getMonth() + 1 === Number(selectedMonth) &&
       (selectedDay === 'all' || timeIn.getDate() === Number(selectedDay));
 
-    return matchesSearch && matchesStatus && matchesDate;
+    return matchesSearch && matchesCourse && matchesStatus && matchesDate;
   });
 
   // Clicking a header sorts by it; clicking the active header flips direction.
@@ -448,6 +479,40 @@ export default function RecordsPage() {
                       '
                   />
                 </div>
+
+                {/* Course Filter - sits below Search. Buttons rather than a
+                    select so each course's record count is visible at a glance,
+                    matching the visitor-type filter on Manage Users. */}
+                <label className='block text-sm font-medium text-navy-200 mt-3 mb-2'>
+                  Course
+                </label>
+                <div className='flex flex-wrap gap-2'>
+                  <button
+                    type='button'
+                    onClick={() => setCourseFilter('all')}
+                    className={`px-4 py-2.5 rounded-lg font-semibold text-sm transition-colors border-2 ${
+                      courseFilter === 'all'
+                        ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500'
+                        : 'bg-navy-900/50 text-navy-300 border-navy-700 hover:border-navy-600'
+                    }`}
+                  >
+                    All ({records.length})
+                  </button>
+                  {courseCounts.map(({ label, count }) => (
+                    <button
+                      type='button'
+                      key={label}
+                      onClick={() => setCourseFilter(label)}
+                      className={`px-4 py-2.5 rounded-lg font-semibold text-sm transition-colors border-2 ${
+                        courseFilter === label
+                          ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500'
+                          : 'bg-navy-900/50 text-navy-300 border-navy-700 hover:border-navy-600'
+                      }`}
+                    >
+                      {label} ({count})
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Status Filter */}
@@ -475,105 +540,44 @@ export default function RecordsPage() {
                 </div>
               </div>
 
-              {/* Date Filter - month/year required, day optional */}
+              {/* Date Filter - calendar day, or the whole selected month */}
               <div>
                 <label className='block text-sm font-medium text-navy-200 mb-2'>
                   Date
                 </label>
-                <div className='flex gap-2'>
-                  {/* Month */}
-                  <div className='relative flex-1'>
-                    <select
-                      value={selectedMonth}
-                      onChange={(e) => {
-                        const month = e.target.value;
-                        setSelectedMonth(month);
-                        // Reset the day if the new month has fewer days
-                        const maxDay = new Date(
-                          Number(selectedYear),
-                          Number(month),
-                          0
-                        ).getDate();
-                        if (selectedDay !== 'all' && Number(selectedDay) > maxDay) {
-                          setSelectedDay(String(maxDay));
-                        }
-                      }}
-                      className='
-                        w-full px-4 py-3 rounded-lg appearance-none
-                        bg-navy-900/50 border border-navy-700
-                        text-white font-semibold text-sm
-                        focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500
-                        transition-colors cursor-pointer
-                        '
-                    >
-                      {MONTH_NAMES.map((name, i) => (
-                        <option key={name} value={String(i + 1)} className='bg-navy-900'>
-                          {name}
-                        </option>
-                      ))}
-                    </select>
-                    <i className='fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-navy-300 text-xs pointer-events-none'></i>
-                  </div>
-
-                  {/* Year */}
-                  <div className='relative w-28'>
-                    <select
-                      value={selectedYear}
-                      onChange={(e) => {
-                        const year = e.target.value;
-                        setSelectedYear(year);
-                        const maxDay = new Date(
-                          Number(year),
-                          Number(selectedMonth),
-                          0
-                        ).getDate();
-                        if (selectedDay !== 'all' && Number(selectedDay) > maxDay) {
-                          setSelectedDay(String(maxDay));
-                        }
-                      }}
-                      className='
-                        w-full px-4 py-3 rounded-lg appearance-none
-                        bg-navy-900/50 border border-navy-700
-                        text-white font-semibold text-sm
-                        focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500
-                        transition-colors cursor-pointer
-                        '
-                    >
-                      {availableYears.map((year) => (
-                        <option key={year} value={String(year)} className='bg-navy-900'>
-                          {year}
-                        </option>
-                      ))}
-                    </select>
-                    <i className='fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-navy-300 text-xs pointer-events-none'></i>
-                  </div>
-
-                  {/* Day (optional) */}
-                  <div className='relative flex-1'>
-                    <select
-                      value={selectedDay}
-                      onChange={(e) => setSelectedDay(e.target.value)}
-                      className='
-                        w-full px-4 py-3 rounded-lg appearance-none
-                        bg-navy-900/50 border border-navy-700
-                        text-white font-semibold text-sm
-                        focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500
-                        transition-colors cursor-pointer
-                        '
-                    >
-                      <option value='all' className='bg-navy-900'>
-                        All days
-                      </option>
-                      {Array.from({ length: daysInSelectedMonth }, (_, i) => i + 1).map(
-                        (day) => (
-                          <option key={day} value={String(day)} className='bg-navy-900'>
-                            Day {day}
-                          </option>
-                        )
-                      )}
-                    </select>
-                    <i className='fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-navy-300 text-xs pointer-events-none'></i>
-                  </div>
+                <div className='flex flex-col sm:flex-row gap-2'>
+                  <input
+                    type='date'
+                    value={selectedDateValue}
+                    onChange={(e) => handleDateChange(e.target.value)}
+                    aria-label='Filter records by date'
+                    className='
+                      flex-1 min-w-0 px-4 py-3 rounded-lg
+                      bg-navy-900/50 border border-navy-700
+                      text-white font-semibold text-sm
+                      focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500
+                      transition-colors cursor-pointer
+                      '
+                  />
+                  <button
+                    type='button'
+                    onClick={toggleWholeMonth}
+                    aria-pressed={selectedDay === 'all'}
+                    className={`px-4 py-3 rounded-lg font-semibold text-sm transition-colors border-2 flex items-center justify-center gap-2 ${
+                      selectedDay === 'all'
+                        ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500'
+                        : 'bg-navy-900/50 text-navy-300 border-navy-700 hover:border-navy-600'
+                    }`}
+                  >
+                    <i
+                      className={`fa-solid ${
+                        selectedDay === 'all'
+                          ? 'fa-calendar-days'
+                          : 'fa-calendar-day'
+                      }`}
+                    ></i>
+                    All month
+                  </button>
                 </div>
 
                 {/* Active date description */}

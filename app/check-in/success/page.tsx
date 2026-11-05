@@ -148,24 +148,6 @@ export default function CheckInSuccessPage() {
                     Continue
                   </span>
                 </button>
-
-                {/* Secondary action for checked-in visitors: go see the 3D
-                    route, which is the natural next step in this app. */}
-                {isCheckIn && (
-                  <button
-                    onClick={() => router.push('/visitor')}
-                    className='
-                      mt-3 w-full px-4 py-3 rounded-lg font-semibold text-sm
-                      bg-navy-700 hover:bg-navy-600 text-navy-100
-                      transition-colors duration-150
-                    '
-                  >
-                    <span className='flex items-center justify-center gap-2'>
-                      <i className='fa-solid fa-route'></i>
-                      View 3D Route
-                    </span>
-                  </button>
-                )}
               </div>
             </div>
 

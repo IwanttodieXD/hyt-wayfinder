@@ -1,4 +1,4 @@
-# Supabase Setup Guide - HYT Wayfinder
+# Supabase Setup Guide - HYT Global
 
 > **⚠️ Partly outdated.** The schema described below predates
 > `supabase/migrations/`. It still shows `role` as a TEXT column with a CHECK
@@ -28,14 +28,14 @@
 
 ## 🎯 Overview
 
-This guide will help you set up Supabase as the backend database for HYT Wayfinder, replacing the mock authentication with real database-backed auth and records.
+This guide will help you set up Supabase as the backend database for HYT Global, replacing the mock authentication with real database-backed auth and records.
 
 ---
 
 ## 📋 Prerequisites
 
 - Supabase account (free tier works)
-- Your HYT Wayfinder project ready
+- Your HYT Global project ready
 
 ---
 
@@ -51,7 +51,7 @@ Sign in with GitHub (recommended)
 ### 1.2 Create New Project
 ```
 Organization: Create or select
-Project Name: hyt-wayfinder
+Project Name: hyt-global
 Database Password: [Generate strong password]
 Region: Choose closest to your users
 Pricing Plan: Free (or Pro if needed)

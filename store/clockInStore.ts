@@ -1,13 +1,12 @@
 import { create } from 'zustand';
-import { DEFAULT_ROUTE_ID } from '@/lib/wayfinding';
 
-export type ClockInStatus = 'not-clocked-in' | 'clocked-in' | 'viewing-route';
+export type ClockInStatus = 'not-clocked-in' | 'clocked-in';
 
 interface StudentProfile {
   name: string;
   /**
    * The assigned room, held as a room NUMBER because that is what
-   * `getRoomByNumber` and `routeIdForDestination` resolve.
+   * `getRoomByNumber` resolves.
    *
    * The former `id`, `building` and `room` fields are gone. `id` was never set
    * (it rendered as a bare "ID #"), and `building`/`room` were hardcoded
@@ -24,25 +23,14 @@ interface ClockInState {
   clockInTime: Date | null;
   status: ClockInStatus;
   activeRecordId: string | null;
-  /** Which destination route to draw in 3D, set from the scanned QR code. */
-  activeRouteId: string;
 
   // Clock-in actions
   clockIn: (recordId?: string) => void;
   clockOut: () => void;
-  startRouteView: () => void;
   /** Reconciles in-memory state with the open attendance record in the database. */
   syncFromServer: (openRecord: { id: string; timeIn: Date } | null) => void;
   setStudentName: (name: string) => void;
   setDestination: (destination: string) => void;
-
-  // Route animation state
-  isRouteAnimating: boolean;
-  currentWaypoint: number;
-  setRouteAnimating: (animating: boolean) => void;
-  setCurrentWaypoint: (waypoint: number) => void;
-  setActiveRoute: (routeId: string) => void;
-  resetRoute: () => void;
 }
 
 export const useClockInStore = create<ClockInState>((set) => ({
@@ -54,9 +42,6 @@ export const useClockInStore = create<ClockInState>((set) => ({
   clockInTime: null,
   status: 'not-clocked-in',
   activeRecordId: null,
-  activeRouteId: DEFAULT_ROUTE_ID,
-  isRouteAnimating: false,
-  currentWaypoint: 0,
 
   // Actions
   setStudentName: (name) =>
@@ -77,13 +62,6 @@ export const useClockInStore = create<ClockInState>((set) => ({
       clockInTime: null,
       status: 'not-clocked-in',
       activeRecordId: null,
-      isRouteAnimating: false,
-      currentWaypoint: 0,
-    }),
-
-  startRouteView: () =>
-    set({
-      status: 'viewing-route',
     }),
 
   /**
@@ -94,14 +72,9 @@ export const useClockInStore = create<ClockInState>((set) => ({
    * genuinely inside the building. That is not cosmetic: the scanner then read
    * them as not clocked in, so scanning the entrance code would have CLOCKED
    * THEM OUT mid-visit.
-   *
-   * `status: 'viewing-route'` is deliberately left alone. A poll landing while
-   * someone is watching their 3D route must not eject them back to the scanner.
    */
   syncFromServer: (openRecord: { id: string; timeIn: Date } | null) =>
     set((state) => {
-      if (state.status === 'viewing-route') return state;
-
       // Already carrying the same record - a poll landing right after a local
       // clockIn would otherwise reset the time they were shown.
       if (openRecord && state.activeRecordId === openRecord.id) return state;
@@ -113,24 +86,5 @@ export const useClockInStore = create<ClockInState>((set) => ({
             clockInTime: openRecord.timeIn,
           }
         : { status: 'not-clocked-in', activeRecordId: null, clockInTime: null };
-    }),
-
-  setRouteAnimating: (animating) => set({ isRouteAnimating: animating }),
-
-  setCurrentWaypoint: (waypoint) => set({ currentWaypoint: waypoint }),
-
-  // Switching destination also rewinds the animation, otherwise the waypoint
-  // index would point into a different route's array.
-  setActiveRoute: (routeId) =>
-    set({ activeRouteId: routeId, currentWaypoint: 0, isRouteAnimating: false }),
-
-  // Return: stops the animation, rewinds to the first waypoint, and drops back
-  // out of the 3D view to the scanner. Setting `status` to 'clocked-in' is what
-  // makes StudentMobileView render the QRScanner again instead of the route.
-  resetRoute: () =>
-    set({
-      isRouteAnimating: false,
-      currentWaypoint: 0,
-      status: 'clocked-in',
     }),
 }));

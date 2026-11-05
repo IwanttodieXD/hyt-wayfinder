@@ -195,8 +195,7 @@ export default function UsersPage() {
           (purpose?.label ?? '').toLowerCase().includes(term);
 
         const matchesType =
-          typeFilter === 'all' ||
-          (typeFilter === '__none' ? u.visitorType === null : u.visitorType === typeFilter);
+          typeFilter === 'all' || u.visitorType === typeFilter;
 
         return matchesSearch && matchesType;
       }),
@@ -260,6 +259,9 @@ export default function UsersPage() {
     }
     if (!editing && !form.courseId) {
       return setFormError('Please select a course.');
+    }
+    if (!form.visitorTypeId) {
+      return setFormError('Please select a visitor type.');
     }
     if (!form.pendingPurposeId) {
       return setFormError('Please select a purpose.');
@@ -374,13 +376,22 @@ if (editing) {
               <i className='fa-solid fa-arrow-left'></i>
               <span>Back to Dashboard</span>
             </Link>
-            <button
-              onClick={openCreate}
-              className='px-4 py-2 rounded-lg bg-yellow-500 hover:bg-yellow-600 text-yellow-950 font-semibold text-sm transition-colors flex items-center gap-2'
-            >
-              <i className='fa-solid fa-user-plus'></i>
-              Add User
-            </button>
+            <div className='flex flex-wrap items-center gap-2'>
+              <Link
+                href='/admin/lookups'
+                className='px-4 py-2 rounded-lg bg-navy-700 hover:bg-navy-600 text-white font-semibold text-sm transition-colors flex items-center gap-2'
+              >
+                <i className='fa-solid fa-list-check'></i>
+                Manage Lookups
+              </Link>
+              <button
+                onClick={openCreate}
+                className='px-4 py-2 rounded-lg bg-yellow-500 hover:bg-yellow-600 text-yellow-950 font-semibold text-sm transition-colors flex items-center gap-2'
+              >
+                <i className='fa-solid fa-user-plus'></i>
+                Add User
+              </button>
+            </div>
           </div>
 
           {/* Total Users. Given the same prominence as on the dashboard, since it's the
@@ -573,11 +584,18 @@ if (editing) {
                         <td
                           className={`px-4 py-3 ${expired ? 'opacity-30' : ''}`}
                         >
-                          <span
-                            className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${visitorTypeStyle(u.visitorType)}`}
-                          >
-                            {u.visitorType ?? 'Unclassified'}
-                          </span>
+                          {u.visitorType ? (
+                            <span
+                              className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${visitorTypeStyle(u.visitorType)}`}
+                            >
+                              {u.visitorType}
+                            </span>
+                          ) : (
+                            // Legacy rows created before visitor types were
+                            // required. The dash keeps the column from looking
+                            // broken without labelling the person.
+                            <span className='text-navy-500 text-xs'>&mdash;</span>
+                          )}
                         </td>
                         {/* What this person is expected to be here for. Room and purpose are the two
                             things staff now assign, so they are what the list shows
@@ -810,10 +828,11 @@ if (editing) {
                     onChange={(e) =>
                       setForm({ ...form, visitorTypeId: e.target.value })
                     }
+                    required
                     className={`${INPUT} appearance-none cursor-pointer`}
                   >
-                    <option value='' className='bg-navy-900'>
-                      Unclassified
+                    <option value='' disabled className='bg-navy-900'>
+                      Select visitor type
                     </option>
                     {visitorTypes.map((type) => (
                       <option key={type.id} value={type.id} className='bg-navy-900'>

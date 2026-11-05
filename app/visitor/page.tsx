@@ -15,8 +15,7 @@ export default function VisitorPortal() {
   useClockInProfile();
 
   // Reconciles check-in state with the database, so a refresh doesn't report
-  // "not checked in" for someone who is genuinely inside - and so the 3D route
-  // button is reachable after a refresh.
+  // "not checked in" for someone who is genuinely inside.
   useAttendanceStatus(user?.id);
 
   if (!isAllowed) {

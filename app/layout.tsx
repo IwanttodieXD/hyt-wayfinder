@@ -2,10 +2,11 @@ import type { Metadata } from 'next';
 import './globals.css';
 import AuthGate from '@/components/AuthGate';
 import AnimatedBackground from '@/components/AnimatedBackground';
+import ThemeInit from '@/components/ThemeInit';
 
 export const metadata: Metadata = {
-  title: 'HYT WAYFINDER',
-  description: 'Virtual 3D tour of HYT Global Institute building',
+  title: 'HYT Global',
+  description: 'Visitor management system for HYT Global Institute',
   icons: {
     icon: '/hyt_logo.png',
   },
@@ -19,24 +20,7 @@ export default function RootLayout({
   return (
     <html lang='en' suppressHydrationWarning>
       <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              (function () {
-                try {
-                  var raw = localStorage.getItem('hyt-theme');
-                  var theme = raw ? (JSON.parse(raw).state || {}).theme : 'dark';
-                  if (theme !== 'light') theme = 'dark';
-                  var root = document.documentElement;
-                  root.classList.add(theme);
-                  root.style.colorScheme = theme;
-                } catch (e) {
-                  document.documentElement.classList.add('dark');
-                }
-              })();
-            `,
-          }}
-        />
+        <ThemeInit />
         <link
           rel='stylesheet'
           href='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css'

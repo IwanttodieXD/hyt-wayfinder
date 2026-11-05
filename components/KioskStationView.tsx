@@ -16,10 +16,9 @@ import {
 import { useRoomsStore } from '@/store/roomsStore';
 import { useLiveData } from '@/hooks/useLiveData';
 import LiveBadge from '@/components/LiveBadge';
-import StationRegistrationForm from '@/components/StationRegistrationForm';
-import RegistrationQr from '@/components/RegistrationQr';
+import VerificationQr from '@/components/VerificationQr';
 
-// Everything the print window needs, without dragging in the waypoint data.
+// Everything the print window needs for a single QR poster.
 type PrintableCode = {
   id: string;
   label: string;
@@ -29,8 +28,8 @@ type PrintableCode = {
   qrValue: string;
 };
 
-// Destination labels go into a generated print document, so escape them
-// rather than trusting the registry text.
+// Room labels go into a generated print document, so escape them rather than
+// trusting the stored text.
 function escapeHtml(value: string) {
   return value
     .replace(/&/g, '&amp;')
@@ -197,8 +196,8 @@ export default function KioskStationView() {
           <div>
             <h1 className='text-3xl font-bold text-white mb-2'>QR Station</h1>
             <p className='text-navy-300'>
-              Register visitors at the desk, then print the attendance code for
-              the ground floor and a door code for each room.
+              Print the verification code for the entrance, the attendance code
+              for the ground floor, and a door code for each room.
             </p>
           </div>
           <LiveBadge lastRefreshed={lastRefreshed} />
@@ -266,7 +265,7 @@ export default function KioskStationView() {
             <p className='text-navy-200 text-sm'>
               The code below opens the{' '}
               <span className='text-blue-300 font-semibold'>
-                self-registration page
+                visitor verification page
               </span>{' '}
               in the visitor&apos;s phone browser. It is deliberately a{' '}
               <span className='text-white font-semibold'>separate code</span>{' '}
@@ -275,7 +274,7 @@ export default function KioskStationView() {
               check-in for everyone already holding a pass.
             </p>
           </div>
-          <RegistrationQr />
+          <VerificationQr />
         </div>
 
         {/* Attendance heading. There is exactly one attendance code and it is
@@ -613,8 +612,9 @@ export default function KioskStationView() {
                 <span className='text-yellow-400 font-bold text-xs'>1</span>
               </div>
               <p className='text-navy-200'>
-                Register the visitor above. Their account and pass are created on
-                the spot — no QR code is needed to sign up.
+                The visitor scans the entrance verification code above. If they
+                already have a record they are signed in; someone new is sent to
+                registration.
               </p>
             </div>
             <div className='flex items-start gap-3 text-sm'>
@@ -626,7 +626,7 @@ export default function KioskStationView() {
                 <span className='text-green-300 font-semibold'>
                   ground floor attendance code
                 </span>{' '}
-                to check in and receive their 3D route.
+                to check in.
               </p>
             </div>
             <div className='flex items-start gap-3 text-sm'>

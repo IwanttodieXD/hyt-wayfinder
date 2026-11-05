@@ -74,7 +74,7 @@ export default function PassExpiredPage() {
                 className='w-full h-full object-contain'
               />
             </div>
-            <h1 className='text-2xl font-bold text-white mb-1'>HYT Wayfinder</h1>
+            <h1 className='text-2xl font-bold text-white mb-1'>HYT Global</h1>
             <p className='text-yellow-300 text-sm'>HYT Global Institute</p>
           </div>
 

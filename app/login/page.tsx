@@ -57,7 +57,7 @@ export default function LoginPage() {
                 className='w-full h-full object-contain'
               />
             </div>
-            <h1 className='text-3xl font-bold text-white mb-2'>HYT Wayfinder</h1>
+            <h1 className='text-3xl font-bold text-white mb-2'>HYT Global</h1>
             <p className='text-yellow-300'>Sign in to your account</p>
           </div>
 

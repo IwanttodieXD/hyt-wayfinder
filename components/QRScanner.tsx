@@ -12,13 +12,7 @@ import { performVisitorCheckIn } from '@/lib/checkIn';
 import QRCode from 'react-qr-code';
 
 export default function QRScanner() {
-  const {
-    status,
-    clockIn,
-    clockOut,
-    activeRecordId,
-    startRouteView,
-  } = useClockInStore();
+  const { status, clockIn, clockOut, activeRecordId } = useClockInStore();
   const { clockOutRecord } = useRecordsStore();
   const { enterRoom, leaveRoom, getCurrentRoom, fetchTodayPresence } =
     useRoomPresenceStore();
@@ -54,7 +48,7 @@ const handledRef = useRef(false);
   const frameSizeRef = useRef(0);
 
   // Track the rendered frame so the scanner's search box matches it. Also covers
-  // rotation and the frame resizing between the scanner and the 3D route view.
+  // rotation and the frame resizing on different screen sizes.
   useEffect(() => {
     const el = frameRef.current;
     if (!el) return;
@@ -586,7 +580,7 @@ const handledRef = useRef(false);
           {showQR
             ? 'Present your personal QR code to the check-in scanner to check in.'
             : status === 'not-clocked-in'
-              ? 'Scan the entrance code to check in and receive your route.'
+              ? 'Scan the entrance code to check in.'
               : 'You are checked in. Scan a room door to record where you are, or the entrance code to check out.'}
         </p>
 
@@ -730,22 +724,6 @@ const handledRef = useRef(false);
         </div>
       )}
 
-      {/* View Route (when checked in) */}
-      {status !== 'not-clocked-in' && (
-        <button
-          onClick={startRouteView}
-          className='
-            relative px-4 py-3 rounded-lg font-bold text-base text-white
-            bg-navy-700 hover:bg-navy-600
-            transition-colors duration-150
-            '
-        >
-          <span className='relative z-10 flex items-center gap-2'>
-            <i className='fa-solid fa-route'></i>
-            View 3D Route
-          </span>
-        </button>
-      )}
     </div>
   );
 }

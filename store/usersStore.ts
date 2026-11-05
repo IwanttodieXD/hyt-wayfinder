@@ -525,15 +525,16 @@ export const useUsersStore = create<UsersState>()((set, get) => ({
 
   getUserCount: () => get().users.length,
 
-  // Drives the "who is coming to the orientation" tally. Unclassified visitors
-  // are grouped under "Unclassified" so the numbers always add up to the total
-  // rather than silently under-counting.
+  // Drives the "who is coming to the orientation" tally and the visitor-type
+  // filter buttons. Legacy users with no type are skipped rather than grouped
+  // under a pseudo-type: "Unclassified" is not a visitor type and should not be
+  // offered as a filter category.
   getCountByVisitorType: () => {
     const counts = new Map<string, number>();
 
     for (const user of get().users) {
-      const label = user.visitorType ?? 'Unclassified';
-      counts.set(label, (counts.get(label) ?? 0) + 1);
+      if (!user.visitorType) continue;
+      counts.set(user.visitorType, (counts.get(user.visitorType) ?? 0) + 1);
     }
 
     return [...counts.entries()]

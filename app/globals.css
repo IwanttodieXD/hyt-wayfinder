@@ -60,14 +60,13 @@
   color-scheme: dark;
 }
 
-/* Light theme. Also used to pin the 3D route view to light.
+/* Light theme.
 
    Blue-tinted neutrals: the surfaces and text carry a cool blue cast rather
    than the neutral grey they used to be, so panels read as related to the blue
    accents instead of sitting beside them. The scale is still inverted relative
    to dark mode (950 lightest = page, 200 darkest = strongest text). */
-html.light,
-.theme-fixed-light {
+html.light {
   /* Surfaces: page -> panel -> raised -> borders */
   --navy-950: 240 245 252; /* page background, faint blue */
   --navy-900: 255 255 255; /* panel surface */
@@ -127,38 +126,6 @@ html.light,
   --background: 240 245 252;
   --foreground: 16 42 78;
   color-scheme: light;
-}
-
-/* Pins the palette to its dark-theme values regardless of the active theme.
-
-   Used by the HUD that floats over the 3D scene. That scene is fixed (a bright
-   sky and a lit building), so its overlays are translucent black in both
-   themes. Without this scope the light-mode text steps would resolve to dark
-   gold and the `text-white` tokens to near-black, both of which vanish against
-   the dark overlays. Scoping the dark values keeps the HUD readable in either
-   theme, and keeps the yellow accents bright. */
-.theme-fixed-dark {
-  --navy-950: 6 15 52;
-  --navy-900: 10 16 39;
-  --navy-800: 17 26 58;
-  --navy-700: 26 37 73;
-  --navy-600: 36 50 92;
-  --navy-500: 51 66 111;
-  --navy-400: 100 119 168;
-  --navy-300: 139 156 199;
-  --navy-200: 182 195 224;
-  --white: 255 255 255;
-  --paper: 255 255 255;
-  --yellow-100: 254 249 195;
-  --yellow-200: 254 240 138;
-  --yellow-300: 253 224 71;
-  --yellow-400: 250 204 21;
-  --yellow-500: 234 179 8;
-  --yellow-600: 202 138 4;
-  --yellow-700: 161 98 7;
-  --yellow-800: 133 77 14;
-  --yellow-900: 113 63 18;
-  --yellow-950: 66 32 6;
 }
 
 body {
@@ -250,8 +217,7 @@ body {
     border-bottom-color: rgb(var(--navy-700));
   }
 
-  html.light .app-header,
-  .theme-fixed-light .app-header {
+  html.light .app-header {
     background-color: rgb(var(--yellow-50));
     border-bottom-color: rgb(var(--yellow-500) / 0.3);
     box-shadow: 0 1px 3px rgb(var(--yellow-900) / 0.08);

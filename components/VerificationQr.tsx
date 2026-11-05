@@ -5,7 +5,11 @@ import QRCode from 'react-qr-code';
 import { registrationUrl } from '@/lib/publicUrl';
 
 /**
- * QR code that opens the self-registration page.
+ * QR code that opens the entrance verification page.
+ *
+ * The URL points at `/verify`, where a visitor confirms their name and course.
+ * A visitor already on file is signed in from there; someone with no record is
+ * forwarded on to `/register`.
  *
  * Separate from the attendance code on purpose. `ATTENDANCE_QR_VALUE` encodes
  * `HYT-KIOSK-CHECKIN-STATION`, and `parseQrValue` matches that prefix to clock
@@ -18,7 +22,7 @@ import { registrationUrl } from '@/lib/publicUrl';
  * give different HTML on the server and on the client, which React reports as
  * a hydration mismatch.
  */
-export default function RegistrationQr() {
+export default function VerificationQr() {
   const [url, setUrl] = useState('');
   const [copied, setCopied] = useState(false);
 
@@ -30,7 +34,7 @@ export default function RegistrationQr() {
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
     printWindow.document.write(
-      '<!doctype html><html><head><title>Visitor Registration</title>' +
+      '<!doctype html><html><head><title>Visitor Verification</title>' +
         '<meta charset="utf-8" />' +
         '<style>' +
         'body { font-family: Arial, Helvetica, sans-serif; color: #111; ' +
@@ -41,8 +45,8 @@ export default function RegistrationQr() {
         '.code { background: #fff; padding: 28px; border: 2px solid #111; }' +
         '.code svg { width: 320px; height: 320px; display: block; }' +
         '</style></head><body>' +
-        '<h1>Visitor Registration</h1>' +
-        '<p>Scan to register before entering</p>' +
+        '<h1>Visitor Verification</h1>' +
+        '<p>Scan to verify before entering</p>' +
         `<div class="code">${svgMarkup}</div>` +
         '</body></html>'
     );
@@ -57,23 +61,24 @@ export default function RegistrationQr() {
   const svgMarkup =
     url && typeof document !== 'undefined'
       ? document
-          .querySelector('[data-registration-qr] svg')
+          .querySelector('[data-verification-qr] svg')
           ?.outerHTML ?? ''
       : '';
 
   return (
     <div className='glass-panel border-navy-800 rounded-lg p-6 flex flex-col items-center'>
       <div className='flex items-center gap-2 mb-1 self-stretch'>
-        <h3 className='text-white font-bold text-lg'>Registration QR</h3>
+        <h3 className='text-white font-bold text-lg'>Verification QR</h3>
       </div>
       <p className='text-navy-300 text-xs text-center mb-4 self-stretch'>
-        Post this at the entrance. Scanning it opens the registration form -
-        no account needed beforehand.
+        Post this at the entrance. Scanning it opens the verification form,
+        where visitors confirm their name and course. New visitors are forwarded
+        to registration.
       </p>
 
       <div className='flex justify-center w-full mb-4'>
         <div
-          data-registration-qr
+          data-verification-qr
           className='bg-paper p-6 rounded-lg w-full max-w-[240px] shadow-lg'
         >
           {url ? (
@@ -111,7 +116,7 @@ export default function RegistrationQr() {
           className='flex-1 px-4 py-2.5 rounded-lg font-semibold text-sm bg-yellow-500 hover:bg-yellow-600 text-yellow-950 transition-colors duration-150 flex items-center justify-center gap-2 disabled:opacity-50'
         >
           <i className='fa-solid fa-print'></i>
-          Print Registration QR
+          Print Verification QR
         </button>
         <button
           type='button'
