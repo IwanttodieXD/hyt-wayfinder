@@ -1,223 +1,60 @@
 # HYT Global — Project Summary
 
-What this project does, how it is put together, and what you can do with it.
+HYT Global is a visitor-management website for the HYT Global Institute. It helps staff verify visitors, record who is in the building, track room presence, and review attendance history.
 
----
+## Visitor flow
 
-## 1. What it does
+Visitors do **not** need an account or login. They provide their name and course for verification. When verification succeeds, the system automatically checks them in to the building.
 
-A visitor management system for the HYT Global Institute building. It replaces
-a paper sign-in sheet with two separate things:
+After that:
 
-**1. Attendance — who is in the building.**
-One QR code at the ground floor entrance. Visitors scan it on their phone to
-check in, and scan it again to check out. This is the only code that records
-attendance.
+1. Visitors scan a room's QR code when they enter it.
+2. Scanning a different room's QR code records their move to that room.
+3. When leaving the building, visitors scan the checkout QR code to check out.
 
-**2. Room presence — who is in which room.**
-One QR code per room, posted on that room's door. Scanning it records that the
-person is in that room right now, and closes the room they were in before. This
-never touches attendance.
+Room QR codes track room presence; the checkout QR code records that the visitor is leaving the building. The visitor does not need to scan a separate entrance check-in QR code after verification.
 
-Keeping these two apart matters. If a single code did both jobs, a visitor
-standing at the wrong poster could clock themselves out, and "who is in Room
-304 right now" would be a guess. As built, attendance is trustworthy and the
-occupancy view is based on real scans rather than assumptions.
+## Staff/admin capabilities
 
----
+The system's documented staff and admin tools include:
 
-## 2. The two kinds of QR code
+- A station for displaying or printing QR codes
+- A room occupancy view
+- Attendance records and room-visit history
+- Room management
+- Visitor management
 
-| | Attendance | Room presence |
-| --- | --- | --- |
-| Value | `HYT-KIOSK-CHECKIN-STATION` | `HYT-ROOM-01:<ROOM_ID>` |
-| How many | Exactly one | One per room |
-| Where | Ground floor entrance | On each room door |
-| Effect | Clocks in / clocks out | Records presence only |
-| Table written | `clock_in_records` | `room_presence` |
+Admin access is separate from the visitor flow. The precise admin permissions and available actions depend on the application configuration and deployment.
 
-`parseQrValue()` in `lib/wayfinding.ts` decides which kind was scanned, based on
-the prefix, and returns `null` for anything unrecognised rather than guessing.
+## Main pages
 
-Room presence rows are **append-only**. Scanning a room closes your previous
-open row first, so you can never be counted in two rooms at once, and the full
-movement history survives. That makes "who was in Room 304 at 3pm" answerable
-after the fact, not just "who is there now".
-
----
-
-## 3. Roles and who sees what
-
-| Role | Can do |
+| Route | Purpose |
 | --- | --- |
-| `visitor` | Register, scan in/out, record room presence |
-| `admin` | Everything: station, occupancy, attendance records, room visits, user management |
+| `/` | Landing page / navigation |
+| `/check-in` | Visitor verification and QR-scanning flow; confirm exact deployed route and steps |
+| `/station` | Admin QR-code station |
+| `/occupancy` | Room occupancy view |
+| `/admin` | Admin dashboard |
+| `/admin/records` | Attendance records |
+| `/admin/room-records` | Room-visit history |
+| `/admin/rooms` | Room management |
+| `/admin/users` | Visitor management |
 
-Public registration can only ever produce a `visitor`: the `handle_new_user`
-trigger hardcodes that role and ignores anything the client sends.
+Routes and access may vary by deployment. Older documentation describes visitor logins, self-registration, and entrance-QR check-in; those are not the current visitor workflow described here.
 
-There is **exactly one admin**, enforced by a partial unique index rather than
-by the UI, and it is hidden from `/admin/users` — it is neither listed nor
-editable there. A second admin is a liability, not a convenience: anyone who can
-edit users could otherwise grant themselves the keys.
+## Technology
 
-The `trainer` and `trainee` roles were removed. They were never granted
-anything: no RLS policy distinguished them from `visitor`, and `/trainer` was a
-byte-identical copy of `/visitor`. The enum labels still exist in Postgres,
-which cannot drop them — see `20260101000003_retire_trainee_roles.sql`.
+The application uses Next.js, React, TypeScript, Supabase, Tailwind CSS, and QR-scanning/display libraries. The repository includes database setup instructions and SQL migrations under `supabase/`.
 
-### Visitor types are not roles
+## Setup and operations
 
-At an event the people arriving are trainees, trainers and VIPs, but none of
-those need different *permissions*. Putting them on `role` is what created the
-dead roles above. So classification lives in a separate `visitor_types` lookup
-table joined from `users.visitor_type_id`, alongside `company`, `host_name`,
-`phone`, `valid_until` and `notes`.
+For developer setup, environment variables, database setup, and deployment, see [`README.md`](./README.md), [`SUPABASE_SETUP.md`](./SUPABASE_SETUP.md), and [`VERCEL_DEPLOYMENT.md`](./VERCEL_DEPLOYMENT.md).
 
-`role` answers "what may this person do" (two values). The visitor profile
-answers "who is this person" (many values). Neither grants anything the other
-does not. See `20260101000004_visitor_profiles.sql`.
+Email/SMTP is not used by the visitor process or current application workflow; do not describe email as a visitor verification or notification feature.
 
-`valid_until` is enforced at login and on session restore, so an orientation's
-credentials stop working the morning after the event without anyone archiving
-rows by hand.
+## Important notes
 
-Admin-only pages are enforced with `useRoleGuard`, which redirects non-admins to
-`/admin`.
-
----
-
-## 4. Pages
-
-| Route | Who | What it does |
-| --- | --- | --- |
-| `/` | Anyone | Redirects by auth state and role |
-| `/login` | Anyone | Sign in |
-| `/register` | Anyone | Create a visitor account |
-| `/check-in` | visitor | Mobile scanner: check in/out, scan room doors |
-| `/visitor` | visitor | Visitor view |
-| `/station` | admin | Print the attendance code and each room's door code. Room posters show a live headcount. Live occupancy moved to `/admin` |
-| `/occupancy` | admin | Who is inside which room right now |
-| `/admin` | admin | Dashboard |
-| `/admin/records` | admin | Attendance records (check-in/out), searchable, exportable |
-| `/admin/room-records` | admin | Room visit history, grouped per room |
-| `/admin/users` | admin | Manage visitors: classify, set host/company/pass expiry, archive and restore |
-| `/api/admin/users` | server | Visitor create/edit/archive/restore via the service role key |
-
----
-
-## 5. How the code is organised
-
-```
-app/                    Pages (Next.js App Router)
-components/             QR scanner, kiosk, registration, navigation
-store/                  Zustand state: auth, users, records, roomPresence, clockIn
-lib/wayfinding.ts       QR code parser
-lib/supabase.ts         Supabase client
-hooks/                  Role guard, profile sync, live data
-supabase/migrations/    SQL migrations
-scripts/                next-with-canonical-path.js (Windows path-casing fix)
-```
-
-Roughly 7,600 lines across ~40 source files. The largest are the kiosk view
-(643), the attendance records page (606), and the user management page (583).
-
-### The two stores worth knowing about
-
-`lib/wayfinding.ts` is the QR parser: it decides whether a scanned value is an
-attendance code or a room door code. Rooms themselves come from the `rooms`
-table via `store/roomsStore.ts`, so adding a room is a data change in
-`/admin/rooms`, not a code change.
-
-`store/roomPresenceStore.ts` owns all room-presence reads and writes. Nothing
-else touches the `room_presence` table.
-
----
-
-## 6. Setting it up
-
-Full instructions are in [SUPABASE_SETUP.md](./SUPABASE_SETUP.md) and
-[README.md](./README.md). The short version:
-
-```bash
-npm install
-cp .env.example .env.local    # then fill in your Supabase keys
-# Run the SQL from SUPABASE_SETUP.md in the Supabase SQL editor
-npm run dev
-```
-
-Environment variables:
-
-| Variable | Required | Notes |
-| --- | --- | --- |
-| `NEXT_PUBLIC_SUPABASE_URL` | yes | Project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | yes | Public key; safe in the browser — RLS protects the data |
-| `SUPABASE_SERVICE_ROLE_KEY` | for account create/delete | **Server-only.** Bypasses RLS. Never prefix with `NEXT_PUBLIC_` |
-| `NEXT_PUBLIC_APP_URL` | recommended | Base URL |
-| `SMTP_*`, `DATABASE_URL`, `QR_EXPIRY_HOURS` | optional | Not currently wired up |
-
-Deploy with [VERCEL_DEPLOYMENT.md](./VERCEL_DEPLOYMENT.md). Set the environment
-variables for all three Vercel environments and redeploy — Vercel only injects
-variables into new builds.
-
----
-
-## 7. What you can do with it
-
-**Straight away, with no code changes:**
-
-- Print the attendance code and post it at the entrance; print one room code per
-  room door. Both are generated on `/station`.
-- See who is in the building and who is in which room, live.
-- Search and export the full attendance history.
-- Review every room visit, per room, with dates and durations.
-- Create accounts and assign roles and destinations.
-- Deploy to Vercel.
-
-**Small changes, in the files named:**
-
-- **Add a room** — use `/admin/rooms`. The kiosk, scanner, occupancy view and
-  room-records page all pick it up from the `rooms` table automatically.
-- **Change QR parsing** — the prefixes and parser live in
-  `lib/wayfinding.ts`; `lib/wayfinding.test.ts` pins the behaviour.
-- **Rebrand the colours** — the palette lives in `tailwind.config.ts` and
-  `app/globals.css`.
-- **Change what a role can see** — `useRoleGuard` in each page, plus the
-  redirects in `app/page.tsx`.
-
-**Natural next features:**
-
-- Export room visits (the attendance page already has CSV/PDF export; room
-  visits do not).
-- Live updates via Supabase Realtime, so occupancy refreshes without a reload.
-- Visitor self-service clock-out from the phone rather than scanning to leave.
-- Multiple stations, if you ever add a second entrance — the QR values do carry a
-  station id (`HYT-KIOSK-01-`, `HYT-ROOM-01-`), but that id is hardcoded in
-  `lib/wayfinding.ts`, so a second entrance means generalising the constants and
-  the parser, not just adding a data row.
-- Email notifications via the unused `SMTP_*` variables.
-
----
-
-## 8. Known gaps
-
-Worth knowing before you rely on this:
-
-- **The database schema is being replaced.** The app still writes to the old
-  `room_presence` table and the old `clock_in_records` columns. The new schema is
-  in `supabase/migrations/20260101000001_full_schema.sql` (see
-  [supabase/SCHEMA.md](./supabase/SCHEMA.md)) but the code has not been updated
-  to match yet — see `IMPLEMENTATION_PROMPT.md`.
-- **Old-format room posters still work.** Codes printed as
-  `HYT-KIOSK-01-CHECKIN-STATION:<ROOM>` resolve to the room they name, so a door
-  scan records presence and never touches attendance. Reprinting in the
-  `HYT-ROOM-01:<ROOM>` format is optional.
-- **Account create/delete returns `501`** until `SUPABASE_SERVICE_ROLE_KEY` is
-  set. Read and update still work.
-- **Limited automated tests.** `npm test` covers the QR parser and shared
-  helpers; the presence logic is still tested manually.
-- **`prisma:*` scripts in `package.json` are dead** — they point at a Prisma
-  setup that was replaced by Supabase. Safe to delete.
-- **Demo credentials were shown on the login page.** They were removed from the
-  UI, but if those accounts exist, treat the passwords as compromised and reset
-  them.
+- Visitors are verified by name and course, then automatically checked in when verification succeeds.
+- Visitors scan room QR codes to record room presence and the checkout QR code when leaving.
+- Confirm the exact verification interface, QR behavior, and admin permissions in the deployed application before publishing user instructions.
+- Keep visitor information and Supabase credentials private. Never expose service-role keys in client-side code or documentation.
