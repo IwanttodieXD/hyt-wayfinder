@@ -101,15 +101,13 @@ html.light {
   --yellow-800: 154 52 18;
   --yellow-900: 124 45 18;
   --yellow-950: 67 20 7;
-  /* The same pattern in a faint sky version: low opacity so it reads as
-     drifting texture on the pale blue page rather than competing with the
-     content. A few amber stars keep the warm accent present. */
-  --pattern-diamond: 96 165 250;
-  --pattern-diamond-alpha: 0.09;
-  --pattern-star: 150 190 235;
-  --pattern-star-cool: 96 165 250;
-  --pattern-star-warm: 249 115 22;
-  --pattern-stars-opacity: 0.45;
+  /* Light mode uses faint amber dots and stars against the pale blue page. */
+  --pattern-diamond: 249 115 22;
+  --pattern-diamond-alpha: 0.12;
+  --pattern-star: 249 115 22;
+  --pattern-star-cool: 251 146 60;
+  --pattern-star-warm: 234 88 12;
+  --pattern-stars-opacity: 0.55;
   /* Expired rows: in light mode they fade toward white instead of deepening
      into the page, so "expired" reads as washed-out rather than dark. The
      gentler opacity keeps the text legible while still clearly muted. */
@@ -177,7 +175,6 @@ body {
   @keyframes scale-in {
     0% {
       transform: scale(0);
-      opacity: 0;
     }
     50% {
       transform: scale(1.2);
@@ -314,11 +311,11 @@ body {
 }
 
 /* Every themed element that has a Tailwind transition would otherwise start
-   its own colour transition the moment the `<html>` class flips: the reveal and
+   its own colour transition the moment the <html> class flips: the reveal and
    a few dozen fading surfaces then fight for the same frames. Freezing those
    transitions for the duration leaves the reveal as the only thing animating,
    which is what makes the motion even on large desktop viewports. The
-   view-transition pseudo-elements are not matched by `*`, so the reveal itself
+   view-transition pseudo-elements are not matched by *, so the reveal itself
    keeps running. */
 html.theme-switching *,
 html.theme-switching *::before,
@@ -348,13 +345,13 @@ html.theme-switching .animated-bg__drift {
    - `.animated-bg__checker`: a big board centred on the viewport. Every other
      cell holds a square rotated 45 degrees into a diamond. Its colour and alpha
      come from the `--pattern-diamond*` variables, so dark mode gets the
-     original dark diamonds and light mode a faint sky version. The board
+     original dark diamonds and light mode a faint amber version. The board
      drifts up-and-right by exactly one cell, which lands the checkerboard back
      on itself, so the loop has no seam.
    - `.animated-bg__diamond`: each square slowly shrinks and returns to its
      original size. Timing is keyed off the square's diagonal (see the
      component), which is what keeps the loop seamless.
-   - `.animated-bg__stars`: a tiled field of faint stars drifting on the same
+   - `.animated-bg__stars`: a tiled field of faint dots drifting on the same
      45-degree path.
 
    It is a fixed layer at z-index -1: above the body colour, below all content.
@@ -392,8 +389,8 @@ html.theme-switching .animated-bg__drift {
   }
 }
 
-/* The angled black square. It is positioned on its cell centre, rotated 45
-   degrees, and slowly shrinks then returns to its original size. */
+/* The angled square is positioned on its cell centre, rotated 45 degrees,
+   and slowly shrinks then returns to its original size. */
 .animated-bg__diamond {
   position: absolute;
   width: 7.5%;
@@ -445,9 +442,8 @@ html.theme-switching .animated-bg__drift {
   }
 }
 
-/* The pattern runs in both themes. Light mode swaps in the faint sky-blue
-   variables declared under `html.light`, so the same shapes read as a subtle
-   drifting texture on the pale blue page instead of being hidden. */
+/* The pattern runs in both themes. Light mode swaps in amber variables so the
+   same shapes read as subtle texture on the pale blue page. */
 
 /* Respect the OS setting - keep the shapes, drop the motion. */
 @media (prefers-reduced-motion: reduce) {
