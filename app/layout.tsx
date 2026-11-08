@@ -5,7 +5,7 @@ import AnimatedBackground from '@/components/AnimatedBackground';
 import ThemeInit from '@/components/ThemeInit';
 
 export const metadata: Metadata = {
-  title: 'HYT Global',
+  title: 'HYT-Global VMS',
   description: 'Visitor management system for HYT Global Institute',
   icons: {
     icon: '/hyt_logo.png',
