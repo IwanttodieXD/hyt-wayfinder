@@ -30,7 +30,7 @@ export default function AdminShell({ children }: AdminShellProps) {
             </span>
             <span className='min-w-0'>
               <span className='block truncate text-base font-bold leading-tight text-white'>
-                HYT Wayfinding
+                HYT Global
               </span>
               <span className='mt-0.5 block truncate text-[11px] leading-tight text-navy-400'>
                 Admin console
