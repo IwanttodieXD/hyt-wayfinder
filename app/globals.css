@@ -101,9 +101,9 @@ html.light {
   --yellow-800: 154 52 18;
   --yellow-900: 124 45 18;
   --yellow-950: 67 20 7;
-  /* Light mode uses faint amber dots and stars against the pale blue page. */
-  --pattern-diamond: 249 115 22;
-  --pattern-diamond-alpha: 0.12;
+  /* Keep the geometric diamonds sky-blue; tint only the dust-like starfield amber. */
+  --pattern-diamond: 96 165 250;
+  --pattern-diamond-alpha: 0.09;
   --pattern-star: 249 115 22;
   --pattern-star-cool: 251 146 60;
   --pattern-star-warm: 234 88 12;
@@ -345,7 +345,7 @@ html.theme-switching .animated-bg__drift {
    - `.animated-bg__checker`: a big board centred on the viewport. Every other
      cell holds a square rotated 45 degrees into a diamond. Its colour and alpha
      come from the `--pattern-diamond*` variables, so dark mode gets the
-     original dark diamonds and light mode a faint amber version. The board
+     original dark diamonds and light mode a faint sky version. The board
      drifts up-and-right by exactly one cell, which lands the checkerboard back
      on itself, so the loop has no seam.
    - `.animated-bg__diamond`: each square slowly shrinks and returns to its
