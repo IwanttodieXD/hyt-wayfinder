@@ -1,4 +1,4 @@
-# UAT Checklist — HYT Wayfinder
+# UAT Checklist — HYT Global
 
 User acceptance testing for the visitor management system. Work through the
 sections in order; each row is one check with a clear pass condition.
