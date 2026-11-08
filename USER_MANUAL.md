@@ -1,13 +1,13 @@
-# HYT Wayfinder — User Manual
+# HYT-Global VMS — User Manual
 
-A guide to using the HYT Global visitor management system. It covers the visitor
+A guide to using the HYT-Global VMS visitor management system. It covers the visitor
 journey first, then the administrator tools.
 
 ---
 
 ## 1. What the system does
 
-HYT Wayfinder replaces the paper sign-in sheet with two separate records:
+HYT-Global VMS replaces the paper sign-in sheet with two separate records:
 
 1. **Attendance — who is in the building.** One QR code at the ground floor
    entrance. Scanning it checks a visitor in; scanning it again checks them out.
@@ -43,7 +43,7 @@ The front desk may register you, or you can register yourself at `/register`.
 
 To register yourself:
 
-1. Open the HYT Wayfinder link given to you by the front desk.
+1. Open the HYT-Global VMS link given to you by the front desk.
 2. Choose **Register** / **Create your pass**.
 3. Enter your first name, last name, middle initial (optional), email, contact
    number, course, visitor type, purpose and assigned room.
