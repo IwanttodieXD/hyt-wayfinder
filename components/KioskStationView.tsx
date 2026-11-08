@@ -6,15 +6,11 @@ import { useRecordsStore } from '@/store/recordsStore';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import QRCode from 'react-qr-code';
-import {
-  ATTENDANCE_QR_VALUE,
-} from '@/lib/wayfinding';
-import {
-  useRoomPresenceStore,
-  visitDuration,
-} from '@/store/roomPresenceStore';
+import { ATTENDANCE_QR_VALUE } from '@/lib/wayfinding';
+import { useRoomPresenceStore, visitDuration } from '@/store/roomPresenceStore';
 import { useRoomsStore } from '@/store/roomsStore';
 import { useLiveData } from '@/hooks/useLiveData';
+import AdminPageHeader from '@/components/AdminPageHeader';
 import LiveBadge from '@/components/LiveBadge';
 import VerificationQr from '@/components/VerificationQr';
 
@@ -111,9 +107,7 @@ export default function KioskStationView() {
   // Only one pass over the occupancy map, rather than rebuilding it per poster.
   // Keyed by room id, matching how presence rows are stored.
   const roomCounts = (() => {
-    const byRoom = new Map(
-      getOccupancyByRoom().map((r) => [r.roomId, r.people.length])
-    );
+    const byRoom = new Map(getOccupancyByRoom().map((r) => [r.roomId, r.people.length]));
     return (roomId: string) => byRoom.get(roomId) ?? 0;
   })();
 
@@ -176,104 +170,69 @@ export default function KioskStationView() {
   };
 
   return (
-    <div className='w-full min-h-full p-8'>
+    <div className='w-full min-h-full'>
       <div className='max-w-7xl mx-auto'>
-        {/* Back to the dashboard, mirroring the back link on the other admin
-            sub-pages (/admin/rooms, /admin/records, /admin/users). The station
-            is reached from the dashboard tile, so that is where it returns to. */}
-        <Link
-          href='/admin'
-          className='inline-flex items-center gap-2 text-navy-300 hover:text-navy-200 transition-colors mb-4'
-        >
-          <i className='fa-solid fa-arrow-left'></i>
-          <span>Back to Dashboard</span>
-        </Link>
+        <AdminPageHeader
+          eyebrow='Tools'
+          title='QR Station'
+          subtitle='Print the verification code for the entrance, the attendance code for the ground floor, and a door code for each room.'
+          actions={<LiveBadge lastRefreshed={lastRefreshed} />}
+        />
 
-        {/* Page title. No status badge here: it used to read "Station Active", but
-            nothing ever set it inactive, so it was decoration rather than
-            information. The live counts below carry the real status. */}
-        <div className='mb-8 flex items-start justify-between gap-4'>
-          <div>
-            <h1 className='text-3xl font-bold text-white mb-2'>QR Station</h1>
-            <p className='text-navy-300'>
-              Print the verification code for the entrance, the attendance code
-              for the ground floor, and a door code for each room.
-            </p>
-          </div>
-          <LiveBadge lastRefreshed={lastRefreshed} />
-        </div>
-
-          {/* Live stats. Each card states what it counts, since "Check Out" next to a
+        {/* Live stats. Each card states what it counts, since "Check Out" next to a
             coffee-cup icon was ambiguous about whether it meant the action or
 	    the number of people who had already done it. */}
-	  <div className='grid grid-cols-1 md:grid-cols-3 gap-3 mb-3'>
-            <div className='glass-panel border-navy-800 p-6 rounded-lg'>
-              <div className='flex items-center gap-4'>
-                <div className='w-14 h-14 rounded-lg bg-green-500/20 flex items-center justify-center flex-shrink-0'>
-                  <i className='fa-solid fa-user-check text-green-400 text-2xl'></i>
-                </div>
-                <div className='min-w-0'>
-                  <p className='text-navy-300 text-sm mb-1'>Checked In Now</p>
-                  <p className='text-white text-3xl font-bold leading-none'>
-                    {activeCount}
-                  </p>
-                </div>
+        <div className='grid grid-cols-1 md:grid-cols-3 gap-3 mb-3'>
+          <div className='glass-panel border-navy-800 p-6 rounded-lg'>
+            <div className='flex items-center gap-4'>
+              <div className='w-14 h-14 rounded-lg bg-green-500/20 flex items-center justify-center flex-shrink-0'>
+                <i className='fa-solid fa-user-check text-green-400 text-2xl'></i>
               </div>
-            </div>
-
-            <div className='glass-panel border-navy-800 p-6 rounded-lg'>
-              <div className='flex items-center gap-4'>
-                <div className='w-14 h-14 rounded-lg bg-yellow-500/20 flex items-center justify-center flex-shrink-0'>
-                  <i className='fa-solid fa-sign-out-alt text-yellow-400 text-2xl'></i>
-                </div>
-                <div className='min-w-0'>
-                  <p className='text-navy-300 text-sm mb-1'>Checked Out Today</p>
-                  <p className='text-white text-3xl font-bold leading-none'>
-                    {onBreakCount}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className='glass-panel border-navy-800 p-6 rounded-lg'>
-              <div className='flex items-center gap-4'>
-                <div className='w-14 h-14 rounded-lg bg-navy-600/20 flex items-center justify-center flex-shrink-0'>
-                  <i className='fa-solid fa-clock text-navy-200 text-2xl'></i>
-                </div>
-                <div className='min-w-0'>
-                  <p className='text-navy-300 text-sm mb-1'>Current Time</p>
-                  <p className='text-white text-3xl font-bold leading-none tabular-nums'>
-                    {now.toLocaleTimeString('en-US', {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                      hour12: true,
-                    })}
-                  </p>
-                </div>
+              <div className='min-w-0'>
+                <p className='text-navy-300 text-sm mb-1'>Checked In Now</p>
+                <p className='text-white text-3xl font-bold leading-none'>
+                  {activeCount}
+                </p>
               </div>
             </div>
           </div>
 
-        {/* Side by side on wide screens, stacked on a phone. The QR belongs
-            beside the form it sends people to, so the desk can print it without
-            hunting for a second panel. */}
-        <div className='grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8'>
-          <div className='flex flex-col justify-center rounded-lg border border-blue-500/30 bg-blue-500/10 p-5'>
-            <h2 className='text-white font-bold text-lg mb-2'>
-              Entrance poster
-            </h2>
-            <p className='text-navy-200 text-sm'>
-              The code below opens the{' '}
-              <span className='text-blue-300 font-semibold'>
-                visitor verification page
-              </span>{' '}
-              in the visitor&apos;s phone browser. It is deliberately a{' '}
-              <span className='text-white font-semibold'>separate code</span>{' '}
-              from the attendance QR below: that one is read by this app to
-              clock people in, and replacing it with a link would break
-              check-in for everyone already holding a pass.
-            </p>
+          <div className='glass-panel border-navy-800 p-6 rounded-lg'>
+            <div className='flex items-center gap-4'>
+              <div className='w-14 h-14 rounded-lg bg-yellow-500/20 flex items-center justify-center flex-shrink-0'>
+                <i className='fa-solid fa-sign-out-alt text-yellow-400 text-2xl'></i>
+              </div>
+              <div className='min-w-0'>
+                <p className='text-navy-300 text-sm mb-1'>Checked Out Today</p>
+                <p className='text-white text-3xl font-bold leading-none'>
+                  {onBreakCount}
+                </p>
+              </div>
+            </div>
           </div>
+
+          <div className='glass-panel border-navy-800 p-6 rounded-lg'>
+            <div className='flex items-center gap-4'>
+              <div className='w-14 h-14 rounded-lg bg-navy-600/20 flex items-center justify-center flex-shrink-0'>
+                <i className='fa-solid fa-clock text-navy-200 text-2xl'></i>
+              </div>
+              <div className='min-w-0'>
+                <p className='text-navy-300 text-sm mb-1'>Current Time</p>
+                <p className='text-white text-3xl font-bold leading-none tabular-nums'>
+                  {now.toLocaleTimeString('en-US', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: true,
+                  })}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* The entrance verification code, kept separate from the attendance
+            code below so the two posters cannot be confused. */}
+        <div className='mx-auto mb-8 max-w-md'>
           <VerificationQr />
         </div>
 
@@ -287,12 +246,10 @@ export default function KioskStationView() {
               Ground Floor · Attendance
             </span>
           </div>
-          <h2 className='text-2xl font-bold text-white mb-2'>
-            Scan to Check In or Out
-          </h2>
+          <h2 className='text-2xl font-bold text-white mb-2'>Scan to Check In or Out</h2>
           <p className='text-navy-300'>
-            This is the only code that records attendance. Post it at the ground
-            floor entrance.
+            This is the only code that records attendance. Post it at the ground floor
+            entrance.
           </p>
         </div>
 
@@ -317,16 +274,16 @@ export default function KioskStationView() {
             <p className='text-white font-bold text-sm text-center'>
               Ground Floor Attendance
             </p>
-            <p className='text-navy-400 text-xs text-center mt-1'>
-              Main entrance
-            </p>
+            <p className='text-navy-400 text-xs text-center mt-1'>Main entrance</p>
             <button
-              onClick={() => handlePrintQR({
-                id: 'attendance',
-                label: 'Ground Floor Attendance',
-                room: 'Main Entrance',
-                qrValue: ATTENDANCE_QR_VALUE,
-              })}
+              onClick={() =>
+                handlePrintQR({
+                  id: 'attendance',
+                  label: 'Ground Floor Attendance',
+                  room: 'Main Entrance',
+                  qrValue: ATTENDANCE_QR_VALUE,
+                })
+              }
               className='
                 mt-4 w-full px-4 py-2.5 rounded-lg font-semibold text-sm
                 bg-green-600 hover:bg-green-700 text-paper
@@ -349,10 +306,12 @@ export default function KioskStationView() {
               Rooms QR Codes
             </span>
           </div>
-          <h2 className='text-2xl font-bold text-white mb-2'>Scan to Record your visit</h2>
+          <h2 className='text-2xl font-bold text-white mb-2'>
+            Scan to Record your visit
+          </h2>
           <p className='text-navy-300'>
-            Post one on each room door. Scanning records who is inside that room
-            — it does not check anyone in or out.
+            Post one on each room door. Scanning records who is inside that room — it does
+            not check anyone in or out.
           </p>
         </div>
 
@@ -360,12 +319,12 @@ export default function KioskStationView() {
             printed and posted on its own door. */}
         <div className='grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-4'>
           {rooms.length === 0 && (
-          <p className='text-navy-400 text-sm text-center py-8'>
-            No rooms yet. Add rooms under Admin &rarr; Rooms to print their codes.
-          </p>
-        )}
+            <p className='text-navy-400 text-sm text-center py-8'>
+              No rooms yet. Add rooms under Admin &rarr; Rooms to print their codes.
+            </p>
+          )}
 
-        {rooms.map((room) => (
+          {rooms.map((room) => (
             <div
               key={room.id}
               className='glass-panel border-navy-800 rounded-lg p-6 flex flex-col items-center'
@@ -388,9 +347,7 @@ export default function KioskStationView() {
                   />
                 </div>
               </div>
-              <p className='text-white font-bold text-sm text-center'>
-                {room.name}
-              </p>
+              <p className='text-white font-bold text-sm text-center'>{room.name}</p>
               <p className='text-navy-400 text-xs text-center mt-1'>
                 {room.roomNumber} · {room.building}
               </p>
@@ -417,14 +374,12 @@ export default function KioskStationView() {
               >
                 <span
                   className={`text-xs font-semibold ${
-                    roomCounts(room.id) > 0
-                      ? 'text-green-300'
-                      : 'text-navy-400'
+                    roomCounts(room.id) > 0 ? 'text-green-300' : 'text-navy-400'
                   }`}
                 >
                   <i className='fa-solid fa-users mr-1'></i>
-                  {roomCounts(room.id)}{' '}
-                  {roomCounts(room.id) === 1 ? 'person' : 'people'} inside
+                  {roomCounts(room.id)} {roomCounts(room.id) === 1 ? 'person' : 'people'}{' '}
+                  inside
                   <i className='fa-solid fa-chevron-right ml-2 text-[10px] opacity-60'></i>
                 </span>
               </button>
@@ -478,8 +433,7 @@ export default function KioskStationView() {
                     {openRoomVisits.room.name}
                   </h3>
                   <p className='text-navy-400 text-xs mt-0.5'>
-                    {openRoomVisits.room.roomNumber} ·{' '}
-                    {openRoomVisits.room.building}
+                    {openRoomVisits.room.roomNumber} · {openRoomVisits.room.building}
                   </p>
                 </div>
                 <button
@@ -519,7 +473,8 @@ export default function KioskStationView() {
                     </p>
                   </div>
                 ) : (
-                  <div className='space-y-5'>{/* Still inside, listed first - that's the actionable group for
+                  <div className='space-y-5'>
+                    {/* Still inside, listed first - that's the actionable group for
                       whoever is checking the room. */}
                     {openRoomVisits.inside.length > 0 && (
                       <div>
@@ -578,14 +533,14 @@ export default function KioskStationView() {
                                   hour: '2-digit',
                                   minute: '2-digit',
                                 })}{' '}
-                                ·{' '}
-                                {visitDuration(visit.enteredAt, visit.exitedAt)}
+                                · {visitDuration(visit.enteredAt, visit.exitedAt)}
                               </span>
                             </li>
                           ))}
                         </ul>
                       </div>
-                    )}</div>
+                    )}
+                  </div>
                 )}
               </div>
 
@@ -612,9 +567,8 @@ export default function KioskStationView() {
                 <span className='text-yellow-400 font-bold text-xs'>1</span>
               </div>
               <p className='text-navy-200'>
-                The visitor scans the entrance verification code above. If they
-                already have a record they are signed in; someone new is sent to
-                registration.
+                The visitor scans the entrance verification code above. If they already
+                have a record they are signed in; someone new is sent to registration.
               </p>
             </div>
             <div className='flex items-start gap-3 text-sm'>

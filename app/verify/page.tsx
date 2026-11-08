@@ -11,17 +11,24 @@ import {
   VERIFIED_CHECKIN_PATH,
   type VerifyLoginRecord,
 } from '@/lib/publicUrl';
+import {
+  Alert,
+  AuthShell,
+  Button,
+  Field,
+  SelectWrap,
+  controlClass,
+  selectClass,
+} from '@/components/ui';
 
 type Stage =
   | 'form'
   | 'declined'
   | 'pending'
+  | 'expired'
   | 'not-found'
   | 'ambiguous'
   | 'error';
-
-const INPUT =
-  'w-full px-4 py-3 rounded-lg bg-navy-900/80 border-2 border-yellow-500/30 text-white placeholder-navy-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500 transition-colors';
 
 /**
  * The hidden admin doorway.
@@ -43,13 +50,14 @@ const ADMIN_SHORTCUT = { firstName: 'john', lastName: 'admin' };
 /**
  * Entrance verification.
  *
- * Reached by scanning the QR poster at the front desk. Asks for the visitor's
+ * Reached by scanning the QR poster at the front desk. Asks for the trainee's
  * first and last name, looks them up against the roster, and routes on the
  * result:
  *
  *   found + approved  -> sign them in and send them to check-in
  *   found + declined  -> explain, point at the front desk
  *   found + pending   -> explain, point at the front desk
+ *   found + expired   -> explain, ask for a renewal (never sent to check-in)
  *   not found         -> /register, prefilled with what they typed
  *   ambiguous         -> explain, send to the front desk (two people, one name)
  *
@@ -60,7 +68,7 @@ const ADMIN_SHORTCUT = { firstName: 'john', lastName: 'admin' };
  * already recognized - mints a real Supabase session for the matched account
  * (service-role `generateLink` + `verifyOtp`). This page installs it with
  * `setSession`, refreshes the auth store, and lands on /check-in, where the
- * visitor is checked in automatically.
+ * trainee is checked in automatically.
  *
  * A record with no email on file is signed in the same way: the route derives a
  * synthetic, non-deliverable login address from the profile id, so a missing
@@ -133,7 +141,7 @@ export default function VerifyPage() {
     if (outcome.kind === 'ambiguous') {
       // More than one person in this course shares this name, so there is no way
       // to tell which one is standing at the desk. Refuse rather than guess:
-      // picking one would sign this visitor into somebody else's account.
+      // picking one would sign this trainee into somebody else's account.
       setStage('ambiguous');
       setBusy(false);
       return;
@@ -150,6 +158,16 @@ export default function VerifyPage() {
       // Found, but not approved yet - the front desk handles it.
       setRecord(outcome.record);
       setStage('pending');
+      setBusy(false);
+      return;
+    }
+
+    if (outcome.kind === 'expired') {
+      // The record is good, but the pass date has passed. The route does not
+      // mint a session for this outcome, so there is nothing to install and
+      // nowhere to redirect - explain it here.
+      setRecord(outcome.record);
+      setStage('expired');
       setBusy(false);
       return;
     }
@@ -190,277 +208,300 @@ export default function VerifyPage() {
   // Carry their name into registration so it is not retyped. The two fields map
   // straight onto two of /register's three, so they travel separately rather
   // than being joined and re-split. The middle initial is left blank: the
-  // visitor has not given us one, and inventing it from the stored name is
+  // trainee has not given us one, and inventing it from the stored name is
   // exactly the guesswork the split columns exist to avoid.
   //
   // Only the name: the course is deliberately NOT forwarded. /register keys its
   // picker on course id and the course list loads asynchronously, so a label in
   // the query string could not be applied without a re-render race - and the
-  // visitor is picking their course fresh anyway, since that is what told us
+  // trainee is picking their course fresh anyway, since that is what told us
   // they had no record.
   const registerHref =
     `/register?firstName=${encodeURIComponent(firstName.trim())}` +
     `&lastName=${encodeURIComponent(lastName.trim())}`;
 
+  const reset = () => {
+    setStage('form');
+    setError('');
+  };
+
   return (
-    <div className='min-h-screen flex items-start sm:items-center justify-center p-4 sm:py-8'>
-      <div className='w-full max-w-md'>
-        <div className='glass-panel border-navy-700 rounded-lg p-6 sm:p-8'>
-          {/* Same mark as the other auth screens, so this reads as part of the
-              product rather than a separate app bolted on. */}
-          <div className='text-center mb-6'>
-            <div className='w-14 h-14 mx-auto mb-3 flex items-center justify-center'>
-              <img
-                src='/hyt_logo.png'
-                alt='HYT Global'
-                className='w-full h-full object-contain'
-              />
-            </div>
-            <h1 className='text-2xl font-bold text-white mb-1'>Visitor Validation</h1>
-            <p className='text-yellow-300 text-sm'>HYT Global Institute</p>
-          </div>
-          {stage === 'form' && (
-            <>
-              <p className='text-navy-300 text-sm mb-5'>
-                Enter your first and last name to verify your previous visit.
-              </p>
-
-              <form onSubmit={handleSubmit} className='space-y-4'>
-                {/* Two fields, not one. The database matches the first and last
-                    word of the stored full name, so a visitor does not have to
-                    reproduce their middle name exactly to be let in. */}
-                <div className='grid grid-cols-1 sm:grid-cols-2 gap-3'>
-                  <div>
-                    <label
-                      htmlFor='v-first-name'
-                      className='block text-sm font-medium text-navy-200 mb-1.5'
-                    >
-                      First name <span className='text-red-400'>*</span>
-                    </label>
-                    <input
-                      id='v-first-name'
-                      className={INPUT}
-                      value={firstName}
-                      onChange={(e) => setFirstName(e.target.value)}
-                      placeholder='Ma. Juana Mae'
-                      autoComplete='given-name'
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label
-                      htmlFor='v-last-name'
-                      className='block text-sm font-medium text-navy-200 mb-1.5'
-                    >
-                      Last name <span className='text-red-400'>*</span>
-                    </label>
-                    <input
-                      id='v-last-name'
-                      className={INPUT}
-                      value={lastName}
-                      onChange={(e) => setLastName(e.target.value)}
-                      placeholder='Dela Cruz'
-                      autoComplete='family-name'
-                      required
-                    />
-                  </div>
-                </div>
-
+    <AuthShell
+      eyebrow='Entrance check-in'
+      title='Welcome back'
+      subtitle='Confirm your name and course to start today’s attendance.'
+      aside={
+        <div className='space-y-5'>
+          <p className='text-[11px] font-semibold uppercase tracking-[0.18em] text-yellow-400'>
+            Orientation roster
+          </p>
+          <h2 className='text-3xl font-bold leading-tight text-white'>
+            Your pass is waiting at the door.
+          </h2>
+          <p className='max-w-md text-sm leading-relaxed text-navy-400'>
+            We match the name and course on your orientation record. Once you
+            are verified, check-in happens automatically and your room scan is
+            ready from your phone.
+          </p>
+          <ol className='space-y-3'>
+            {[
+              {
+                icon: 'fa-id-card',
+                title: '1. Confirm your record',
+                body: 'First name, last name and the course you attended.',
+              },
+              {
+                icon: 'fa-door-open',
+                title: '2. Attendance starts',
+                body: 'We check you in at the entrance as soon as you are verified.',
+              },
+              {
+                icon: 'fa-location-dot',
+                title: '3. Scan your room',
+                body: 'Use the room door QR to record where you are during the day.',
+              },
+            ].map((step) => (
+              <li
+                key={step.title}
+                className='flex gap-3 rounded-2xl border border-navy-700/70 bg-navy-900/60 p-4'
+              >
+                <span className='flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-yellow-500/15 text-yellow-400'>
+                  <i className={`fa-solid ${step.icon} text-sm`}></i>
+                </span>
                 <div>
-                  <label
-                    htmlFor='v-course'
-                    className='block text-sm font-medium text-navy-200 mb-1.5'
-                  >
-                    Course <span className='text-red-400'>*</span>
-                  </label>
-                  <div className='relative'>
-                    <select
-                      id='v-course'
-                      value={courseId}
-                      onChange={(e) => setCourseId(e.target.value)}
-                      required
-                      className={`${INPUT} appearance-none cursor-pointer pl-11`}
-                    >
-                      <option value='' className='bg-navy-900'>
-                        Select your course
-                      </option>
-                      {courses.map((course) => (
-                        <option
-                          key={course.id}
-                          value={course.id}
-                          className='bg-navy-900'
-                        >
-                          {course.label}
-                        </option>
-                      ))}
-                    </select>
-                    <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
-                      <i className='fa-solid fa-graduation-cap text-yellow-400'></i>
-                    </div>
-                    <i className='fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-navy-400 text-xs pointer-events-none'></i>
-                  </div>
-                </div>
-
-                {error && (
-                  <p
-                    role='alert'
-                    className='text-red-300 text-sm bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2'
-                  >
-                    {error}
+                  <p className='text-sm font-semibold text-white'>
+                    {step.title}
                   </p>
-                )}
-
-                <button
-                  type='submit'
-                  disabled={busy}
-                  className='w-full px-4 py-3 rounded-lg bg-yellow-500 hover:bg-yellow-600 text-yellow-950 font-semibold transition-colors disabled:opacity-60 disabled:cursor-not-allowed'
-                >
-                  {busy ? 'Verifying…' : 'Check my record'}
-                </button>
-              </form>
-
-              <div className='mt-5 pt-5 border-t border-navy-800 text-center'>
-                <p className='text-navy-400 text-xs mb-2'>Never attended orientation?</p>
-                <Link
-                  href='/register'
-                  className='text-yellow-300 hover:text-yellow-200 text-sm font-semibold'
-                >
-                  Register as a new visitor
-                </Link>
-              </div>
-            </>
-          )}
-
-          {stage === 'error' && (
-            <div className='text-center py-4'>
-              <div className='w-16 h-16 mx-auto mb-4 rounded-full bg-red-500/20 flex items-center justify-center'>
-                <i className='fa-solid fa-triangle-exclamation text-red-400 text-2xl'></i>
-              </div>
-              <h2 className='text-xl font-bold text-white mb-2'>
-                Could not sign you in
-              </h2>
-              {error && (
-                <p
-                  role='alert'
-                  className='text-yellow-300 text-sm bg-yellow-500/10 border border-yellow-500/30 rounded-lg px-3 py-2 mb-4'
-                >
-                  {error}
-                </p>
-              )}
-              <button
-                onClick={() => {
-                  setStage('form');
-                  setError('');
-                }}
-                className='w-full px-4 py-3 rounded-lg bg-yellow-500 hover:bg-yellow-600 text-yellow-950 font-semibold text-sm'
-              >
-                Try again
-              </button>
-            </div>
-          )}
-
-          {(stage === 'declined' || stage === 'pending') && (
-            <div className='text-center py-4'>
-              <div
-                className={`w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center ${
-                  stage === 'declined' ? 'bg-red-500/20' : 'bg-yellow-500/20'
-                }`}
-              >
-                <i
-                  className={`fa-solid ${
-                    stage === 'declined' ? 'fa-circle-xmark' : 'fa-clock'
-                  } ${
-                    stage === 'declined' ? 'text-red-400' : 'text-yellow-400'
-                  } text-2xl`}
-                ></i>
-              </div>
-              <h2 className='text-xl font-bold text-white mb-2'>
-                {stage === 'declined' ? 'Not approved' : 'Awaiting review'}
-              </h2>
-              {record && (
-                <p className='text-navy-300 text-sm mb-2'>
-                  We found{' '}
-                  <span className='text-white font-semibold'>{record.full_name}</span>
-                  {record.programme ? ` (${record.programme})` : ''}.
-                </p>
-              )}
-              <p className='text-navy-300 text-sm mb-6'>
-                {stage === 'declined'
-                  ? 'Your record was found, but the last orientation was not approved. Please speak to the front desk before entering.'
-                  : 'Your record was found, but your result has not been processed yet. Please speak to the front desk.'}
-              </p>
-              <button
-                onClick={() => {
-                  setStage('form');
-                  setError('');
-                }}
-                className='text-navy-400 hover:text-navy-200 text-sm'
-              >
-                Try a different name
-              </button>
-            </div>
-          )}
-
-          {stage === 'ambiguous' && (
-            <div className='text-center py-4'>
-              <div className='w-16 h-16 mx-auto mb-4 rounded-full bg-yellow-500/20 flex items-center justify-center'>
-                <i className='fa-solid fa-users text-yellow-400 text-2xl'></i>
-              </div>
-              <h2 className='text-xl font-bold text-white mb-2'>
-                More than one match
-              </h2>
-              <p className='text-navy-300 text-sm mb-6'>
-                We found more than one person with that name in this course, so we
-                cannot tell which record is yours. Please speak to the front desk and
-                they will confirm it for you.
-              </p>
-              <button
-                onClick={() => {
-                  setStage('form');
-                  setError('');
-                }}
-                className='text-navy-400 hover:text-navy-200 text-sm'
-              >
-                Check a different name
-              </button>
-            </div>
-          )}
-
-          {stage === 'not-found' && (
-            <div className='text-center py-4'>
-              <div className='w-16 h-16 mx-auto mb-4 rounded-full bg-blue-500/20 flex items-center justify-center'>
-                <i className='fa-solid fa-user-plus text-blue-300 text-2xl'></i>
-              </div>
-              <h2 className='text-xl font-bold text-white mb-2'>No record found</h2>
-              <p className='text-navy-300 text-sm mb-6'>
-                We have no orientation record for that name in this course. You may
-                have mistyped your name, or you may not have attended orientation.
-                Try again, or register as a new visitor and the front desk will
-                review it.
-              </p>
-              <button
-                onClick={() => {
-                  setStage('form');
-                  setError('');
-                }}
-                className='w-full px-4 py-3 rounded-lg bg-yellow-500 hover:bg-yellow-600 text-yellow-950 font-semibold text-sm'
-              >
-                Authenticate Again
-              </button>
-              <button
-                onClick={() => router.push(registerHref)}
-                className='w-full px-4 py-3 mt-3 rounded-lg bg-navy-800 hover:bg-navy-700 text-yellow-200 font-semibold text-sm border border-navy-600'
-              >
-                Register as new visitor
-              </button>
-            </div>
-          )}
+                  <p className='mt-0.5 text-xs leading-relaxed text-navy-400'>
+                    {step.body}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ol>
         </div>
+      }
+    >
+      {stage === 'form' && (
+        <>
+          <p className='mb-5 text-sm leading-relaxed text-navy-300'>
+            Enter the name and course printed on your orientation roster.
+          </p>
 
-        <p className='text-center text-navy-500 text-xs mt-4'>
-          HYT Global Institute · Visitor Management System
-        </p>
-      </div>
-    </div>
+          <form onSubmit={handleSubmit} className='space-y-4'>
+            {/* Two fields, not one. The database matches the first and last
+                word of the stored full name, so a trainee does not have to
+                reproduce their middle name exactly to be let in. */}
+            <div className='grid grid-cols-1 gap-3 sm:grid-cols-2'>
+              <Field
+                label='First name'
+                htmlFor='v-first-name'
+                required
+              >
+                <input
+                  id='v-first-name'
+                  className={controlClass}
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  placeholder='Ma. Juana Mae'
+                  autoComplete='given-name'
+                  required
+                />
+              </Field>
+              <Field label='Last name' htmlFor='v-last-name' required>
+                <input
+                  id='v-last-name'
+                  className={controlClass}
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  placeholder='Dela Cruz'
+                  autoComplete='family-name'
+                  required
+                />
+              </Field>
+            </div>
+
+            <Field label='Course' htmlFor='v-course' required>
+              <SelectWrap>
+                <select
+                  id='v-course'
+                  value={courseId}
+                  onChange={(e) => setCourseId(e.target.value)}
+                  required
+                  className={selectClass}
+                >
+                  <option value='' className='bg-navy-900'>
+                    Select your course
+                  </option>
+                  {courses.map((course) => (
+                    <option
+                      key={course.id}
+                      value={course.id}
+                      className='bg-navy-900'
+                    >
+                      {course.label}
+                    </option>
+                  ))}
+                </select>
+              </SelectWrap>
+            </Field>
+
+            {error && (
+              <Alert tone='danger' role='alert'>
+                {error}
+              </Alert>
+            )}
+
+            <Button
+              type='submit'
+              loading={busy}
+              icon='fa-right-to-bracket'
+              className='w-full'
+              size='lg'
+            >
+              {busy ? 'Checking your record…' : 'Check my record'}
+            </Button>
+          </form>
+
+          <div className='mt-5 border-t border-navy-800 pt-5 text-center'>
+            <p className='mb-2 text-xs text-navy-400'>
+              First time at HYT Global?
+            </p>
+            <Link
+              href='/register'
+              className='inline-flex items-center gap-2 text-sm font-semibold text-yellow-300 transition-colors hover:text-yellow-200'
+            >
+              <i className='fa-solid fa-user-plus text-xs'></i>
+              Register for a pass
+            </Link>
+          </div>
+        </>
+      )}
+
+      {stage === 'error' && (
+        <div className='py-2 text-center'>
+          <div className='mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-500/20'>
+            <i className='fa-solid fa-triangle-exclamation text-2xl text-red-400'></i>
+          </div>
+          <h2 className='mb-2 text-xl font-bold text-white'>
+            Could not sign you in
+          </h2>
+          {error && (
+            <Alert tone='warning' role='alert' className='mb-4 text-left'>
+              {error}
+            </Alert>
+          )}
+          <Button onClick={reset} className='w-full' size='lg'>
+            Try again
+          </Button>
+        </div>
+      )}
+
+      {(stage === 'declined' || stage === 'pending') && (
+        <div className='py-2 text-center'>
+          <div
+            className={`mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full ${
+              stage === 'declined' ? 'bg-red-500/20' : 'bg-yellow-500/20'
+            }`}
+          >
+            <i
+              className={`fa-solid ${
+                stage === 'declined' ? 'fa-circle-xmark' : 'fa-clock'
+              } ${stage === 'declined' ? 'text-red-400' : 'text-yellow-400'} text-2xl`}
+            ></i>
+          </div>
+          <h2 className='mb-2 text-xl font-bold text-white'>
+            {stage === 'declined' ? 'Not approved' : 'Awaiting review'}
+          </h2>
+          {record && (
+            <p className='mb-2 text-sm text-navy-300'>
+              We found{' '}
+              <span className='font-semibold text-white'>
+                {record.full_name}
+              </span>
+              {record.programme ? ` (${record.programme})` : ''}.
+            </p>
+          )}
+          <p className='mb-6 text-sm leading-relaxed text-navy-300'>
+            {stage === 'declined'
+              ? 'Your record was found, but the last orientation was not approved. Please speak to the front desk before entering.'
+              : 'Your record was found, but your result has not been processed yet. Please speak to the front desk.'}
+          </p>
+          <Button onClick={reset} variant='secondary' className='w-full'>
+            Try a different name
+          </Button>
+        </div>
+      )}
+
+      {stage === 'expired' && (
+        <div className='py-2 text-center'>
+          <div className='mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-yellow-500/20'>
+            <i className='fa-solid fa-clock text-2xl text-yellow-400'></i>
+          </div>
+          <h2 className='mb-2 text-xl font-bold text-white'>Your pass expired</h2>
+          {record && (
+            <p className='mb-2 text-sm text-navy-300'>
+              We found{' '}
+              <span className='font-semibold text-white'>
+                {record.full_name}
+              </span>
+              {record.programme ? ` (${record.programme})` : ''}.
+            </p>
+          )}
+          <p className='mb-6 text-sm leading-relaxed text-navy-300'>
+            Your record is still on file, but the pass date has passed, so we
+            cannot start a new check-in. Ask the front desk to renew it. Your
+            account and visit history are kept.
+          </p>
+          <Button onClick={reset} variant='secondary' className='w-full'>
+            Try a different name
+          </Button>
+        </div>
+      )}
+
+      {stage === 'ambiguous' && (
+        <div className='py-2 text-center'>
+          <div className='mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-yellow-500/20'>
+            <i className='fa-solid fa-users text-2xl text-yellow-400'></i>
+          </div>
+          <h2 className='mb-2 text-xl font-bold text-white'>
+            More than one match
+          </h2>
+          <p className='mb-6 text-sm leading-relaxed text-navy-300'>
+            We found more than one person with that name in this course, so we
+            cannot tell which record is yours. Please speak to the front desk
+            and they will confirm it for you.
+          </p>
+          <Button onClick={reset} variant='secondary' className='w-full'>
+            Check a different name
+          </Button>
+        </div>
+      )}
+
+      {stage === 'not-found' && (
+        <div className='py-2 text-center'>
+          <div className='mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-blue-500/20'>
+            <i className='fa-solid fa-user-plus text-2xl text-blue-300'></i>
+          </div>
+          <h2 className='mb-2 text-xl font-bold text-white'>No record found</h2>
+          <p className='mb-6 text-sm leading-relaxed text-navy-300'>
+            We have no orientation record for that name in this course. You may
+            have mistyped your name, or you may not have attended orientation.
+            Try again, or register for a pass and the front desk will review it.
+          </p>
+          <Button onClick={reset} variant='secondary' className='w-full'>
+            Check my name again
+          </Button>
+          <Button
+            onClick={() => router.push(registerHref)}
+            variant='primary'
+            className='mt-3 w-full'
+            icon='fa-user-plus'
+          >
+            Register for a pass
+          </Button>
+        </div>
+      )}
+    </AuthShell>
   );
 }

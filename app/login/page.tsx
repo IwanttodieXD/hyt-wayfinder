@@ -2,9 +2,17 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuthStore } from '@/store/authStore';
 import Link from 'next/link';
+import { useAuthStore } from '@/store/authStore';
+import { Alert, AuthShell, Button, Field, controlClass } from '@/components/ui';
 
+/**
+ * Sign-in for staff accounts and returning pass holders.
+ *
+ * Trainees normally do not need this screen: the entrance QR at /verify signs
+ * them in with their name and course. The trainee path is still linked below so
+ * someone who lands here by habit has a way forward.
+ */
 export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuthStore();
@@ -44,134 +52,95 @@ export default function LoginPage() {
   };
 
   return (
-    <>
-      <div className='min-h-screen flex items-center justify-center p-4'>
-        {/* Login Card */}
-        <div className='relative w-full max-w-md'>
-          {/* Logo */}
-          <div className='text-center mb-8'>
-            <div className='inline-block w-40 h-40 mb-4'>
-              <img
-                src='/hyt_logo.png'
-                alt='HYT Logo'
-                className='w-full h-full object-contain'
-              />
-            </div>
-            <h1 className='text-3xl font-bold text-white mb-2'>HYT Global</h1>
-            <p className='text-yellow-300'>Sign in to your account</p>
-          </div>
-
-          {/* Login Form */}
-          <div className='border border-yellow-400/30 rounded-lg p-8 bg-navy-900/60'>
-            <form onSubmit={handleSubmit} className='space-y-6'>
-              {/* Error Message */}
-              {error && (
-                <div className='p-4 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm flex items-start gap-2'>
-                  <i className='fa-solid fa-circle-exclamation mt-0.5'></i>
-                  <span>{error}</span>
-                </div>
-              )}
-
-              {/* Email Field */}
-              <div>
-                <label
-                  htmlFor='email'
-                  className='block text-sm font-medium text-yellow-200 mb-2'
-                >
-                  Email Address
-                </label>
-                <div className='relative'>
-                  <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
-                    <i className='fa-solid fa-envelope text-yellow-400'></i>
-                  </div>
-                  <input
-                    type='email'
-                    id='email'
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    className='
-                      w-full pl-12 pr-4 py-3 rounded-lg
-                      bg-navy-900/80 border-2 border-yellow-500/30
-                      text-white placeholder-navy-500
-                      focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500
-                      transition-colors
-                      '
-                    placeholder='you@example.com'
-                  />
-                </div>
-              </div>
-
-              {/* Password Field */}
-              <div>
-                <label
-                  htmlFor='password'
-                  className='block text-sm font-medium text-yellow-200 mb-2'
-                >
-                  Password
-                </label>
-                <div className='relative'>
-                  <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
-                    <i className='fa-solid fa-lock text-yellow-400'></i>
-                  </div>
-                  <input
-                    type='password'
-                    id='password'
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    className='
-                      w-full pl-12 pr-4 py-3 rounded-lg
-                      bg-navy-900/80 border-2 border-yellow-500/30
-                      text-white placeholder-navy-500
-                      focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500
-                      transition-colors
-                      '
-                    placeholder='••••••••'
-                  />
-                </div>
-              </div>
-
-              {/* Submit Button */}
-              <button
-                type='submit'
-                disabled={loading}
-                className='
-                  w-full py-3 rounded-lg font-semibold text-yellow-950
-                  bg-yellow-500 hover:bg-yellow-600
-                  transition-colors duration-150
-                  disabled:opacity-50 disabled:cursor-not-allowed
-                  flex items-center justify-center gap-2
-                  border border-yellow-500/50
-                  '
-              >
-                {loading ? (
-                  <>
-                    <i className='fa-solid fa-spinner fa-spin'></i>
-                    <span>Signing in...</span>
-                  </>
-                ) : (
-                  <>
-                    <i className='fa-solid fa-right-to-bracket'></i>
-                    <span>Sign In</span>
-                  </>
-                )}
-              </button>
-            </form>
-
-            {/* Register Link */}
-            <div className='mt-6 text-center text-sm text-navy-300'>
-              Don&apos;t have an account?{' '}
-              <Link
-                href='/register'
-                className='text-yellow-400 hover:text-yellow-300 font-semibold transition-colors'
-              >
-                Create one
-              </Link>
-            </div>
-          </div>
+    <AuthShell
+      eyebrow='Staff & returning passes'
+      title='Sign in'
+      subtitle='Use the account issued to you by the HYT Global front desk.'
+      aside={
+        <div className='space-y-5'>
+          <p className='text-[11px] font-semibold uppercase tracking-[0.18em] text-yellow-400'>
+            Trainee check-in
+          </p>
+          <h2 className='text-3xl font-bold leading-tight text-white'>
+            No password needed at the door.
+          </h2>
+          <p className='max-w-md text-sm leading-relaxed text-navy-400'>
+            If you are here for a course or orientation, scan the entrance QR or
+            open the verification screen. Your name and course are enough to
+            start today’s attendance.
+          </p>
+          <Link
+            href='/verify'
+            className='inline-flex items-center gap-2 text-sm font-semibold text-yellow-300 transition-colors hover:text-yellow-200'
+          >
+            <i className='fa-solid fa-arrow-left text-xs'></i>
+            Go to entrance check-in
+          </Link>
         </div>
+      }
+    >
+      <form onSubmit={handleSubmit} className='space-y-5'>
+        {error && (
+          <Alert tone='danger' role='alert'>
+            {error}
+          </Alert>
+        )}
+
+        <Field label='Email address' htmlFor='email' required>
+          <input
+            type='email'
+            id='email'
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            autoComplete='email'
+            className={controlClass}
+            placeholder='you@example.com'
+          />
+        </Field>
+
+        <Field label='Password' htmlFor='password' required>
+          <input
+            type='password'
+            id='password'
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            autoComplete='current-password'
+            className={controlClass}
+            placeholder='••••••••'
+          />
+        </Field>
+
+        <Button
+          type='submit'
+          loading={loading}
+          icon='fa-right-to-bracket'
+          size='lg'
+          className='w-full'
+        >
+          {loading ? 'Signing in…' : 'Sign in'}
+        </Button>
+      </form>
+
+      <div className='mt-5 border-t border-navy-800 pt-5 text-center text-sm text-navy-300'>
+        New here?{' '}
+        <Link
+          href='/register'
+          className='font-semibold text-yellow-300 transition-colors hover:text-yellow-200'
+        >
+          Register for a pass
+        </Link>
       </div>
-    </>
+
+      <div className='mt-3 text-center'>
+        <Link
+          href='/verify'
+          className='text-xs text-navy-400 transition-colors hover:text-navy-200'
+        >
+          Trainee? Check in at the entrance instead
+        </Link>
+      </div>
+    </AuthShell>
   );
 }

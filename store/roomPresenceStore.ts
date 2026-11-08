@@ -20,6 +20,14 @@ export interface RoomPresence {
   id: string;
   userId: string;
   userName?: string;
+  /**
+   * The visitor's course, joined from users.course_id -> courses.label.
+   *
+   * Course is a stable attribute of the person, not of the room visit, so it
+   * lives on `users` and is reached through the user join. Null when the
+   * visitor predates the course column or was never enrolled.
+   */
+  courseLabel: string | null;
   /** FK to rooms.id. The room is referenced by id, never copied as text. */
   roomId: string;
   /** Room number, joined from `rooms` for display. Not a column on this table. */
@@ -82,10 +90,11 @@ interface RoomPresenceState {
 
 /**
  * `rooms` is joined for the display name because room_visits has no room_label.
- * The user's name is joined rather than stored, so it can never drift.
+ * The user's name and course are joined rather than stored, so they can never
+ * drift from the profile.
  */
 const SELECT = `*,
-    users:user_id (name),
+    users:user_id (name, courses:course_id (label)),
     rooms:room_id (room_number, name)`;
 
 function mapRow(row: any): RoomPresence {
@@ -93,6 +102,7 @@ function mapRow(row: any): RoomPresence {
     id: row.id,
     userId: row.user_id,
     userName: row.users?.name || 'Unknown User',
+    courseLabel: row.users?.courses?.label ?? null,
     roomId: row.room_id,
     room: row.rooms?.room_number || '',
     roomLabel: row.rooms?.name || row.rooms?.room_number || 'Unknown Room',

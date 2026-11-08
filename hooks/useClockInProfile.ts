@@ -12,9 +12,9 @@ import { useRecordsStore } from '@/store/recordsStore';
  * they are headed.
  *
  * Also loads the rooms list. `StudentMobileView` resolves the assigned room's
- * name from the `rooms` table, and `/visitor` and `/check-in` both render that
- * component without otherwise loading rooms. Doing it here means neither page
- * can forget, and the store caches it so the second render is free.
+ * name from the `rooms` table, and `/check-in` renders that component without
+ * otherwise loading rooms. Doing it here means the page cannot forget, and the
+ * store caches it so a second render is free.
  */
 export function useClockInProfile() {
   const { user, isAuthenticated } = useAuthStore();

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useAuthStore } from '@/store/authStore';
 import { useRoomsStore } from '@/store/roomsStore';
 import {
@@ -16,47 +17,53 @@ import {
   VERIFIED_CHECKIN_PATH,
   type OrientationRecord,
 } from '@/lib/publicUrl';
-import Link from 'next/link';
+import { isTraineeType } from '@/lib/trainee';
+import {
+  Alert,
+  AuthShell,
+  Badge,
+  Button,
+  Field,
+  SelectWrap,
+  controlClass,
+  selectClass,
+} from '@/components/ui';
 
 /**
- * Joins class names, dropping falsy entries.
- *
- * Local rather than a dependency: `classnames`/`clsx` are not in package.json,
- * and this is the only place in the app that needs it. Everything else composes
- * class strings with template literals.
- */
-function cn(...parts: Array<string | false | null | undefined>): string {
-  return parts.filter(Boolean).join(' ');
-}
-
-/**
- * Banner styling per verdict.
+ * Banner detail per orientation verdict.
  *
  * `null` (not in the cohort) is deliberately absent: a first-time walk-in has no
  * verdict, and showing them "pending" would be inventing a status they do not
  * have. Only the three real states are styled here.
  */
-const VERDICT_STYLE: Record<
+const VERDICT: Record<
   NonNullable<OrientationRecord['orientation_status']>,
-  { box: string; icon: string; label: string; text: string }
+  {
+    tone: 'success' | 'danger' | 'warning';
+    icon: string;
+    label: string;
+    detail: string;
+  }
 > = {
   approved: {
-    box: 'border-green-500/30 bg-green-500/10',
+    tone: 'success',
     icon: 'fa-circle-check',
     label: 'Approved',
-    text: 'text-green-300',
+    detail:
+      'You are cleared to enter - continue below to finish creating your account.',
   },
   declined: {
-    box: 'border-red-500/30 bg-red-500/10',
+    tone: 'danger',
     icon: 'fa-circle-xmark',
     label: 'Not approved',
-    text: 'text-red-300',
+    detail: 'Please speak to the front desk before entering.',
   },
   pending: {
-    box: 'border-yellow-500/30 bg-yellow-500/10',
+    tone: 'warning',
     icon: 'fa-clock',
     label: 'Awaiting review',
-    text: 'text-yellow-300',
+    detail:
+      'Your result is still being processed. Please speak to the front desk.',
   },
 };
 
@@ -78,8 +85,8 @@ export default function RegisterPage() {
   } = useRoomsStore();
 
   // Prefill from /verify. Somebody sent here because we had no record for them has
-  // already typed their name and email once; making them retype it is the kind of
-  // small friction that turns into abandoning the form at the door.
+  // already typed their name once; making them retype it is the kind of small
+  // friction that turns into abandoning the form at the door.
   //
   // Read once, in a lazy initializer, rather than via useSearchParams: that hook
   // needs a Suspense boundary in the App Router, and re-reading on every render
@@ -122,7 +129,7 @@ export default function RegisterPage() {
     company: '',
     phone: '',
     // Required only for trainees and trainers; everyone else is not enrolled
-    // in a course. Persisted as users.course_id by migration 20260101000011.
+    // in a course. Persisted as users.course_id by the full setup.
     courseId: '',
   });
   const [error, setError] = useState('');
@@ -146,17 +153,25 @@ export default function RegisterPage() {
   const rooms = getActiveRooms();
   const courses = getActiveCourses();
 
-  // Only trainees and trainers are enrolled in a course. Everyone else is here
-  // for another reason (meeting, delivery, VIP visit, ...), so the course
-  // picker is disabled for them rather than forcing an irrelevant choice.
-  // Matched on the label so this works with both the fallback list and the real
-  // visitor_types table.
-  const selectedVisitorType = visitorTypes.find(
-    (type) => type.id === formData.visitorTypeId
+  // Public registration is trainee-only: the other visitor_types rows still
+  // exist for historical records and for staff-created accounts, but a walk-in
+  // picking their own classification was extra work with no benefit. The real
+  // UUID is resolved once the lookup table loads; fallback ids are ignored
+  // because they are not valid foreign keys.
+  const traineeType = visitorTypes.find(
+    (type) => isTraineeType(type.label) && !type.id.startsWith('fallback-')
   );
-  const courseRequired = ['trainee', 'trainer'].includes(
-    (selectedVisitorType?.label ?? '').trim().toLowerCase()
-  );
+  const courseRequired = true;
+
+  useEffect(() => {
+    if (!traineeType) return;
+
+    setFormData((prev) =>
+      prev.visitorTypeId === traineeType.id
+        ? prev
+        : { ...prev, visitorTypeId: traineeType.id }
+    );
+  }, [traineeType]);
 
   useEffect(() => {
     fetchPurposes();
@@ -205,8 +220,6 @@ export default function RegisterPage() {
     };
   }, [formData.email]);
 
-  
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -251,6 +264,13 @@ export default function RegisterPage() {
       return;
     }
 
+    if (!formData.visitorTypeId) {
+      setError(
+        'Trainee registration is still loading. Please wait a moment and try again.'
+      );
+      return;
+    }
+
     setLoading(true);
 
     // A self-registered visitor gets a pass that expires at the end of today.
@@ -274,7 +294,7 @@ export default function RegisterPage() {
 
     // No password is collected any more (see the commented-out fields below), but
     // Supabase still needs one to create the auth user. This is a throwaway: it
-    // is never shown, never sent anywhere, and never used to sign in - visitors
+    // is never shown, never sent anywhere, and never used to sign in - trainees
     // authenticate through /verify with their name and course.
     const generatedPassword =
       typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -291,7 +311,7 @@ export default function RegisterPage() {
       purpose: formData.purpose || undefined,
       pendingRoomId: chosenRoom?.id,
       pendingPurposeId: chosenPurpose?.id,
-      visitorTypeId: formData.visitorTypeId || undefined,
+      visitorTypeId: formData.visitorTypeId,
       company: formData.company.trim() || undefined,
       phone: formData.phone.trim() || undefined,
       courseId: formData.courseId,
@@ -308,698 +328,397 @@ export default function RegisterPage() {
     }
 
     if (result.success) {
-        // Self-registration only ever produces a visitor: the database trigger
-        // hardcodes role='visitor' and ignores anything the client sends. Admins
-        // are provisioned by hand through /admin/users.
-        //
-        // The ?verified=1 marker is the same one /verify appends, so
-        // /check-in's auto-check-in hook fires as soon as the visitor lands and
-        // records them without a second scan. Same destination as a successful
-        // /verify, so both entry points end in the same place.
-        router.push(VERIFIED_CHECKIN_PATH);
-      } else {
-        setError(result.error || 'Registration failed');
-        setLoading(false);
-      }
-    };
+      // Self-registration only ever produces a visitor: the database trigger
+      // hardcodes role='visitor' and ignores anything the client sends. Admins
+      // are provisioned by hand through /admin/users.
+      //
+      // The ?verified=1 marker is the same one /verify appends, so
+      // /check-in's auto-check-in hook fires as soon as the visitor lands and
+      // records them without a second scan. Same destination as a successful
+      // /verify, so both entry points end in the same place.
+      router.push(VERIFIED_CHECKIN_PATH);
+    } else {
+      setError(result.error || 'Registration failed');
+      setLoading(false);
+    }
+  };
+
+  /* Account created, email not yet confirmed. A success screen, not an error:
+     there is genuinely nothing to fix, they just need to click the link Supabase
+     emailed them. */
+  if (pendingConfirmation) {
+    return (
+      <AuthShell
+        eyebrow='Almost done'
+        title='Check your email'
+        subtitle='One more step before your pass is active.'
+      >
+        <div className='text-center'>
+          <div className='mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-yellow-500/15'>
+            <i className='fa-solid fa-envelope-open-text text-2xl text-yellow-400'></i>
+          </div>
+          <p className='mb-2 text-sm text-navy-300'>
+            We sent a confirmation link to
+          </p>
+          <p className='mb-6 break-all font-semibold text-white'>
+            {pendingConfirmation}
+          </p>
+          <p className='mb-6 text-sm leading-relaxed text-navy-400'>
+            Open it to activate your account, then sign in. The link expires
+            after a while, so if it has gone stale just register again.
+          </p>
+          <Button
+            onClick={() => router.push('/login')}
+            icon='fa-right-to-bracket'
+            className='w-full'
+            size='lg'
+          >
+            Go to sign in
+          </Button>
+          <button
+            onClick={() => {
+              setPendingConfirmation(null);
+              setError('');
+            }}
+            className='mt-4 text-sm text-navy-400 transition-colors hover:text-navy-200'
+          >
+            Use a different email
+          </button>
+        </div>
+      </AuthShell>
+    );
+  }
 
   return (
-    <>
-      {/* Account created, email not yet confirmed. A success screen, not an
-          error: there is genuinely nothing to fix, they just need to click the
-          link Supabase emailed them. */}
-      {pendingConfirmation && (
-        <div className='min-h-screen flex items-center justify-center p-4'>
-          <div className='w-full max-w-md text-center'>
-            <div className='glass-panel border-navy-700 rounded-lg p-8'>
-              <div className='w-16 h-16 mx-auto mb-5 rounded-full bg-yellow-500/20 flex items-center justify-center'>
-                <i className='fa-solid fa-envelope-open-text text-yellow-400 text-2xl'></i>
-              </div>
-              <h1 className='text-2xl font-bold text-white mb-3'>
-                Check your email
-              </h1>
-              <p className='text-navy-300 text-sm mb-2'>
-                We sent a confirmation link to
-              </p>
-              <p className='text-white font-semibold mb-6 break-all'>
-                {pendingConfirmation}
-              </p>
-              <p className='text-navy-400 text-sm mb-6'>
-                Open it to activate your account, then sign in. The link expires
-                after a while, so if it has gone stale just register again.
-              </p>
+    <AuthShell
+      eyebrow='New pass'
+      title='Create your pass'
+      subtitle='Register once, then check in at the entrance with your name and course.'
+      size='lg'
+      aside={
+        <div className='space-y-5'>
+          <Badge tone='brand' icon='fa-graduation-cap'>
+            Trainee check-in
+          </Badge>
+          <h2 className='text-3xl font-bold leading-tight text-white'>
+            One form, then you are ready for the door.
+          </h2>
+          <p className='max-w-md text-sm leading-relaxed text-navy-400'>
+            Your details are used to verify you at the entrance and to show the
+            right room for your course. A pass is issued for today only; the
+            front desk can extend it if you are staying longer.
+          </p>
+          <ul className='space-y-3'>
+            {[
+              'Your name and course must match the orientation roster.',
+              'The course picks your assigned room automatically.',
+              'After registering, the entrance check-in is automatic.',
+            ].map((item) => (
+              <li
+                key={item}
+                className='flex items-start gap-3 text-sm leading-relaxed text-navy-300'
+              >
+                <i className='fa-solid fa-circle-check mt-0.5 text-yellow-400'></i>
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      }
+    >
+      <form onSubmit={handleSubmit} className='space-y-6'>
+        {/* Error Message */}
+        {error && (
+          <Alert tone='danger' role='alert'>
+            <p>{error}</p>
+
+            {/* An address that already has a login can never register
+                again, so don't leave them on this form with no way out.
+                Signing in repairs a missing profile automatically. */}
+            {/already has an account|already registered/i.test(error) && (
               <Link
                 href='/login'
-                className='
-                  inline-block w-full px-4 py-3 rounded-lg
-                  bg-yellow-500 hover:bg-yellow-600 text-yellow-950
-                  font-semibold text-sm transition-colors
-                '
+                className='mt-2 inline-flex items-center gap-2 text-sm font-semibold text-yellow-300 transition-colors hover:text-yellow-200'
               >
-                Go to Sign In
+                <i className='fa-solid fa-right-to-bracket'></i>
+                Go to sign in
               </Link>
-              <button
-                onClick={() => {
-                  setPendingConfirmation(null);
-                  setError('');
-                }}
-                className='mt-4 text-navy-400 hover:text-navy-200 text-sm transition-colors'
-              >
-                Use a different email
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+            )}
+          </Alert>
+        )}
 
-      {!pendingConfirmation && (
-        // items-start on small screens. Centring a tall form with flex centres
-        // the overflow too, so the top and bottom get clipped and become
-        // unreachable on a phone - including the Create Account button.
-        <div className='min-h-screen flex items-start sm:items-center justify-center p-4 sm:py-8'>
-        {/* Register Card */}
-        <div className='relative w-full max-w-md'>
-          {/* Logo. Smaller on phones so it does not push the form off screen. */}
-          <div className='text-center mb-6 sm:mb-8'>
-            <div className='inline-block w-16 h-16 sm:w-24 sm:h-24 mb-4'>
-              <img
-                src='/hyt_logo.png'
-                alt='HYT Logo'
-                className='w-full h-full object-contain'
+        {/* Your details */}
+        <section className='space-y-4'>
+          <div>
+            <h2 className='text-sm font-semibold text-white'>Your details</h2>
+            <p className='mt-0.5 text-xs leading-relaxed text-navy-400'>
+              Use the name printed on your orientation roster.
+            </p>
+          </div>
+
+          {/* Name Field. Three inputs, not one: these are the columns the
+              entrance check matches on. First and last are required; the
+              middle initial is optional and is stored as a single letter. */}
+          <div className='grid grid-cols-1 gap-3 sm:grid-cols-[1fr_4.5rem_1fr]'>
+            <Field label='First name' htmlFor='firstName' required>
+              <input
+                type='text'
+                id='firstName'
+                value={formData.firstName}
+                onChange={(e) =>
+                  setFormData({ ...formData, firstName: e.target.value })
+                }
+                required
+                autoComplete='given-name'
+                className={controlClass}
+                placeholder='Juan'
               />
-            </div>
-            <h1 className='text-2xl sm:text-3xl font-bold text-white mb-2'>
-              Create Account
-            </h1>
-            <p className='text-yellow-300'>Join HYT Global</p>
+            </Field>
+
+            <Field label='M.I.' htmlFor='middleInitial' hint='Optional'>
+              <input
+                type='text'
+                id='middleInitial'
+                value={formData.middleInitial}
+                onChange={(e) =>
+                  setFormData({ ...formData, middleInitial: e.target.value })
+                }
+                // Two, so typing "C." is not cut off mid-word. The stored
+                // value is normalised to a single letter.
+                maxLength={2}
+                className={`${controlClass} px-2 text-center`}
+                placeholder='C.'
+              />
+            </Field>
+
+            <Field label='Last name' htmlFor='lastName' required>
+              <input
+                type='text'
+                id='lastName'
+                value={formData.lastName}
+                onChange={(e) =>
+                  setFormData({ ...formData, lastName: e.target.value })
+                }
+                required
+                autoComplete='family-name'
+                className={controlClass}
+                placeholder='Dela Cruz'
+              />
+            </Field>
           </div>
 
-          {/* Register Form */}
-          <div className='border border-yellow-400/30 rounded-lg p-5 sm:p-8 bg-navy-900/60'>
-            <form onSubmit={handleSubmit} className='space-y-5'>
-              {/* Error Message */}
-              {error && (
-                <div className='p-4 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm'>
-                  <div className='flex items-start gap-2'>
-                    <i className='fa-solid fa-circle-exclamation mt-0.5'></i>
-                    <span>{error}</span>
-                  </div>
+          <Field label='Email address' htmlFor='email' required>
+            <input
+              type='email'
+              id='email'
+              value={formData.email}
+              onChange={(e) =>
+                setFormData({ ...formData, email: e.target.value })
+              }
+              required
+              autoComplete='email'
+              className={controlClass}
+              placeholder='you@example.com'
+            />
+          </Field>
 
-                  {/* An address that already has a login can never register
-                      again, so don't leave them on this form with no way out.
-                      Signing in repairs a missing profile automatically. */}
-                  {/already has an account|already registered/i.test(error) && (
-                    <Link
-                      href='/login'
-                      className='mt-3 inline-flex items-center gap-2 text-yellow-300 hover:text-yellow-200 font-semibold transition-colors'
-                    >
-                      <i className='fa-solid fa-right-to-bracket'></i>
-                      Go to sign in
-                    </Link>
-                  )}
-                </div>
-              )}
+          {/* Orientation verdict, shown only once the address matches a
+              member of the last cohort. A null result renders nothing: a
+              first-time walk-in has no verdict, and inventing one - or
+              worse, defaulting to 'declined' - would be actively wrong. */}
+          {orientation && (
+            <Alert
+              tone={VERDICT[orientation.orientation_status].tone}
+              icon={VERDICT[orientation.orientation_status].icon}
+              title={`Orientation: ${VERDICT[orientation.orientation_status].label}`}
+              role='status'
+            >
+              Found you from the last orientation
+              {orientation.programme ? ` (${orientation.programme})` : ''}.{' '}
+              {VERDICT[orientation.orientation_status].detail}
+            </Alert>
+          )}
 
-              {/* Name Field. Three inputs, not one: these are the columns the
-                  entrance check matches on. First and last are required; the
-                  middle initial is optional and is stored as a single letter. */}
-              <div className='grid grid-cols-1 sm:grid-cols-[1fr_4.5rem_1fr] gap-3'>
-                <div>
-                  <label
-                    htmlFor='firstName'
-                    className='block text-sm font-medium text-yellow-200 mb-2'
-                  >
-                    First Name <span className='text-yellow-400'>*</span>
-                  </label>
-                  <div className='relative'>
-                    <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
-                      <i className='fa-solid fa-user text-yellow-400'></i>
-                    </div>
-                    <input
-                      type='text'
-                      id='firstName'
-                      value={formData.firstName}
-                      onChange={(e) =>
-                        setFormData({ ...formData, firstName: e.target.value })
-                      }
-                      required
-                      autoComplete='given-name'
-                      className='
-                        w-full pl-12 pr-4 py-3 rounded-lg
-                        bg-navy-900/80 border-2 border-yellow-500/30
-                        text-white placeholder-navy-500
-                        focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500
-                        transition-colors
-                        '
-                      placeholder='Juan'
-                    />
-                  </div>
-                </div>
+          <div className='grid grid-cols-1 gap-3 sm:grid-cols-2'>
+            <Field
+              label='Company / school'
+              htmlFor='company'
+              hint='Optional'
+            >
+              <input
+                type='text'
+                id='company'
+                value={formData.company}
+                onChange={(e) =>
+                  setFormData({ ...formData, company: e.target.value })
+                }
+                placeholder='Where you are from'
+                className={controlClass}
+              />
+            </Field>
 
-                <div>
-                  <label
-                    htmlFor='middleInitial'
-                    className='block text-sm font-medium text-yellow-200 mb-2'
-                  >
-                    M.I.
-                  </label>
-                  <input
-                    type='text'
-                    id='middleInitial'
-                    value={formData.middleInitial}
-                    onChange={(e) =>
-                      setFormData({ ...formData, middleInitial: e.target.value })
-                    }
-                    // Two, so typing "C." is not cut off mid-word. The stored
-                    // value is normalised to a single letter.
-                    maxLength={2}
-                    className='
-                      w-full px-2 py-3 rounded-lg text-center
-                      bg-navy-900/80 border-2 border-yellow-500/30
-                      text-white placeholder-navy-500
-                      focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500
-                      transition-colors
-                      '
-                    placeholder='C.'
-                  />
-                </div>
-
-                <div>
-                  <label
-                    htmlFor='lastName'
-                    className='block text-sm font-medium text-yellow-200 mb-2'
-                  >
-                    Last Name <span className='text-yellow-400'>*</span>
-                  </label>
-                  <div className='relative'>
-                    <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
-                      <i className='fa-solid fa-user text-yellow-400'></i>
-                    </div>
-                    <input
-                      type='text'
-                      id='lastName'
-                      value={formData.lastName}
-                      onChange={(e) =>
-                        setFormData({ ...formData, lastName: e.target.value })
-                      }
-                      required
-                      autoComplete='family-name'
-                      className='
-                        w-full pl-12 pr-4 py-3 rounded-lg
-                        bg-navy-900/80 border-2 border-yellow-500/30
-                        text-white placeholder-navy-500
-                        focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500
-                        transition-colors
-                        '
-                      placeholder='Dela Cruz'
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Email Field */}
-              <div>
-                <label
-                  htmlFor='email'
-                  className='block text-sm font-medium text-yellow-200 mb-2'
-                >
-                  Email Address
-                </label>
-                <div className='relative'>
-                  <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
-                    <i className='fa-solid fa-envelope text-yellow-400'></i>
-                  </div>
-                  <input
-                    type='email'
-                    id='email'
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    required
-                    className='
-                      w-full pl-12 pr-4 py-3 rounded-lg
-                      bg-navy-900/80 border-2 border-yellow-500/30
-                      text-white placeholder-navy-500
-                      focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500
-                      transition-colors
-                      '
-                    placeholder='you@example.com'
-                  />
-                </div>
-
-                {/* Orientation verdict, shown only once the address matches a
-                    member of the last cohort. A null result renders nothing: a
-                    first-time walk-in has no verdict, and inventing one - or
-                    worse, defaulting to 'declined' - would be actively wrong. */}
-                {orientation && (
-                  <div
-                    role='status'
-                    aria-live='polite'
-                    className={cn(
-                      'mt-3 rounded-lg border px-4 py-3',
-                      VERDICT_STYLE[orientation.orientation_status].box
-                    )}
-                  >
-                    <p
-                      className={cn(
-                        'text-sm font-semibold flex items-center gap-2',
-                        VERDICT_STYLE[orientation.orientation_status].text
-                      )}
-                    >
-                      <i
-                        className={cn(
-                          'fa-solid',
-                          VERDICT_STYLE[orientation.orientation_status].icon
-                        )}
-                      ></i>
-                      Orientation: {VERDICT_STYLE[orientation.orientation_status].label}
-                    </p>
-                    <p className='text-navy-300 text-xs mt-1'>
-                      Found you from the last orientation
-                      {orientation.programme ? ' (' + orientation.programme + ')' : ''}.{' '}
-                      {orientation.orientation_status === 'approved'
-                        ? 'You are cleared to enter - continue below to finish creating your account.'
-                        : orientation.orientation_status === 'declined'
-                          ? 'Please speak to the front desk before entering.'
-                          : 'Your result is still being processed. Please speak to the front desk.'}
-                    </p>
-                  </div>
-                )}
-              </div>
-
-        	  {/* Purpose picker. Also per visit, not per person: the schema puts
-                  purpose_id on clock_in_records so a visitor can attend a Meeting
-                  one day and an Orientation the next. This seeds the first visit. */}
-              <div>
-                <label
-                  htmlFor='purpose'
-                  className='block text-sm font-medium text-yellow-200 mb-2'
-                >
-                  Purpose <span className='text-yellow-400'>*</span>
-                </label>
-                <div className='relative'>
-                  <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
-                    <i className='fa-solid fa-clipboard-question text-yellow-400'></i>
-                  </div>
-                  <select
-                    id='purpose'
-                    value={formData.purpose}
-                    onChange={(e) =>
-                      setFormData({ ...formData, purpose: e.target.value })
-                    }
-                    required
-                    className='
-                      w-full pl-12 pr-4 py-3 rounded-lg appearance-none
-                      bg-navy-900/80 border-2 border-yellow-500/30
-                      text-white placeholder-navy-500
-                      focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500
-                      transition-colors cursor-pointer
-                    '
-                  >
-                    <option value='' className='bg-navy-900'>
-                      Select a purpose
-                    </option>
-                    {purposes.map((purpose) => (
-                      <option
-                        key={purpose.id}
-                        value={purpose.label}
-                        className='bg-navy-900'
-                      >
-                        {purpose.label}
-                      </option>
-                    ))}
-                  </select>
-                  <i className='fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-navy-400 text-xs pointer-events-none'></i>
-                </div>
-              </div>
-
-              {/* Visitor profile. Optional, and asked here so the front desk has it before the
-                  person reaches the desk. An admin can correct any of it later. */}
-              <div className='rounded-lg border border-navy-700 bg-navy-950/40 p-4 space-y-4'>
-                <p className='text-sm font-semibold text-yellow-200'>
-                  About your visit
-                </p>
-
-                <div>
-                  <label
-                    htmlFor='visitorTypeId'
-                    className='block text-sm font-medium text-yellow-200 mb-2'
-                  >
-                    Visitor type
-                  </label>
-                  <div className='relative'>
-                    <select
-                      id='visitorTypeId'
-                      value={formData.visitorTypeId}
-                      onChange={(e) => {
-                        const visitorTypeId = e.target.value;
-                        const nextType = visitorTypes.find(
-                          (type) => type.id === visitorTypeId
-                        );
-                        const needsCourse = ['trainee', 'trainer'].includes(
-                          (nextType?.label ?? '').trim().toLowerCase()
-                        );
-                        setFormData((prev) => ({
-                          ...prev,
-                          visitorTypeId,
-                          // Drop a course that no longer applies. The destination
-                          // effect follows courseId, so the room clears too.
-                          courseId: needsCourse ? prev.courseId : '',
-                        }));
-                      }}
-                      className='
-                        w-full pl-12 pr-4 py-3 rounded-lg appearance-none
-                        bg-navy-900/80 border-2 border-yellow-500/30
-                        text-white placeholder-navy-500
-                        focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500
-                        transition-colors cursor-pointer
-                      '
-                    >
-                      <option value='' className='bg-navy-900'>
-                        Not sure
-                      </option>
-                      {visitorTypes.map((type) => (
-                        <option key={type.id} value={type.id} className='bg-navy-900'>
-                          {type.label}
-                        </option>
-                      ))}
-                    </select>
-                    <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
-                      <i className='fa-solid fa-id-card text-yellow-400'></i>
-                    </div>
-                    <i className='fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-navy-400 text-xs pointer-events-none'></i>
-                  </div>
-                </div>
-
-                {/* `host_name` is not asked here: a visitor cannot name the person they are
-                    meeting. Staff set it on /admin/users. */}
-                {/* Course picker. Required only for trainees and trainers, and
-                    persisted on the user row (unlike destination/purpose which
-                    are per-visit). A course is a stable attribute of the visitor,
-                    but only one that applies to people actually taking a class. */}
-                <div>
-                  <label
-                    htmlFor='courseId'
-                    className='block text-sm font-medium text-yellow-200 mb-2'
-                  >
-                    Course{' '}
-                    {courseRequired && <span className='text-yellow-400'>*</span>}
-                  </label>
-                  <div className='relative'>
-                    <select
-                      id='courseId'
-                      value={formData.courseId}
-                      onChange={(e) =>
-                        setFormData({ ...formData, courseId: e.target.value })
-                      }
-                      required={courseRequired}
-                      disabled={!courseRequired}
-                      className='
-                        w-full pl-12 pr-4 py-3 rounded-lg appearance-none
-                        bg-navy-900/80 border-2 border-yellow-500/30
-                        text-white placeholder-navy-500
-                        focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500
-                        transition-colors cursor-pointer
-                        disabled:cursor-not-allowed disabled:opacity-60
-                      '
-                    >
-                      <option value='' className='bg-navy-900'>
-                        {courseRequired
-                          ? 'Select a course'
-                          : 'Not applicable for this visitor type'}
-                      </option>
-                      {courses.map((course) => (
-                        <option key={course.id} value={course.id} className='bg-navy-900'>
-                          {course.label}
-                        </option>
-                      ))}
-                    </select>
-                    <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
-                      <i
-                        className={cn(
-                          'fa-solid fa-graduation-cap',
-                          courseRequired ? 'text-yellow-400' : 'text-navy-500'
-                        )}
-                      ></i>
-                    </div>
-                    <i
-                      className={cn(
-                        'fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-xs pointer-events-none',
-                        courseRequired ? 'text-navy-400' : 'text-navy-600'
-                      )}
-                    ></i>
-                  </div>
-		
-		  <div>
-                <label
-                  htmlFor='destination'
-                  className='block text-sm font-medium text-yellow-200 mb-2'
-                >
-                  Assigned room
-                </label>
-                <div className='relative'>
-                  <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
-                    <i className='fa-solid fa-location-dot text-yellow-400'></i>
-                  </div>
-                  <select
-                    id='destination'
-                    value={formData.destination}
-                    disabled
-		    className='
-                      w-full pl-12 pr-4 py-3 rounded-lg appearance-none
-                      bg-navy-900/80 border-2 border-yellow-500/30
-                      text-white placeholder-navy-500
-                      transition-colors
-                      disabled:cursor-not-allowed disabled:opacity-70
-                      '
-                  >
-                    <option value=''>No assigned room</option>
-                    {/* The options still come from the `rooms` table, so a room added
-                        in /admin/rooms shows up here immediately. The VALUE is the room
-                        number because that is what `getRoomByNumber` resolves at
-                        check-in; the LABEL is the room name, which is what a person
-                        recognises. Read-only: the room follows the course. */}
-                    {rooms.map((room) => (
-                      <option key={room.id} value={room.roomNumber} className='bg-navy-900'>
-                        {room.name} ({room.roomNumber})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-                </div>
-
-                {/* Two-up on wider screens, stacked on a phone. */}
-                <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
-                  <div>
-                    <label
-                      htmlFor='company'
-                      className='block text-sm font-medium text-yellow-200 mb-2'
-                    >
-                      Company / school
-                    </label>
-                    <div className='relative'>
-                      <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
-                        <i className='fa-solid fa-building text-yellow-400'></i>
-                      </div>
-                      <input
-                        type='text'
-                        id='company'
-                        value={formData.company}
-                        onChange={(e) =>
-                          setFormData({ ...formData, company: e.target.value })
-                        }
-                        placeholder='Optional'
-                        className='
-                          w-full pl-12 pr-4 py-3 rounded-lg
-                          bg-navy-900/80 border-2 border-yellow-500/30
-                          text-white placeholder-navy-500
-                          focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500
-                          transition-colors
-                        '
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label
-                      htmlFor='phone'
-                      className='block text-sm font-medium text-yellow-200 mb-2'
-                    >
-                      Phone <span className='text-yellow-400'>*</span>
-                    </label>
-                    <div className='relative'>
-                      <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
-                        <i className='fa-solid fa-phone text-yellow-400'></i>
-                      </div>
-                      <input
-                        type='tel'
-                        id='phone'
-                        inputMode='tel'
-                        autoComplete='tel'
-                        required
-                        value={formData.phone}
-                        onChange={(e) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            phone: sanitisePhone(e.target.value),
-                          }))
-                        }
-                        // Blocks the keystroke outright; onChange sanitises, which is
-                        // what catches a paste since keydown does not fire for it.
-                        onKeyDown={(e) => {
-                          if (!isAllowedPhoneKey(e.key, e.ctrlKey || e.metaKey)) {
-                            e.preventDefault();
-                          }
-                        }}
-                        // Grouping runs on BLUR, not on every keystroke. Regrouping
-                        // mid-type reorders characters and drags the caret backwards
-                        // over what was just typed; on blur there is no caret to move.
-                        onBlur={() =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            phone: formatPhone(prev.phone),
-                          }))
-                        }
-                        placeholder='09xx xxx xxxx'
-                        className='
-                          w-full pl-12 pr-4 py-3 rounded-lg
-                          bg-navy-900/80 border-2 border-yellow-500/30
-                          text-white placeholder-navy-500
-                          focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500
-                          transition-colors
-                        '
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/*
-                Password fields - commented out, not deleted.
-
-                Visitors no longer set a password: they sign in through /verify
-                with their first and last name and their course. Supabase still
-                needs a password to create the auth user, so handleSubmit
-                generates a throwaway (see `generatedPassword`). To restore these
-                fields, uncomment this block and the two password checks in
-                handleSubmit.
-
-              Password Field
-
-              <div>
-                <label
-                  htmlFor='password'
-                  className='block text-sm font-medium text-yellow-200 mb-2'
-                >
-                  Password
-                </label>
-                <div className='relative'>
-                  <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
-                    <i className='fa-solid fa-lock text-yellow-400'></i>
-                  </div>
-                  <input
-                    type='password'
-                    id='password'
-                    value={formData.password}
-                    onChange={(e) =>
-                      setFormData({ ...formData, password: e.target.value })
-                    }
-                    required
-                    className='
-                      w-full pl-12 pr-4 py-3 rounded-lg
-                      bg-navy-900/80 border-2 border-yellow-500/30
-                      text-white placeholder-navy-500
-                      focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500
-                      transition-colors
-                      '
-                    placeholder='••••••••'
-                  />
-                </div>
-              </div>
-
-              Confirm Password Field
-
-              <div>
-                <label
-                  htmlFor='confirmPassword'
-                  className='block text-sm font-medium text-yellow-200 mb-2'
-                >
-                  Confirm Password
-                </label>
-                <div className='relative'>
-                  <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
-                    <i className='fa-solid fa-lock text-yellow-400'></i>
-                  </div>
-                  <input
-                    type='password'
-                    id='confirmPassword'
-                    value={formData.confirmPassword}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        confirmPassword: e.target.value,
-                      })
-                    }
-                    required
-                    className='
-                      w-full pl-12 pr-4 py-3 rounded-lg
-                      bg-navy-900/80 border-2 border-yellow-500/30
-                      text-white placeholder-navy-500
-                      focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500
-                      transition-colors
-                      '
-                    placeholder='••••••••'
-                  />
-                </div>
-              </div>
-              */}
-
-              {/* Submit Button. Sticky on a phone: the form is long and
-                  the page is centred, so a plain button can sit far below
-                  the fold and out of reach. */}
-              <button
-                type='submit'
-                disabled={loading}
-                className='
-                  sticky bottom-4 z-10 sm:static sm:z-auto
-                  w-full py-3 rounded-lg font-semibold text-yellow-950
-                  bg-yellow-500 hover:bg-yellow-600
-                  transition-colors duration-150
-                  disabled:opacity-50 disabled:cursor-not-allowed
-                  flex items-center justify-center gap-2
-                  border border-yellow-500/50
-                  shadow-lg shadow-black/40 sm:static sm:shadow-none
-                  '
-              >
-                {loading ? (
-                  <>
-                    <i className='fa-solid fa-spinner fa-spin'></i>
-                    <span>Creating Account...</span>
-                  </>
-                ) : (
-                  <>
-                    <i className='fa-solid fa-user-plus'></i>
-                    <span>Create Account</span>
-                  </>
-                )}
-              </button>
-            </form>
-
-            {/* Login Link */}
-            <div className='mt-6 text-center text-sm text-navy-300'>
-              Already registered?{' '}
-              <Link
-                href='/verify'
-                className='text-yellow-400 hover:text-yellow-300 font-semibold transition-colors'
-              >
-                Verify
-              </Link>
-            </div>
+            <Field label='Phone' htmlFor='phone' required>
+              <input
+                type='tel'
+                id='phone'
+                inputMode='tel'
+                autoComplete='tel'
+                required
+                value={formData.phone}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    phone: sanitisePhone(e.target.value),
+                  }))
+                }
+                // Blocks the keystroke outright; onChange sanitises, which is
+                // what catches a paste since keydown does not fire for it.
+                onKeyDown={(e) => {
+                  if (!isAllowedPhoneKey(e.key, e.ctrlKey || e.metaKey)) {
+                    e.preventDefault();
+                  }
+                }}
+                // Grouping runs on BLUR, not on every keystroke. Regrouping
+                // mid-type reorders characters and drags the caret backwards
+                // over what was just typed; on blur there is no caret to move.
+                onBlur={() =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    phone: formatPhone(prev.phone),
+                  }))
+                }
+                placeholder='09xx xxx xxxx'
+                className={controlClass}
+              />
+            </Field>
           </div>
+        </section>
+
+        {/* Your visit */}
+        <section className='space-y-4 border-t border-navy-800 pt-6'>
+          <div>
+            <h2 className='text-sm font-semibold text-white'>Your visit</h2>
+            <p className='mt-0.5 text-xs leading-relaxed text-navy-400'>
+              This is what the front desk and the room scanner will see.
+            </p>
+          </div>
+
+          {/* Purpose picker. Also per visit, not per person: the schema puts
+              purpose_id on clock_in_records so a visitor can attend a Meeting
+              one day and an Orientation the next. This seeds the first visit. */}
+          <Field label='Purpose' htmlFor='purpose' required>
+            <SelectWrap>
+              <select
+                id='purpose'
+                value={formData.purpose}
+                onChange={(e) =>
+                  setFormData({ ...formData, purpose: e.target.value })
+                }
+                required
+                className={selectClass}
+              >
+                <option value='' className='bg-navy-900'>
+                  Select a purpose
+                </option>
+                {purposes.map((purpose) => (
+                  <option
+                    key={purpose.id}
+                    value={purpose.label}
+                    className='bg-navy-900'
+                  >
+                    {purpose.label}
+                  </option>
+                ))}
+              </select>
+            </SelectWrap>
+          </Field>
+
+          {/* A course is a stable attribute of the trainee, persisted on the
+              user row (unlike destination/purpose, which are per visit). */}
+          <Field label='Course' htmlFor='courseId' required>
+            <SelectWrap>
+              <select
+                id='courseId'
+                value={formData.courseId}
+                onChange={(e) =>
+                  setFormData({ ...formData, courseId: e.target.value })
+                }
+                required
+                className={selectClass}
+              >
+                <option value='' className='bg-navy-900'>
+                  Select a course
+                </option>
+                {courses.map((course) => (
+                  <option
+                    key={course.id}
+                    value={course.id}
+                    className='bg-navy-900'
+                  >
+                    {course.label}
+                  </option>
+                ))}
+              </select>
+            </SelectWrap>
+          </Field>
+
+          <Field
+            label='Assigned room'
+            htmlFor='destination'
+            hint='From your course'
+          >
+            <SelectWrap>
+              <select
+                id='destination'
+                value={formData.destination}
+                disabled
+                className={selectClass}
+              >
+                <option value=''>No assigned room</option>
+                {/* The options still come from the `rooms` table, so a room added
+                    in /admin/rooms shows up here immediately. The VALUE is the room
+                    number because that is what `getRoomByNumber` resolves at
+                    check-in; the LABEL is the room name, which is what a person
+                    recognises. Read-only: the room follows the course. */}
+                {rooms.map((room) => (
+                  <option
+                    key={room.id}
+                    value={room.roomNumber}
+                    className='bg-navy-900'
+                  >
+                    {room.name} ({room.roomNumber})
+                  </option>
+                ))}
+              </select>
+            </SelectWrap>
+          </Field>
+        </section>
+
+        {/* Submit Button. Sticky on a phone: the form is long and the page is
+            centred, so a plain button can sit far below the fold and out of
+            reach. */}
+        <div className='sticky bottom-4 z-10 sm:static sm:z-auto'>
+          <Button
+            type='submit'
+            loading={loading}
+            icon='fa-user-plus'
+            size='lg'
+            className='w-full shadow-lg shadow-black/30 sm:shadow-none'
+          >
+            {loading ? 'Creating your pass…' : 'Create my pass'}
+          </Button>
         </div>
+      </form>
+
+      <div className='mt-6 border-t border-navy-800 pt-5 text-center text-sm text-navy-300'>
+        Already registered?{' '}
+        <Link
+          href='/verify'
+          className='font-semibold text-yellow-300 transition-colors hover:text-yellow-200'
+        >
+          Verify at the entrance
+        </Link>
       </div>
-      )}
-    </>
+    </AuthShell>
   );
 }

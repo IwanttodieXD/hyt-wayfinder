@@ -6,10 +6,12 @@ import { useRoomPresenceStore } from '@/store/roomPresenceStore';
 import { useRoomsStore } from '@/store/roomsStore';
 import { useAuthStore } from '@/store/authStore';
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { Html5Qrcode } from 'html5-qrcode';
 import { parseQrValue } from '@/lib/wayfinding';
 import { performVisitorCheckIn } from '@/lib/checkIn';
 import QRCode from 'react-qr-code';
+import Button from './ui/Button';
 
 export default function QRScanner() {
   const { status, clockIn, clockOut, activeRecordId } = useClockInStore();
@@ -18,12 +20,17 @@ export default function QRScanner() {
     useRoomPresenceStore();
   const { fetchRooms, fetchPurposes, fetchCourses, getRoomByQr, getRoomByNumber } =
     useRoomsStore();
-  const { user } = useAuthStore();
+  const { user, passExpired } = useAuthStore();
+  const router = useRouter();
 
   const [scannerActive, setScannerActive] = useState(false);
   const [scanError, setScanError] = useState('');
   const [scanning, setScanning] = useState(false);
   const [showQR, setShowQR] = useState(false);
+  // Expired passes are read-only: the camera is never started and every scan
+  // path is refused before it can write anything. The dialog sends the visitor
+  // back through verification so the front desk can renew them.
+  const [showExpiredNotice, setShowExpiredNotice] = useState(false);
   // Room of the last successful door scan, so the viewfinder can confirm where
   // the person was recorded rather than leaving them guessing.
   const [lastRoom, setLastRoom] = useState<string | null>(null);
@@ -143,6 +150,18 @@ const handledRef = useRef(false);
     async (decodedText: string) => {
       if (handledRef.current) return;
       handledRef.current = true;
+
+      // An expired pass cannot start, change or end a visit. Check before the
+      // value is even parsed, so no QR type - entrance, room or anything else -
+      // can reach a write path.
+      if (passExpired) {
+        await stopScanner();
+        setScannerActive(false);
+        setScanning(false);
+        setShowExpiredNotice(true);
+        handledRef.current = false;
+        return;
+      }
 
       const parsed = parseQrValue(decodedText);
 
@@ -287,6 +306,7 @@ const handledRef = useRef(false);
       getRoomByQr,
       getRoomByNumber,
       performClockOut,
+      passExpired,
     ]
   );
 
@@ -301,6 +321,17 @@ const handledRef = useRef(false);
   handleScanRef.current = handleScanSuccess;
 
   const startCamera = useCallback(async () => {
+    // Do not even open the camera for an expired pass. Showing the dialog
+    // immediately is clearer than letting someone point at a code that will
+    // always be refused. `stopScanner` also covers the late case where the
+    // camera started before AuthGate finished resolving the pass state.
+    if (passExpired) {
+      await stopScanner();
+      setScannerActive(false);
+      setShowExpiredNotice(true);
+      return;
+    }
+
     setScanError('');
     handledRef.current = false;
 
@@ -344,7 +375,7 @@ const handledRef = useRef(false);
       );
       setScannerActive(false);
     }
-  }, []);
+  }, [passExpired, stopScanner]);
 
   const stopCamera = useCallback(async () => {
     await stopScanner();
@@ -378,21 +409,23 @@ const handledRef = useRef(false);
       }
     };
   }, []);
-  // Auto-open the camera on load
+  // Auto-open the camera on load. `startCamera` shows the expired-pass dialog
+  // instead when the pass is no longer valid, so the camera never opens.
   useEffect(() => {
     startCamera();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [startCamera]);
+
+  // A popup alone would leave an expired visitor sitting on a scanner they
+  // cannot use. Give them a moment to read it, then send them to verification.
+  useEffect(() => {
+    if (!showExpiredNotice) return;
+
+    const timer = window.setTimeout(() => router.replace('/verify'), 5000);
+    return () => window.clearTimeout(timer);
+  }, [showExpiredNotice, router]);
 
   return (
-    <div className='
-        w-full h-full flex flex-col items-center relative
-        p-4 pt-5 pb-3
-        // Safe-area padding keeps the frame clear of notches and the home
-        // indicator on phones that have both.
-        pb-[max(0.75rem,env(safe-area-inset-bottom))]
-        overflow-y-auto
-      '>
+    <div className='relative flex min-h-full w-full flex-col items-center px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-5'>
       {/* Camera Viewfinder. `aspect-square` keeps it square, and the size is derived
           from the available width/height rather than hardcoded, so it fills a
           small phone without overflowing a large one. dvh matters because mobile
@@ -406,16 +439,16 @@ const handledRef = useRef(false);
             '
           >
         {/* Viewfinder Frame */}
-        <div className='absolute inset-0 rounded-lg border-2 border-yellow-400/50 overflow-hidden bg-navy-900'>
+        <div className='absolute inset-0 overflow-hidden rounded-2xl border-2 border-yellow-400/50 bg-navy-900'>
           {/* Real Camera Feed */}
-          <div id='qr-reader-mobile' className='w-full h-full' />
+          <div id='qr-reader-mobile' className='h-full w-full' />
 
           {/* Placeholder when camera is off */}
           {!scannerActive && !scanning && (
-            <div className='absolute inset-0 bg-navy-900 flex items-center justify-center'>
+            <div className='absolute inset-0 flex items-center justify-center bg-navy-900'>
               <div className='text-center'>
-                <i className='fa-solid fa-camera text-navy-600 text-5xl mb-3'></i>
-                <p className='text-navy-500 text-xs'>Camera is off</p>
+                <i className='fa-solid fa-camera mb-3 text-5xl text-navy-600'></i>
+                <p className='text-xs text-navy-500'>Camera is off</p>
               </div>
             </div>
           )}
@@ -423,41 +456,43 @@ const handledRef = useRef(false);
           {/* Scanning Laser (overlay) */}
           {scannerActive && !scanning && (
             <div
-              className='absolute left-0 right-0 h-0.5 pointer-events-none'
+              className='pointer-events-none absolute left-0 right-0 h-0.5'
               style={{ animation: 'scan 2s ease-in-out infinite', top: '50%' }}
             ></div>
           )}
 
           {/* Success Animation */}
           {scanning && (
-            <div className='absolute inset-0 bg-green-500/20 flex items-center justify-center animate-pulse'>
-              <div className='w-20 h-20 rounded-full bg-green-500 flex items-center justify-center animate-scale-in'>
-                <i className='fa-solid fa-check text-paper text-3xl'></i>
+            <div className='absolute inset-0 flex animate-pulse items-center justify-center bg-green-500/20'>
+              <div className='flex h-20 w-20 animate-scale-in items-center justify-center rounded-full bg-green-500'>
+                <i className='fa-solid fa-check text-3xl text-paper'></i>
               </div>
             </div>
           )}
 
           {/* Error overlay */}
           {scanError && !scannerActive && !scanning && (
-            <div className='absolute inset-0 bg-navy-950/90 flex flex-col items-center justify-center p-4'>
-              <i className='fa-solid fa-circle-exclamation text-red-500 text-4xl mb-3'></i>
-              <p className='text-red-400 text-xs text-center'>{scanError}</p>
+            <div
+              role='alert'
+              className='absolute inset-0 flex flex-col items-center justify-center bg-navy-950/95 p-5'
+            >
+              <i className='fa-solid fa-circle-exclamation mb-3 text-4xl text-red-500'></i>
+              <p className='max-w-[18rem] text-center text-xs leading-relaxed text-red-300'>
+                {scanError}
+              </p>
 
               {/* R1 offers the fix rather than just the problem: someone who
                   scanned a room door has clearly arrived, so point them at the
                   check-in flow instead of making them guess what to do next. */}
               {status === 'not-clocked-in' && (
-                <button
+                <Button
                   onClick={startCamera}
-                  className='
-                    mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-full
-                    bg-yellow-500 hover:bg-yellow-600 text-yellow-950 text-xs font-medium
-                    transition-colors duration-150
-                  '
+                  size='sm'
+                  icon='fa-door-open'
+                  className='mt-4'
                 >
-                  <i className='fa-solid fa-door-open'></i>
                   Check in at the entrance
-                </button>
+                </Button>
               )}
             </div>
           )}
@@ -511,7 +546,7 @@ const handledRef = useRef(false);
       {/* Camera / My QR switch */}
       <div className='mt-4 flex items-center justify-center gap-3'>
         <span
-          className={`flex items-center gap-1.5 text-xs font-medium transition-colors ${
+          className={`flex items-center gap-1.5 text-xs font-semibold transition-colors ${
             !showQR ? 'text-yellow-300' : 'text-navy-500'
           }`}
         >
@@ -526,18 +561,18 @@ const handledRef = useRef(false);
           onClick={handleToggleQR}
           // The visual pill stays 48x24, but the hit area is padded out to
           // 48x44 - the minimum comfortable touch target on a phone.
-          className={`relative w-12 h-6 my-2.5 rounded-full transition-colors duration-150 after:absolute after:inset-x-0 after:-inset-y-2 after:content-[''] ${
+          className={`relative my-2.5 h-6 w-12 rounded-full transition-colors duration-150 after:absolute after:inset-x-0 after:-inset-y-2 after:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-500/60 focus-visible:ring-offset-2 focus-visible:ring-offset-navy-950 ${
             showQR ? 'bg-yellow-500' : 'bg-navy-700'
           }`}
         >
           <span
-            className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-paper shadow transition-transform duration-150 ${
+            className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-paper shadow transition-transform duration-150 ${
               showQR ? 'translate-x-6' : 'translate-x-0'
             }`}
           />
         </button>
         <span
-          className={`flex items-center gap-1.5 text-xs font-medium transition-colors ${
+          className={`flex items-center gap-1.5 text-xs font-semibold transition-colors ${
             showQR ? 'text-yellow-300' : 'text-navy-500'
           }`}
         >
@@ -549,38 +584,38 @@ const handledRef = useRef(false);
       {/* Instructions */}
       <div className='mt-5 text-center'>
         {showQR ? (
-          <div className='inline-flex items-center gap-2 px-4 py-2 rounded-full bg-yellow-500/10 border border-yellow-500/30 mb-4'>
-            <i className='fa-solid fa-qrcode text-yellow-400 text-sm'></i>
-            <span className='text-yellow-300 text-sm font-medium'>
-              Show this QR at check-in
+          <div className='mb-4 inline-flex items-center gap-2 rounded-full border border-yellow-500/30 bg-yellow-500/10 px-4 py-2'>
+            <i className='fa-solid fa-qrcode text-sm text-yellow-400'></i>
+            <span className='text-sm font-medium text-yellow-300'>
+              Show this QR at reception
             </span>
           </div>
         ) : !scannerActive && !scanning ? (
-          <button
+          <Button
             onClick={startCamera}
-            className='inline-flex items-center gap-2 px-4 py-2 rounded-full bg-yellow-500 hover:bg-yellow-600 text-yellow-950 text-sm font-medium transition-colors duration-150 mb-4'
+            icon='fa-camera'
+            className='mb-4'
           >
-            <i className='fa-solid fa-camera text-sm'></i>
             {status === 'not-clocked-in'
-              ? 'Start camera to scan'
+              ? 'Start camera to check in'
               : 'Open camera to scan'}
-          </button>
+          </Button>
         ) : (
-          <div className='inline-flex items-center gap-2 px-4 py-2 rounded-full bg-yellow-500/10 border border-yellow-500/30 mb-4'>
-            <i className='fa-solid fa-camera text-yellow-400 text-sm'></i>
-            <span className='text-yellow-300 text-sm font-medium'>
+          <div className='mb-4 inline-flex items-center gap-2 rounded-full border border-yellow-500/30 bg-yellow-500/10 px-4 py-2'>
+            <i className='fa-solid fa-camera text-sm text-yellow-400'></i>
+            <span className='text-sm font-medium text-yellow-300'>
               {status === 'not-clocked-in'
                 ? 'Point at the entrance code to check in'
-                : 'Point at any room door or the entrance'}
+                : 'Point at a room door or the entrance'}
             </span>
           </div>
         )}
 
-        <p className='text-navy-300 text-xs max-w-xs mx-auto mb-3'>
+        <p className='mx-auto mb-3 max-w-xs text-xs leading-relaxed text-navy-300'>
           {showQR
-            ? 'Present your personal QR code to the check-in scanner to check in.'
+            ? 'Present this code if the reception desk needs to scan you.'
             : status === 'not-clocked-in'
-              ? 'Scan the entrance code to check in.'
+              ? 'Scan the entrance code to start today’s attendance.'
               : 'You are checked in. Scan a room door to record where you are, or the entrance code to check out.'}
         </p>
 
@@ -588,34 +623,34 @@ const handledRef = useRef(false);
             genuinely different thing and none of them is obvious from the
             poster alone, so the distinction is spelled out here rather than
             left to be inferred from a failed scan. */}
-        <div className='max-w-xs mx-auto mb-4 rounded-lg border border-navy-700 bg-navy-900/50 divide-y divide-navy-800'>
-          <div className='flex items-start gap-2 px-3 py-2 text-left'>
-            <i className='fa-solid fa-door-open text-yellow-400 text-xs mt-0.5'></i>
-            <p className='text-navy-300 text-[11px] leading-snug'>
-              <span className='text-white font-semibold'>Entrance poster</span> —
+        <div className='mx-auto mb-4 max-w-xs divide-y divide-navy-800 overflow-hidden rounded-xl border border-navy-700 bg-navy-900/50 text-left'>
+          <div className='flex items-start gap-2 px-3 py-2'>
+            <i className='fa-solid fa-door-open mt-0.5 text-xs text-yellow-400'></i>
+            <p className='text-[11px] leading-snug text-navy-300'>
+              <span className='font-semibold text-white'>Entrance poster</span> —
               check in on arrival, check out on the way out.
             </p>
           </div>
-          <div className='flex items-start gap-2 px-3 py-2 text-left'>
-            <i className='fa-solid fa-location-dot text-yellow-400 text-xs mt-0.5'></i>
-            <p className='text-navy-300 text-[11px] leading-snug'>
-              <span className='text-white font-semibold'>Room door poster</span> —
+          <div className='flex items-start gap-2 px-3 py-2'>
+            <i className='fa-solid fa-location-dot mt-0.5 text-xs text-yellow-400'></i>
+            <p className='text-[11px] leading-snug text-navy-300'>
+              <span className='font-semibold text-white'>Room door poster</span> —
               records which room you are in. Never checks you in or out.
-              {/* Called out while checked in, because that is the action a visitor
+              {/* Called out while checked in, because that is the action a trainee
                   actually has available in the building and the scanner gave no
                   hint of it otherwise. */}
               {status !== 'not-clocked-in' && (
-                <span className='block mt-1 text-yellow-300'>
-                  <i className='fa-solid fa-circle-check text-[10px] mr-1'></i>
+                <span className='mt-1 block text-yellow-300'>
+                  <i className='fa-solid fa-circle-check mr-1 text-[10px]'></i>
                   You can scan these now.
                 </span>
               )}
             </p>
           </div>
-          <div className='flex items-start gap-2 px-3 py-2 text-left'>
-            <i className='fa-solid fa-id-card text-yellow-400 text-xs mt-0.5'></i>
-            <p className='text-navy-300 text-[11px] leading-snug'>
-              <span className='text-white font-semibold'>Your personal code</span> —
+          <div className='flex items-start gap-2 px-3 py-2'>
+            <i className='fa-solid fa-id-card mt-0.5 text-xs text-yellow-400'></i>
+            <p className='text-[11px] leading-snug text-navy-300'>
+              <span className='font-semibold text-white'>Your personal code</span> —
               shown on this screen for the reception desk to scan.
             </p>
           </div>
@@ -625,7 +660,10 @@ const handledRef = useRef(false);
             scanner already knows which kind of code was scanned, so there is
             nothing to choose, only something to report. */}
         {status !== 'not-clocked-in' && (
-          <p className='text-navy-300 text-xs mb-3'>
+          <p
+            aria-live='polite'
+            className='mb-3 text-xs font-medium text-navy-300'
+          >
             Checked in ·{' '}
             {(() => {
               const current = user ? getCurrentRoom(user.id) : null;
@@ -636,9 +674,9 @@ const handledRef = useRef(false);
 
         {/* Confirms the last door scan actually registered. */}
         {lastRoom && !scanError && !scannerActive && (
-          <div className='inline-flex items-center gap-2 px-4 py-2 rounded-full bg-green-500/10 border border-green-500/30 mb-4'>
-            <i className='fa-solid fa-location-dot text-green-400 text-sm'></i>
-            <span className='text-green-300 text-sm font-medium'>
+          <div className='mb-4 inline-flex items-center gap-2 rounded-full border border-green-500/30 bg-green-500/10 px-4 py-2'>
+            <i className='fa-solid fa-location-dot text-sm text-green-400'></i>
+            <span className='text-sm font-medium text-green-300'>
               Recorded in {lastRoom}
             </span>
           </div>
@@ -646,7 +684,7 @@ const handledRef = useRef(false);
 
         {/* Where they're recorded as being right now. */}
         {user && getCurrentRoom(user.id) && (
-          <p className='text-navy-400 text-xs mb-4'>
+          <p className='mb-4 text-xs text-navy-400'>
             Currently in {getCurrentRoom(user.id)?.roomLabel} ·{' '}
             {getCurrentRoom(user.id)?.enteredAt.toLocaleTimeString('en-US', {
               hour: '2-digit',
@@ -656,40 +694,79 @@ const handledRef = useRef(false);
         )}
       </div>
 
+      {/* Expired pass. Shown on arrival (the camera never opens) and again if a
+          scan somehow reaches the handler. The visitor cannot write attendance
+          or room presence from here; the only way forward is verification. */}
+      {showExpiredNotice && (
+        <div className='fixed inset-0 z-[60] flex items-center justify-center bg-navy-950/85 p-4'>
+          <div
+            role='dialog'
+            aria-modal='true'
+            aria-labelledby='expired-pass-heading'
+            className='glass-panel w-full max-w-sm rounded-2xl border border-yellow-500/30 p-6 text-center shadow-2xl shadow-black/40'
+          >
+            <div className='mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-yellow-500/20'>
+              <i className='fa-solid fa-clock text-2xl text-yellow-400'></i>
+            </div>
+            <h3
+              id='expired-pass-heading'
+              className='mb-2 text-lg font-bold text-white'
+            >
+              Your pass has expired
+            </h3>
+            <p className='mb-2 text-sm leading-relaxed text-navy-300'>
+              Scanning is paused, so entrance and room codes cannot start,
+              change or end a visit. Ask the front desk to renew your pass.
+            </p>
+            <p className='mb-5 text-xs text-navy-400'>
+              Taking you to verification so it can be renewed…
+            </p>
+            <Button
+              onClick={() => router.replace('/verify')}
+              className='w-full'
+            >
+              Go to verification
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* R2: the check-out confirmation. Shown only when the person is recorded
           inside a room, because that is the one case where the intent behind a
           second entrance scan is genuinely ambiguous. */}
       {pendingClockOut && (
-        <div className='fixed inset-0 z-50 bg-navy-950/80 flex items-center justify-center p-4'>
-          <div className='glass-panel border-navy-700 rounded-lg p-6 max-w-sm w-full'>
-            <h3 className='text-white font-bold text-lg mb-2'>
+        <div className='fixed inset-0 z-50 flex items-center justify-center bg-navy-950/80 p-4'>
+          <div
+            role='dialog'
+            aria-modal='true'
+            aria-labelledby='checkout-heading'
+            className='glass-panel w-full max-w-sm rounded-2xl border border-navy-700 p-6 shadow-2xl shadow-black/40'
+          >
+            <h3
+              id='checkout-heading'
+              className='mb-2 text-lg font-bold text-white'
+            >
               Leave the building?
             </h3>
-            <p className='text-navy-300 text-sm mb-6'>
+            <p className='mb-6 text-sm leading-relaxed text-navy-300'>
               You are recorded in {pendingClockOut.roomLabel}. Checking out
               closes your attendance and that room entry.
             </p>
             <div className='flex gap-3'>
-              <button
+              <Button
+                variant='secondary'
                 onClick={cancelClockOut}
-                className='
-                  flex-1 px-4 py-3 rounded-lg font-semibold text-sm
-                  bg-navy-700 hover:bg-navy-600 text-navy-100
-                  transition-colors duration-150
-                '
+                className='flex-1'
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
+                variant='primary'
                 onClick={confirmClockOut}
-                className='
-                  flex-1 px-4 py-3 rounded-lg font-semibold text-sm
-                  bg-yellow-500 hover:bg-yellow-600 text-yellow-950
-                  transition-colors duration-150
-                '
+                className='flex-1'
               >
                 Check out anyway
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -698,28 +775,32 @@ const handledRef = useRef(false);
       {/* Already-in-room notice. A dialog rather than the red error overlay,
           because nothing went wrong - the scan was simply redundant. */}
       {alreadyInRoom && (
-        <div className='fixed inset-0 z-50 bg-navy-950/80 flex items-center justify-center p-4'>
-          <div className='glass-panel border-navy-700 rounded-lg p-6 max-w-sm w-full text-center'>
-            <div className='w-14 h-14 rounded-full bg-yellow-500/20 flex items-center justify-center mx-auto mb-3'>
-              <i className='fa-solid fa-location-dot text-yellow-400 text-2xl'></i>
+        <div className='fixed inset-0 z-50 flex items-center justify-center bg-navy-950/80 p-4'>
+          <div
+            role='dialog'
+            aria-modal='true'
+            aria-labelledby='already-in-room-heading'
+            className='glass-panel w-full max-w-sm rounded-2xl border border-navy-700 p-6 text-center shadow-2xl shadow-black/40'
+          >
+            <div className='mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-yellow-500/20'>
+              <i className='fa-solid fa-location-dot text-2xl text-yellow-400'></i>
             </div>
-            <h3 className='text-white font-bold text-lg mb-2'>
+            <h3
+              id='already-in-room-heading'
+              className='mb-2 text-lg font-bold text-white'
+            >
               You&apos;re already inside this room
             </h3>
-            <p className='text-navy-300 text-sm mb-6'>
+            <p className='mb-6 text-sm leading-relaxed text-navy-300'>
               You&apos;re already recorded in {alreadyInRoom}. No need to scan
               again.
             </p>
-            <button
+            <Button
               onClick={() => setAlreadyInRoom(null)}
-              className='
-                w-full px-4 py-3 rounded-lg font-semibold text-sm
-                bg-yellow-500 hover:bg-yellow-600 text-yellow-950
-                transition-colors duration-150
-              '
+              className='w-full'
             >
               Got it
-            </button>
+            </Button>
           </div>
         </div>
       )}

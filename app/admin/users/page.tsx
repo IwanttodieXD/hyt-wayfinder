@@ -9,22 +9,45 @@ import { tidyPhone, formatPhone, sanitisePhone, isAllowedPhoneKey } from '@/lib/
 import {
   useUsersStore,
   isPassExpired,
+  renewedPassValidUntil,
   type ManagedUser,
 } from '@/store/usersStore';
-import { visitorTypeStyle } from '@/lib/visitorTypeStyles';
+import { usePagination } from '@/hooks/usePagination';
+import { isTraineeType } from '@/lib/trainee';
 import { composeFullName } from '@/lib/fullName';
-import UserProfile from '@/components/UserProfile';
+import AdminPageHeader from '@/components/AdminPageHeader';
+import AdminShell from '@/components/AdminShell';
+import {
+  Alert,
+  Card,
+  EmptyState,
+  StatCard,
+  TablePagination,
+  buttonStyles,
+} from '@/components/ui';
 
 const INPUT =
   'w-full px-4 py-2.5 rounded-lg bg-navy-950/60 border border-navy-700 text-white placeholder-navy-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500 transition-colors';
+
+/** Compact pill used by both filter groups. */
+const filterChipClass = (active: boolean) =>
+  `inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-500/50 ${
+    active
+      ? 'border-yellow-500/60 bg-yellow-500/15 text-yellow-200'
+      : 'border-navy-700 bg-navy-950/40 text-navy-300 hover:border-navy-500 hover:bg-navy-800/70 hover:text-white'
+  }`;
+
+/** The count inside a filter pill, quieter than the label. */
+const filterCountClass = (active: boolean) =>
+  `rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none tabular-nums ${
+    active ? 'bg-yellow-500/20 text-yellow-200' : 'bg-navy-800 text-navy-400'
+  }`;
 
 type FormState = {
   firstName: string;
   middleInitial: string;
   lastName: string;
   email: string;
-  password: string;
-  visitorTypeId: string;
   company: string;
   phone: string;
   /** Room id (rooms.id), or '' for none. Seeds the first attendance record. */
@@ -42,8 +65,6 @@ const EMPTY_FORM: FormState = {
   middleInitial: '',
   lastName: '',
   email: '',
-  password: '',
-  visitorTypeId: '',
   company: '',
   phone: '',
   pendingRoomId: '',
@@ -94,16 +115,21 @@ export default function UsersPage() {
     updateUser,
     archiveUser,
     restoreUser,
-    getCountByVisitorType,
-    getExpiredCount,
+    renewPass,
   } = useUsersStore();
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [typeFilter, setTypeFilter] = useState<string>('all');
-  // Course only applies to trainees and trainers, so the Course column and
-  // filter are hidden for every other type.
+  // Course is always shown on this page because every row is a trainee.
   const [courseFilter, setCourseFilter] = useState('all');
+  // Active / valid / expired / archived are mutually exclusive views of the
+  // same list. Active is the full unarchived set; valid and expired are slices
+  // of it.
   const [showArchived, setShowArchived] = useState(false);
+  const [showExpired, setShowExpired] = useState(false);
+  const [showValid, setShowValid] = useState(false);
+  // Newest account first by default, matching the store's initial order and
+  // the attendance log's default. Clicking Joined flips to oldest first.
+  const [joinedSort, setJoinedSort] = useState<'latest' | 'oldest'>('latest');
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editing, setEditing] = useState<ManagedUser | null>(null);
@@ -115,38 +141,53 @@ export default function UsersPage() {
     text: string;
   } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  // Id of the row being renewed, or 'all' while the bulk action runs.
+  const [renewing, setRenewing] = useState<string | null>(null);
 
   // Whether the admin picked a room by hand in the create modal. Once they
   // have, the course no longer overwrites it.
   const roomTouched = useRef(false);
 
   const visitorTypes = getActiveVisitorTypes();
+  // Add User creates a trainee. The visitor type is no longer chosen by hand;
+  // the real lookup UUID is resolved once the table loads. Fallback ids are
+  // ignored because they are not valid foreign keys.
+  const traineeType = visitorTypes.find(
+    (type) => isTraineeType(type.label) && !type.id.startsWith('fallback-')
+  );
   // Rooms and purposes back the assigned-room and purpose pickers, which mirror
   // the register form. Both are ordered by the store (rooms by floor).
   const rooms = getActiveRooms();
   const purposes = getActivePurposes();
   const courses = getActiveCourses();
-  const typeCounts = getCountByVisitorType();
-  const expiredCount = getExpiredCount();
 
-  // Course is a trainee/trainer attribute. For every other visitor type the
-  // Course column and filter are hidden.
-  const showCourse =
-    typeFilter === 'all' ||
-    ['trainee', 'trainer'].includes(typeFilter.trim().toLowerCase());
-
-  const selectTypeFilter = (label: string) => {
-    setTypeFilter(label);
-    // A course chosen for trainees must not keep filtering invisibly after
-    // switching to a type that has no course.
-    if (label !== 'all' && !['trainee', 'trainer'].includes(label.trim().toLowerCase())) {
-      setCourseFilter('all');
-    }
-  };
+  // This page manages trainees only. The visitor type is joined from the
+  // profile, so non-trainees (and legacy rows with no classification) are
+  // scoped out before search/course/archived filtering.
+  const traineeUsers = useMemo(
+    () => users.filter((u) => isTraineeType(u.visitorType)),
+    [users]
+  );
+  const traineeArchivedUsers = useMemo(
+    () => archivedUsers.filter((u) => isTraineeType(u.visitorType)),
+    [archivedUsers]
+  );
+  const expiredUsers = useMemo(
+    () => traineeUsers.filter((u) => isPassExpired(u)),
+    [traineeUsers]
+  );
+  const expiredCount = expiredUsers.length;
+  // A "valid" pass is the complement among active trainees: not expired,
+  // including passes with no expiry date at all.
+  const validUsers = useMemo(
+    () => traineeUsers.filter((u) => !isPassExpired(u)),
+    [traineeUsers]
+  );
+  const validCount = validUsers.length;
 
   useEffect(() => {
     if (!isAuthenticated || currentUser?.role !== 'admin') {
-      router.push('/login');
+      router.push('/verify');
     } else {
       fetchUsers();
       fetchVisitorTypes();
@@ -182,20 +223,23 @@ export default function UsersPage() {
     setForm((f) => (f.pendingRoomId === next ? f : { ...f, pendingRoomId: next }));
   }, [editing, form.courseId, rooms, getRoomForCourse]);
 
-  // Archived rows are searched with the same filter as the active list so the
-  // two views cannot drift apart.
-  const source = showArchived ? archivedUsers : users;
+  // Archived and expired rows are searched with the same filter as the active
+  // list so the views cannot drift apart. Expired is a slice of the active list,
+  // not a separate bucket: an archived pass is already out of the way.
+  const source = showArchived
+    ? traineeArchivedUsers
+    : showExpired
+      ? expiredUsers
+      : showValid
+        ? validUsers
+        : traineeUsers;
 
-  // Course tally for the filter buttons. Only courses actually used by the
-  // current type view are listed, so the counts stay meaningful when the
-  // Visitor type filter is Trainee or Trainer.
+  // Course tally for the filter buttons, counted from every loaded row in the
+  // current active/archived view.
   const courseCounts = useMemo(() => {
-    const relevant = source.filter(
-      (u) => typeFilter === 'all' || u.visitorType === typeFilter
-    );
     const counts = new Map<string, number>();
 
-    for (const u of relevant) {
+    for (const u of source) {
       if (!u.courseId) continue;
       counts.set(u.courseId, (counts.get(u.courseId) ?? 0) + 1);
     }
@@ -208,16 +252,10 @@ export default function UsersPage() {
       }))
       .filter((course) => course.count > 0)
       .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
-  }, [source, courses, typeFilter]);
+  }, [source, courses]);
 
-  // Number of people the course filter is choosing between: the current type
-  // view, not the whole user list.
-  const courseScopeCount = useMemo(
-    () =>
-      source.filter((u) => typeFilter === 'all' || u.visitorType === typeFilter)
-        .length,
-    [source, typeFilter]
-  );
+  // Number of people the course filter is choosing between.
+  const courseScopeCount = source.length;
 
   const filteredUsers = useMemo(
     () =>
@@ -232,7 +270,7 @@ export default function UsersPage() {
         const matchesSearch =
           !term ||
           u.name.toLowerCase().includes(term) ||
-          // Nullable since migration 20260101000014: roster rows with no address
+          // Nullable in the current schema: roster rows with no address
           // have NULL here. Calling .toLowerCase() unguarded throws and takes the
           // ENTIRE list down, not just this row - one keystroke in the search box
           // would blank the admin page.
@@ -245,20 +283,39 @@ export default function UsersPage() {
           (room?.roomNumber ?? '').toLowerCase().includes(term) ||
           (purpose?.label ?? '').toLowerCase().includes(term);
 
-        const matchesType =
-          typeFilter === 'all' || u.visitorType === typeFilter;
+        // Course is always shown here: every row in scope is a trainee, and a
+        // trainee is enrolled in a course.
+        const matchesCourse = courseFilter === 'all' || u.courseId === courseFilter;
 
-        // Ignored while the Course filter is hidden, so a course chosen for
-        // trainees cannot silently keep excluding rows after switching types.
-        const matchesCourse =
-          !showCourse ||
-          courseFilter === 'all' ||
-          u.courseId === courseFilter;
-
-        return matchesSearch && matchesType && matchesCourse;
+        return matchesSearch && matchesCourse;
       }),
-    [source, searchTerm, typeFilter, showCourse, courseFilter, rooms, purposes]
+    [source, searchTerm, courseFilter, rooms, purposes]
   );
+
+  // Sorting runs on the full filtered list, before pagination, so page one is
+  // always the true latest (or oldest) result rather than the latest of a page.
+  const sortedUsers = useMemo(() => {
+    const direction = joinedSort === 'latest' ? -1 : 1;
+    return [...filteredUsers].sort(
+      (a, b) => (a.createdAt.getTime() - b.createdAt.getTime()) * direction
+    );
+  }, [filteredUsers, joinedSort]);
+
+  const pagination = usePagination(
+    sortedUsers.length,
+    [
+      searchTerm,
+      courseFilter,
+      showArchived,
+      showExpired,
+      showValid,
+      joinedSort,
+    ].join('|')
+  );
+  const visibleUsers = sortedUsers.slice(pagination.start, pagination.end);
+
+  const toggleJoinedSort = () =>
+    setJoinedSort((current) => (current === 'latest' ? 'oldest' : 'latest'));
 
   if (!isAuthenticated || currentUser?.role !== 'admin') {
     return null;
@@ -279,13 +336,9 @@ export default function UsersPage() {
       firstName: target.firstName,
       middleInitial: target.middleInitial ?? '',
       lastName: target.lastName,
-      // Nullable since 20260101000014; the form's own field stays a string
+      // Nullable in the current schema; the form's own field stays a string
       // because an admin editing this person is expected to supply an address.
       email: target.email ?? '',
-      password: '',
-      visitorTypeId: target.visitorType
-        ? (visitorTypes.find((t) => t.label === target.visitorType)?.id ?? '')
-        : '',
       company: target.company ?? '',
       phone: target.phone ?? '',
       pendingRoomId: target.pendingRoomId ?? '',
@@ -312,14 +365,13 @@ export default function UsersPage() {
       return setFormError('First name and last name are required.');
     }
     if (!form.email.trim()) return setFormError('Email is required.');
-    if (!editing && form.password.length < 6) {
-      return setFormError('Password must be at least 6 characters.');
+    if (!editing && !traineeType) {
+      return setFormError(
+        'Trainee registration is still loading. Please wait a moment and try again.'
+      );
     }
     if (!editing && !form.courseId) {
       return setFormError('Please select a course.');
-    }
-    if (!form.visitorTypeId) {
-      return setFormError('Please select a visitor type.');
     }
     if (!form.pendingPurposeId) {
       return setFormError('Please select a purpose.');
@@ -327,28 +379,24 @@ export default function UsersPage() {
 
     // For the confirmation notice only. The server composes its own display
     // name from the same parts, so this is never the source of truth.
-    const fullName = composeFullName(
-      form.firstName,
-      form.middleInitial,
-      form.lastName
-    );
+    const fullName = composeFullName(form.firstName, form.middleInitial, form.lastName);
 
     setIsSaving(true);
 
-    // Shared between create and edit so the two paths cannot drift on which fields
-// are sent. Empty strings are meaningful: the server turns them into SQL NULL,
-// which is how a field gets cleared.
-const profileFields = () => ({
-  visitorTypeId: form.visitorTypeId,
-  company: form.company,
-  phone: form.phone,
-  pendingRoomId: form.pendingRoomId,
-  pendingPurposeId: form.pendingPurposeId,
-  courseId: form.courseId,
-  validUntil: form.validUntil,
-});
+    // Shared between create and edit so the two paths cannot drift on which
+    // fields are sent. Empty strings are meaningful: the server turns them into
+    // SQL NULL, which is how a field gets cleared. The visitor type is absent on
+    // purpose: edits leave the existing classification alone.
+    const profileFields = () => ({
+      company: form.company,
+      phone: form.phone,
+      pendingRoomId: form.pendingRoomId,
+      pendingPurposeId: form.pendingPurposeId,
+      courseId: form.courseId,
+      validUntil: form.validUntil,
+    });
 
-if (editing) {
+    if (editing) {
       const { success, error } = await updateUser(editing.id, {
         firstName: form.firstName,
         middleInitial: form.middleInitial,
@@ -368,7 +416,10 @@ if (editing) {
       middleInitial: form.middleInitial,
       lastName: form.lastName,
       email: form.email.trim(),
-      password: form.password,
+      // The password field was removed from this form: every admin-created
+      // account uses this shared default, which the person can reset later.
+      password: 'pass123',
+      visitorTypeId: traineeType?.id,
       ...profileFields(),
     });
     setIsSaving(false);
@@ -401,251 +452,317 @@ if (editing) {
     );
   };
 
+  const handleRenew = async (target: ManagedUser) => {
+    setRenewing(target.id);
+    const validUntil = renewedPassValidUntil();
+    const { success, error } = await renewPass(target.id, validUntil);
+    setRenewing(null);
+
+    setNotice(
+      success
+        ? {
+            kind: 'success',
+            text: `Renewed ${target.name}'s pass until ${formatDate(new Date(validUntil))}.`,
+          }
+        : { kind: 'error', text: error || 'Could not renew the pass.' }
+    );
+  };
+
+  const handleRenewAll = async () => {
+    if (expiredUsers.length === 0) return;
+
+    setRenewing('all');
+    const validUntil = renewedPassValidUntil();
+    let renewed = 0;
+    let failed = 0;
+
+    // Sequential rather than a burst of parallel writes: the route talks to
+    // Supabase Auth for some paths and a long list should not flood it.
+    for (const target of expiredUsers) {
+      const result = await renewPass(target.id, validUntil);
+      if (result.success) renewed += 1;
+      else failed += 1;
+    }
+
+    setRenewing(null);
+    setNotice(
+      failed === 0
+        ? {
+            kind: 'success',
+            text: `Renewed ${renewed} expired ${renewed === 1 ? 'pass' : 'passes'} until ${formatDate(new Date(validUntil))}.`,
+          }
+        : {
+            kind: 'error',
+            text: `Renewed ${renewed}, but ${failed} could not be renewed. Try again for the remaining rows.`,
+          }
+    );
+  };
+
   return (
     <>
-      <div className='min-h-screen'>
-        <header className='app-header border-b sticky top-0 z-40'>
-          <div className='max-w-7xl mx-auto px-4 py-3 flex items-center justify-between'>
-            <Link href='/admin' className='flex items-center gap-3'>
-              <div className='w-12 h-12 flex items-center justify-center overflow-hidden'>
-                <img
-                  src='/hyt_logo.png'
-                  alt='HYT Logo'
-                  className='w-full h-full object-contain'
-                />
-              </div>
-              <div>
-                <h1 className='text-white font-bold text-lg leading-none'>
-                  User Management
-                </h1>
-                <p className='text-navy-300 text-xs mt-0.5'>Manage accounts and roles</p>
-              </div>
-            </Link>
-            <UserProfile />
-          </div>
-        </header>
-
-        <main className='max-w-7xl mx-auto px-4 py-5'>
-          <div className='flex flex-wrap items-center justify-between gap-3 mb-6'>
-            <Link
-              href='/admin'
-              className='text-navy-300 hover:text-navy-200 flex items-center gap-2 transition-colors'
-            >
-              <i className='fa-solid fa-arrow-left'></i>
-              <span>Back to Dashboard</span>
-            </Link>
-            <div className='flex flex-wrap items-center gap-2'>
-              <Link
-                href='/admin/lookups'
-                className='px-4 py-2 rounded-lg bg-navy-700 hover:bg-navy-600 text-white font-semibold text-sm transition-colors flex items-center gap-2'
-              >
-                <i className='fa-solid fa-list-check'></i>
-                Manage Lookups
+      <AdminShell>
+        <AdminPageHeader
+          eyebrow='Manage'
+          title='Trainee Management'
+          subtitle='Manage trainee accounts'
+          actions={
+            <>
+              <Link href='/admin/lookups' className={buttonStyles('secondary', 'md')}>
+                <i className='fa-solid fa-list-check text-xs'></i>
+                Manage Form Options
               </Link>
-              <button
-                onClick={openCreate}
-                className='px-4 py-2 rounded-lg bg-yellow-500 hover:bg-yellow-600 text-yellow-950 font-semibold text-sm transition-colors flex items-center gap-2'
-              >
-                <i className='fa-solid fa-user-plus'></i>
-                Add User
+              <button onClick={openCreate} className={buttonStyles('primary', 'md')}>
+                <i className='fa-solid fa-user-plus text-xs'></i>
+                Add Trainee
               </button>
-            </div>
-          </div>
+            </>
+          }
+        />
 
-          {/* Total Users. Given the same prominence as on the dashboard, since it's the
-              headline number for this page; the role counts below are the
-              breakdown of it. */}
-          <div className='mb-3'>
-            <div className='glass-panel border-yellow-500/30 rounded-lg p-6'>
-              <div className='flex items-center gap-5'>
-                <div className='w-16 h-16 rounded-xl bg-yellow-500/20 flex items-center justify-center flex-shrink-0'>
-                  <i className='fa-solid fa-users text-yellow-400 text-3xl'></i>
-                </div>
-                <div className='min-w-0'>
-                  <p className='text-yellow-300 text-xs font-semibold uppercase tracking-wider mb-1'>
-                    Total Users
-                  </p>
-                  <p className='text-white text-5xl font-bold leading-none tabular-nums'>
-                    {users.length}
-                  </p>
-                </div>
-              </div>
+        {/* Total trainees. Given the same prominence as on the dashboard,
+            since it is the headline number for this page. */}
+        <Card className='mb-3 border-yellow-500/30'>
+          <div className='flex items-center gap-5'>
+            <div className='flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-xl bg-yellow-500/15'>
+              <i className='fa-solid fa-users text-3xl text-yellow-400'></i>
             </div>
-          </div>
-
-          {/* Headline counts. Visitor types rather than roles, because that is the
-              question worth asking at an event: how many trainees, trainers and
-              VIPs are on the list. "Expired" is surfaced because an out-of-date
-              pass is the thing most likely to go unnoticed until it matters. */}
-          <div className='grid grid-cols-2 md:grid-cols-4 gap-3 mb-6'>
-            <div className='glass-panel border-navy-800 p-4 rounded-lg'>
-              <p className='text-navy-300 text-xs mb-1'>Active visitors</p>
-              <p className='text-white text-2xl font-bold'>{users.length}</p>
-            </div>
-            {typeCounts.slice(0, 2).map(({ label, count }) => (
-              <div key={label} className='glass-panel border-navy-800 p-4 rounded-lg'>
-                <p className='text-navy-300 text-xs mb-1'>{label}s</p>
-                <p className='text-white text-2xl font-bold'>{count}</p>
-              </div>
-            ))}
-            <div className='glass-panel border-navy-800 p-4 rounded-lg'>
-              <p className='text-navy-300 text-xs mb-1'>Expired passes</p>
-              <p
-                className={`text-2xl font-bold ${
-                  expiredCount > 0 ? 'text-red-400' : 'text-white'
-                }`}
-              >
-                {expiredCount}
+            <div className='min-w-0'>
+              <p className='mb-1 text-xs font-semibold uppercase tracking-wider text-yellow-300'>
+                Total Trainees
+              </p>
+              <p className='text-5xl font-bold leading-none tabular-nums text-white'>
+                {traineeUsers.length}
               </p>
             </div>
           </div>
+        </Card>
 
-          {notice && (
-            <div
-              className={`mb-4 px-4 py-3 rounded-lg border text-sm flex items-center gap-2 ${notice.kind === 'success' ? 'bg-green-500/10 border-green-500/30 text-green-300' : 'bg-red-500/10 border-red-500/30 text-red-300'}`}
-            >
-              <i
-                className={`fa-solid ${notice.kind === 'success' ? 'fa-circle-check' : 'fa-circle-exclamation'}`}
-              ></i>
-              {notice.text}
-            </div>
-          )}
+        {/* Headline counts. "Expired" is surfaced because an out-of-date pass
+            is the thing most likely to go unnoticed until it matters. */}
+        <div className='mb-4 grid grid-cols-2 gap-3 md:grid-cols-3'>
+          <StatCard
+            label='Active trainees'
+            value={traineeUsers.length}
+            hint='Not archived'
+            icon='fa-user-check'
+            tone='brand'
+          />
+          <StatCard
+            label='Archived trainees'
+            value={traineeArchivedUsers.length}
+            hint='History kept'
+            icon='fa-box-archive'
+            tone='info'
+          />
+          <StatCard
+            label='Expired passes'
+            value={expiredCount}
+            hint='Need renewing'
+            icon='fa-triangle-exclamation'
+            tone={expiredCount > 0 ? 'danger' : 'neutral'}
+            action={
+              expiredCount > 0 ? (
+                <button
+                  type='button'
+                  onClick={handleRenewAll}
+                  disabled={renewing !== null}
+                  className='inline-flex w-full items-center justify-center gap-2 rounded-lg border border-yellow-500/40 bg-yellow-500/15 px-3 py-2 text-xs font-semibold text-yellow-200 transition-colors hover:bg-yellow-500/25 disabled:cursor-not-allowed disabled:opacity-60'
+                >
+                  <i
+                    className={`fa-solid ${
+                      renewing === 'all' ? 'fa-spinner fa-spin' : 'fa-rotate'
+                    }`}
+                  ></i>
+                  {renewing === 'all' ? 'Renewing…' : 'Renew all'}
+                </button>
+              ) : undefined
+            }
+          />
+        </div>
 
-          {/* Search - its own panel above the filters so the input spans the
+        {notice && (
+          <Alert tone={notice.kind === 'success' ? 'success' : 'danger'} className='mb-4'>
+            {notice.text}
+          </Alert>
+        )}
+
+        {/* Search - its own panel above the filters so the input spans the
               full width instead of sharing a column with the filter buttons. */}
-          <div className='glass-panel border-navy-800 rounded-lg p-4 mb-6'>
-            <label className='block text-sm font-medium text-navy-200 mb-2'>
-              Search
-            </label>
-            <div className='relative'>
-              <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
-                <i className='fa-solid fa-magnifying-glass text-navy-500'></i>
-              </div>
-              <input
-                type='text'
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder='Search name, email, room, or purpose...'
-                className='w-full pl-12 pr-4 py-2.5 rounded-lg bg-navy-900/50 border border-navy-700 text-white placeholder-navy-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500 transition-colors'
-              />
+        <Card className='mb-4'>
+          <label className='mb-2 block text-sm font-medium text-navy-200'>Search</label>
+          <div className='relative'>
+            <div className='pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4'>
+              <i className='fa-solid fa-magnifying-glass text-navy-500'></i>
             </div>
+            <input
+              type='text'
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder='Search trainee name, email, room, or purpose...'
+              className={`${INPUT} pl-12`}
+            />
           </div>
+        </Card>
 
-          {/* Filters */}
-          <div className='glass-panel border-navy-800 rounded-lg p-4 mb-6'>
-            <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
-              <div>
-                <label className='block text-sm font-medium text-navy-200 mb-2'>
-                  Visitor type
-                </label>
-                <div className='flex flex-wrap gap-2'>
-                  <button
-                    onClick={() => selectTypeFilter('all')}
-                    className={`px-4 py-2.5 rounded-lg font-semibold text-sm capitalize transition-colors border-2 ${typeFilter === 'all' ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500' : 'bg-navy-900/50 text-navy-300 border-navy-700 hover:border-navy-600'}`}
-                  >
-                    All ({users.length})
-                  </button>
-                  {typeCounts.map(({ label, count }) => (
+        {/* Filters */}
+        <Card className='mb-4'>
+          <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+            {/* Course. This page only manages trainees, so the filter is
+                  always present. */}
+            <div>
+              <label className='mb-2 block text-xs font-semibold uppercase tracking-wider text-navy-400'>
+                Course
+              </label>
+              <div className='flex flex-wrap gap-1.5'>
+                <button
+                  onClick={() => setCourseFilter('all')}
+                  className={filterChipClass(courseFilter === 'all')}
+                >
+                  All
+                  <span className={filterCountClass(courseFilter === 'all')}>
+                    {courseScopeCount}
+                  </span>
+                </button>
+                {courseCounts.map(({ id, label, count }) => {
+                  const active = courseFilter === id;
+                  return (
                     <button
-                      key={label}
-                      onClick={() => selectTypeFilter(label)}
-                      className={`px-4 py-2.5 rounded-lg font-semibold text-sm capitalize transition-colors border-2 ${typeFilter === label ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500' : 'bg-navy-900/50 text-navy-300 border-navy-700 hover:border-navy-600'}`}
+                      key={id}
+                      onClick={() => setCourseFilter(id)}
+                      className={filterChipClass(active)}
                     >
-                      {label} ({count})
+                      {label}
+                      <span className={filterCountClass(active)}>{count}</span>
                     </button>
-                  ))}
-                </div>
-
-                {/* Course filter. Only rendered for visitor types that take a
-                    course, so VIPs, contractors and the rest are not asked to
-                    choose one. */}
-                {showCourse && (
-                  <>
-                    <label className='block text-sm font-medium text-navy-200 mt-3 mb-2'>
-                      Course
-                    </label>
-                    <div className='flex flex-wrap gap-2'>
-                      <button
-                        onClick={() => setCourseFilter('all')}
-                        className={`px-4 py-2.5 rounded-lg font-semibold text-sm transition-colors border-2 ${courseFilter === 'all' ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500' : 'bg-navy-900/50 text-navy-300 border-navy-700 hover:border-navy-600'}`}
-                      >
-                        All ({courseScopeCount})
-                      </button>
-                      {courseCounts.map(({ id, label, count }) => (
-                        <button
-                          key={id}
-                          onClick={() => setCourseFilter(id)}
-                          className={`px-4 py-2.5 rounded-lg font-semibold text-sm transition-colors border-2 ${courseFilter === id ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500' : 'bg-navy-900/50 text-navy-300 border-navy-700 hover:border-navy-600'}`}
-                        >
-                          {label} ({count})
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                )}
+                  );
+                })}
               </div>
-              <div>
-                <label className='block text-sm font-medium text-navy-200 mb-2'>
-                  Show
-                </label>
-                <div className='flex flex-wrap gap-2'>
-                  <button
-                    onClick={() => setShowArchived(false)}
-                    className={`px-4 py-2.5 rounded-lg font-semibold text-sm transition-colors border-2 ${!showArchived ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500' : 'bg-navy-900/50 text-navy-300 border-navy-700 hover:border-navy-600'}`}
+            </div>
+            <div>
+              <label className='mb-2 block text-xs font-semibold uppercase tracking-wider text-navy-400'>
+                Show
+              </label>
+              <div className='flex flex-wrap gap-1.5'>
+                <button
+                  onClick={() => {
+                    setShowArchived(false);
+                    setShowExpired(false);
+                    setShowValid(false);
+                  }}
+                  className={filterChipClass(
+                    !showArchived && !showExpired && !showValid
+                  )}
+                >
+                  Active
+                  <span
+                    className={filterCountClass(
+                      !showArchived && !showExpired && !showValid
+                    )}
                   >
-                    Active ({users.length})
-                  </button>
-                  <button
-                    onClick={() => setShowArchived(true)}
-                    className={`px-4 py-2.5 rounded-lg font-semibold text-sm transition-colors border-2 ${showArchived ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500' : 'bg-navy-900/50 text-navy-300 border-navy-700 hover:border-navy-600'}`}
-                  >
-                    Archived ({archivedUsers.length})
-                  </button>
-                </div>
+                    {traineeUsers.length}
+                  </span>
+                </button>
+                <button
+                  onClick={() => {
+                    setShowArchived(false);
+                    setShowExpired(false);
+                    setShowValid(true);
+                  }}
+                  className={filterChipClass(showValid)}
+                >
+                  Valid
+                  <span className={filterCountClass(showValid)}>{validCount}</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setShowArchived(false);
+                    setShowExpired(true);
+                    setShowValid(false);
+                  }}
+                  className={filterChipClass(showExpired)}
+                >
+                  Expired
+                  <span className={filterCountClass(showExpired)}>
+                    {expiredCount}
+                  </span>
+                </button>
+                <button
+                  onClick={() => {
+                    setShowArchived(true);
+                    setShowExpired(false);
+                    setShowValid(false);
+                  }}
+                  className={filterChipClass(showArchived)}
+                >
+                  Archived
+                  <span className={filterCountClass(showArchived)}>
+                    {traineeArchivedUsers.length}
+                  </span>
+                </button>
               </div>
             </div>
           </div>
+        </Card>
 
-          <div className='glass-panel border-navy-800 rounded-lg overflow-hidden'>
-            <div className='overflow-x-auto'>
-              <table className='w-full'>
-                <thead className='bg-navy-900/50 border-b border-navy-800'>
-                  <tr>
-                    {[
-                      'Visitor',
-                      'Type',
-                      ...(showCourse ? ['Course'] : []),
-                      'Assigned / Purpose',
-                      'Pass',
-                      'Joined',
-                      'Actions',
-                    ].map(
-                      (heading) => (
-                        <th
-                          key={heading}
-                          className='px-4 py-3 text-left text-xs font-semibold text-navy-400 uppercase tracking-wider'
+        <Card padded={false} className='overflow-hidden'>
+          <div className='overflow-x-auto'>
+            <table className='w-full lg:table-fixed'>
+              <thead className='bg-navy-900/50 border-b border-navy-800'>
+                <tr>
+                  {[
+                    { label: 'Trainee', width: 'lg:w-[24%]' },
+                    { label: 'Course', width: 'lg:w-[13%]' },
+                    { label: 'Assigned / Purpose', width: 'lg:w-[21%]' },
+                    { label: 'Pass', width: 'lg:w-[12%]' },
+                    { label: 'Joined', width: 'lg:w-[11%]' },
+                    { label: 'Actions', width: 'lg:w-[19%]' },
+                  ].map(({ label, width }) => (
+                    <th
+                      key={label}
+                      className={`${width} px-3 py-2 text-left text-xs font-semibold text-navy-400 uppercase tracking-wider`}
+                    >
+                      {label === 'Joined' ? (
+                        <button
+                          type='button'
+                          onClick={toggleJoinedSort}
+                          className='flex items-center gap-2 uppercase tracking-wider transition-colors hover:text-white'
+                          title={
+                            joinedSort === 'latest'
+                              ? 'Sorted latest first — click for oldest'
+                              : 'Sorted oldest first — click for latest'
+                          }
                         >
-                          {heading}
-                        </th>
-                      )
-                    )}
-                  </tr>
-                </thead>
-                <tbody className='divide-y divide-navy-800'>
-                  {filteredUsers.map((u) => {
-                    const expired = isPassExpired(u);
-                    return (
-                      <tr
-                        key={u.id}
-                        className={`transition-colors ${
-                          expired
-                            ? 'bg-black/60 hover:bg-blue-500/20'
-                            : // Brighter blue hover on valid rows so they
-                              // stand out against the dimmed expired ones.
-                              'hover:bg-blue-500/20'
-                        }`}
-                      >
-                        {/* Expired rows are dimmed as a unit via the row
+                          <span>{label}</span>
+                          <i
+                            className={`fa-solid text-[10px] ${
+                              joinedSort === 'latest'
+                                ? 'fa-arrow-down text-yellow-400'
+                                : 'fa-arrow-up text-yellow-400'
+                            }`}
+                          ></i>
+                        </button>
+                      ) : (
+                        label
+                      )}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className='divide-y divide-navy-800'>
+                {visibleUsers.map((u) => {
+                  const expired = isPassExpired(u);
+                  return (
+                    <tr
+                      key={u.id}
+                      className={`transition-colors ${
+                        expired
+                          ? 'row-expired hover:bg-blue-500/20'
+                          : // Brighter blue hover on valid rows so they
+                            // stand out against the dimmed expired ones.
+                            'hover:bg-blue-500/20'
+                      }`}
+                    >
+                      {/* Expired rows are dimmed as a unit via the row
                             background and dimmed text on the info cells, NOT
                             via `opacity` on the <tr>. CSS opacity stacks, so a
                             child's `opacity:1` cannot undo a parent's
@@ -653,193 +770,189 @@ if (editing) {
                             the action buttons too, with no way to un-dim them.
                             The buttons below keep their own colours and stay
                             full-bright on the dimmed row. */}
-                        <td
-                          className={`px-4 py-3 ${expired ? 'opacity-30' : ''}`}
-                        >
-                          <div className='flex items-center gap-3'>
-                            <div className='w-9 h-9 rounded-lg bg-yellow-500/20 flex items-center justify-center flex-shrink-0'>
-                              <i className='fa-solid fa-user text-yellow-400'></i>
-                            </div>
-                            <div className='min-w-0'>
-                              <p className='text-white font-semibold text-sm'>{u.name}</p>
-                              <p className='text-navy-500 text-xs truncate'>
-                            {/* 'No email on file' rather than a blank line: a
+                      <td className={`px-3 py-2 ${expired ? 'row-expired-cell' : ''}`}>
+                        <div className='flex items-center gap-3'>
+                          <div className='flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-yellow-500/20'>
+                            <i className='fa-solid fa-user text-sm text-yellow-400'></i>
+                          </div>
+                          <div className='min-w-0'>
+                            <p className='truncate text-sm font-semibold text-white'>
+                              {u.name}
+                            </p>
+                            <p className='text-navy-500 text-xs truncate'>
+                              {/* 'No email on file' rather than a blank line: a
                                 silent gap reads as a rendering bug, and this is
                                 the registrar's cue to collect an address. */}
-                            {u.email ?? 'No email on file'}
-                          </p>
-                              {u.phone && (
-                                // Tidied on display as well, so rows typed before
-                                // this existed read the same as new ones. The stored
-                                // value is never rewritten by this.
-                                <p className='text-navy-500 text-xs truncate'>
-                                  {tidyPhone(u.phone)}
-                                </p>
-                              )}
-                            </div>
+                              {u.email ?? 'No email on file'}
+                            </p>
+                            {u.phone && (
+                              // Tidied on display as well, so rows typed before
+                              // this existed read the same as new ones. The stored
+                              // value is never rewritten by this.
+                              <p className='text-navy-500 text-xs truncate'>
+                                {tidyPhone(u.phone)}
+                              </p>
+                            )}
                           </div>
-                        </td>
-                        <td
-                          className={`px-4 py-3 ${expired ? 'opacity-30' : ''}`}
-                        >
-                          {u.visitorType ? (
-                            <span
-                              className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${visitorTypeStyle(u.visitorType)}`}
-                            >
-                              {u.visitorType}
+                        </div>
+                      </td>
+                      <td
+                        className={`px-3 py-2 whitespace-nowrap ${expired ? 'row-expired-cell' : ''}`}
+                      >
+                        {(() => {
+                          const course = courses.find((c) => c.id === u.courseId);
+                          return course ? (
+                            <span className='inline-block max-w-full truncate rounded-md border border-yellow-500/20 bg-yellow-500/10 px-2.5 py-1 align-bottom text-xs font-medium text-yellow-300'>
+                              {course.label}
                             </span>
                           ) : (
-                            // Legacy rows created before visitor types were
-                            // required. The dash keeps the column from looking
-                            // broken without labelling the person.
                             <span className='text-navy-500 text-xs'>&mdash;</span>
-                          )}
-                        </td>
-                        {showCourse && (
-                          <td
-                            className={`px-4 py-3 whitespace-nowrap ${expired ? 'opacity-30' : ''}`}
-                          >
-                            {(() => {
-                              const course = courses.find(
-                                (c) => c.id === u.courseId
-                              );
-                              return course ? (
-                                <span className='px-2.5 py-1 rounded-md bg-yellow-500/10 text-yellow-300 border border-yellow-500/20 text-xs font-medium'>
-                                  {course.label}
-                                </span>
-                              ) : (
-                                <span className='text-navy-500 text-xs'>
-                                  &mdash;
-                                </span>
-                              );
-                            })()}
-                          </td>
-                        )}
-                        {/* What this person is expected to be here for. Room and purpose are the two
+                          );
+                        })()}
+                      </td>
+                      {/* What this person is expected to be here for. Room and purpose are the two
                             things staff now assign, so they are what the list shows
                             in the primary slot; company is secondary context.
                             Resolved from the rooms/purposes lists already loaded on
                             this page. */}
-                        <td
-                          className={`px-4 py-3 text-sm ${expired ? 'opacity-30' : ''}`}
-                        >
-                          {(() => {
-                            const room = rooms.find((r) => r.id === u.pendingRoomId);
-                            const purpose = purposes.find(
-                              (p) => p.id === u.pendingPurposeId
-                            );
+                      <td className={`px-3 py-2 text-sm ${expired ? 'row-expired-cell' : ''}`}>
+                        {(() => {
+                          const room = rooms.find((r) => r.id === u.pendingRoomId);
+                          const purpose = purposes.find(
+                            (p) => p.id === u.pendingPurposeId
+                          );
 
-                            if (!room && !purpose) {
-                              return <p className='text-navy-500'>-</p>;
-                            }
+                          if (!room && !purpose) {
+                            return <p className='text-navy-500'>-</p>;
+                          }
 
-                            return (
-                              <>
-                                {room && (
-                                  <p className='text-white'>
-                                    {room.name}
-                                    <span className='text-navy-500 text-xs'>
-                                      {' '}
-                                      {room.roomNumber}
-                                    </span>
-                                  </p>
-                                )}
-                                {purpose && (
-                                  <p className='text-navy-400 text-xs'>
-                                    {purpose.label}
-                                  </p>
-                                )}
-                              </>
-                            );
-                          })()}
-                          {u.company && (
-                            <p className='text-navy-500 text-xs truncate'>
-                              {u.company}
-                            </p>
-                          )}
-                        </td>
-                        <td
-                          className={`px-4 py-3 whitespace-nowrap text-sm ${expired ? 'opacity-30' : ''}`}
-                        >
-                          {u.validUntil ? (
-                            <span className={expired ? 'text-red-400' : 'text-navy-300'}>
-                              {expired ? 'Expired ' : ''}
-                              {formatDate(u.validUntil)}
-                            </span>
-                          ) : (
-                            <span className='text-navy-500'>No expiry</span>
-                          )}
-                        </td>
-                        <td
-                          className={`px-4 py-3 whitespace-nowrap text-navy-300 text-sm ${expired ? 'opacity-30' : ''}`}
-                        >
-                          {formatDate(u.createdAt)}
-                        </td>
-                        {/* Actions cell is deliberately NOT dimmed. The buttons
+                          return (
+                            <>
+                              {room && (
+                                <p className='truncate text-white'>
+                                  {room.name}
+                                  <span className='text-navy-500 text-xs'>
+                                    {' '}
+                                    {room.roomNumber}
+                                  </span>
+                                </p>
+                              )}
+                              {purpose && (
+                                <p className='truncate text-navy-400 text-xs'>
+                                  {purpose.label}
+                                </p>
+                              )}
+                            </>
+                          );
+                        })()}
+                        {u.company && (
+                          <p className='text-navy-500 text-xs truncate'>{u.company}</p>
+                        )}
+                      </td>
+                      <td
+                        className={`px-3 py-2 text-sm ${expired ? 'row-expired-cell' : ''}`}
+                      >
+                        {u.validUntil ? (
+                          <span className={expired ? 'text-red-400' : 'text-navy-300'}>
+                            {expired ? 'Expired ' : ''}
+                            {formatDate(u.validUntil)}
+                          </span>
+                        ) : (
+                          <span className='text-navy-500'>No expiry</span>
+                        )}
+                      </td>
+                      <td
+                        className={`px-3 py-2 text-navy-300 text-sm ${expired ? 'row-expired-cell' : ''}`}
+                      >
+                        {formatDate(u.createdAt)}
+                      </td>
+                      {/* Actions cell is deliberately NOT dimmed. The buttons
                             keep their own colours so they stay readable and
                             clickable on the dimmed row. */}
-                        <td className='px-4 py-3'>
-                          <div className='flex items-center gap-2'>
+                      <td className='px-3 py-2'>
+                        <div className='flex flex-wrap items-center gap-2'>
+                          <button
+                            onClick={() => openEdit(u)}
+                            className='px-3 py-1.5 rounded-lg bg-navy-800 border border-navy-700 text-navy-200 hover:bg-navy-700 hover:text-white text-xs font-semibold transition-colors'
+                          >
+                            Edit
+                          </button>
+                          {!showArchived && expired && (
                             <button
-                              onClick={() => openEdit(u)}
-                              className='px-3 py-1.5 rounded-lg bg-navy-800 border border-navy-700 text-navy-200 hover:bg-navy-700 hover:text-white text-xs font-semibold transition-colors'
+                              onClick={() => handleRenew(u)}
+                              disabled={renewing !== null}
+                              title='Extend this pass by 30 days'
+                              className='inline-flex items-center gap-1.5 rounded-lg border border-yellow-500/40 bg-yellow-500/15 px-3 py-1.5 text-xs font-semibold text-yellow-200 transition-colors hover:bg-yellow-500/25 disabled:cursor-not-allowed disabled:opacity-60'
                             >
-                              Edit
+                              <i
+                                className={`fa-solid ${
+                                  renewing === u.id
+                                    ? 'fa-spinner fa-spin'
+                                    : 'fa-rotate'
+                                }`}
+                              ></i>
+                              Renew
                             </button>
-                            {showArchived ? (
-                              <button
-                                onClick={() => confirmRestore(u)}
-                                className='px-3 py-1.5 rounded-lg bg-green-600 border border-green-500/30 text-paper hover:bg-green-700 text-xs font-semibold transition-colors'
-                              >
-                                Restore
-                              </button>
-                            ) : (
-                              <button
-                                onClick={() => setDeleteTarget(u)}
-                                title='Revoke access and archive this visitor'
-                                className='px-3 py-1.5 rounded-lg bg-red-600 border border-red-500/30 text-paper hover:bg-red-700 text-xs font-semibold transition-colors'
-                              >
-                                Archive
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                          )}
+                          {showArchived ? (
+                            <button
+                              onClick={() => confirmRestore(u)}
+                              className='px-3 py-1.5 rounded-lg bg-green-600 border border-green-500/30 text-paper hover:bg-green-700 text-xs font-semibold transition-colors'
+                            >
+                              Restore
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => setDeleteTarget(u)}
+                              title='Revoke access and archive this visitor'
+                              className='px-3 py-1.5 rounded-lg bg-red-600 border border-red-500/30 text-paper hover:bg-red-700 text-xs font-semibold transition-colors'
+                            >
+                              Archive
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
 
-              {!isLoading && filteredUsers.length === 0 && (
-                <div className='text-center py-12'>
-                  <i className='fa-solid fa-users text-navy-600 text-4xl mb-3'></i>
-                  <p className='text-navy-300'>
-                    {showArchived ? 'No archived users' : 'No users found'}
-                  </p>
-                  {!showArchived && users.length === 0 && (
-                    <p className='text-navy-500 text-sm mt-1'>
-                      Add your first user to get started
-                    </p>
-                  )}
-                </div>
-              )}
+            {!isLoading && filteredUsers.length === 0 && (
+              <EmptyState
+                icon='fa-users'
+                title={
+                  showArchived
+                    ? 'No archived trainees'
+                    : showExpired
+                      ? 'No expired passes'
+                      : showValid
+                        ? 'No valid passes'
+                        : 'No trainees found'
+                }
+                description={
+                  !showArchived && !showExpired && !showValid && traineeUsers.length === 0
+                    ? 'Add your first trainee to get started'
+                    : showExpired && expiredCount === 0
+                      ? 'Every active pass is still valid.'
+                      : showValid && validCount === 0
+                        ? 'Every active trainee currently has an expired pass.'
+                        : undefined
+                }
+              />
+            )}
 
-              {isLoading && users.length === 0 && (
-                <div className='text-center py-12'>
-                  <i className='fa-solid fa-spinner fa-spin text-yellow-400 text-2xl'></i>
-                  <p className='text-navy-300 mt-2'>Loading users...</p>
-                </div>
-              )}
-            </div>
+            {isLoading && traineeUsers.length === 0 && (
+              <div className='py-12 text-center'>
+                <i className='fa-solid fa-spinner fa-spin text-2xl text-yellow-400'></i>
+                <p className='mt-2 text-navy-300'>Loading trainees...</p>
+              </div>
+            )}
           </div>
 
-          <div className='mt-4 text-center text-navy-400 text-sm'>
-            Showing {filteredUsers.length} of {source.length}{' '}
-            {showArchived ? 'archived' : 'active'} visitors
-            {expiredCount > 0 && !showArchived && ` · ${expiredCount} with an expired pass`}
-          </div>
-        </main>
-      </div>
+          <TablePagination pagination={pagination} itemLabel='trainees' />
+        </Card>
+      </AdminShell>
 
       {isModalOpen && (
         // `items-start` on small screens so a long form scrolls from the top
@@ -857,7 +970,7 @@ if (editing) {
           <div className='relative w-full sm:max-w-md bg-navy-900 border border-navy-700 sm:rounded-lg my-0 sm:my-8 max-h-[100dvh] sm:max-h-[calc(100dvh-4rem)] flex flex-col'>
             <div className='px-4 py-3 border-b border-navy-700 flex items-center justify-between flex-shrink-0'>
               <h2 className='text-white font-bold'>
-                {editing ? 'Edit Visitor' : 'Add Visitor'}
+                {editing ? 'Edit Trainee' : 'Add Trainee'}
               </h2>
               <button
                 onClick={closeModal}
@@ -870,292 +983,259 @@ if (editing) {
             {/* The form is a flex column: a scrollable field region and a fixed footer.
                 Both need to be children of the form, and the footer must not be
                 inside the scroll container, or Cancel/Save scroll out of reach. */}
-            <form
-              onSubmit={handleSubmit}
-              className='flex flex-col min-h-0 flex-1'
-            >
+            <form onSubmit={handleSubmit} className='flex flex-col min-h-0 flex-1'>
               <div className='p-4 space-y-3 overflow-y-auto flex-1 min-h-0 overscroll-contain'>
-              {formError && (
-                <div className='p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-300 text-sm'>
-                  {formError}
-                </div>
-              )}
-              {/* Three fields, not one: these are the columns the entrance
+                {formError && (
+                  <div className='p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-300 text-sm'>
+                    {formError}
+                  </div>
+                )}
+                {/* Three fields, not one: these are the columns the entrance
                   check matches on. The middle initial is optional and is
                   normalised to a single letter server-side. */}
-              <div className='grid grid-cols-1 sm:grid-cols-[1fr_4.5rem_1fr] gap-3'>
+                <div className='grid grid-cols-1 sm:grid-cols-[1fr_4.5rem_1fr] gap-3'>
+                  <div>
+                    <label className='block text-sm font-medium text-navy-200 mb-2'>
+                      First name <span className='text-red-400'>*</span>
+                    </label>
+                    <input
+                      type='text'
+                      value={form.firstName}
+                      onChange={(e) => setForm({ ...form, firstName: e.target.value })}
+                      required
+                      className={INPUT}
+                    />
+                  </div>
+                  <div>
+                    <label className='block text-sm font-medium text-navy-200 mb-2'>
+                      M.I.
+                    </label>
+                    <input
+                      type='text'
+                      value={form.middleInitial}
+                      onChange={(e) =>
+                        setForm({ ...form, middleInitial: e.target.value })
+                      }
+                      // Two, so an admin who types "O." is not stopped mid-word.
+                      maxLength={2}
+                      className={INPUT}
+                    />
+                  </div>
+                  <div>
+                    <label className='block text-sm font-medium text-navy-200 mb-2'>
+                      Last name <span className='text-red-400'>*</span>
+                    </label>
+                    <input
+                      type='text'
+                      value={form.lastName}
+                      onChange={(e) => setForm({ ...form, lastName: e.target.value })}
+                      required
+                      className={INPUT}
+                    />
+                  </div>
+                </div>
                 <div>
                   <label className='block text-sm font-medium text-navy-200 mb-2'>
-                    First name <span className='text-red-400'>*</span>
+                    Email
                   </label>
                   <input
-                    type='text'
-                    value={form.firstName}
-                    onChange={(e) => setForm({ ...form, firstName: e.target.value })}
+                    type='email'
+                    value={form.email}
+                    onChange={(e) => setForm({ ...form, email: e.target.value })}
                     required
                     className={INPUT}
                   />
                 </div>
-                <div>
-                  <label className='block text-sm font-medium text-navy-200 mb-2'>
-                    M.I.
-                  </label>
-                  <input
-                    type='text'
-                    value={form.middleInitial}
-                    onChange={(e) =>
-                      setForm({ ...form, middleInitial: e.target.value })
-                    }
-                    // Two, so an admin who types "O." is not stopped mid-word.
-                    maxLength={2}
-                    className={INPUT}
-                  />
-                </div>
-                <div>
-                  <label className='block text-sm font-medium text-navy-200 mb-2'>
-                    Last name <span className='text-red-400'>*</span>
-                  </label>
-                  <input
-                    type='text'
-                    value={form.lastName}
-                    onChange={(e) => setForm({ ...form, lastName: e.target.value })}
-                    required
-                    className={INPUT}
-                  />
-                </div>
-              </div>
-              <div>
-                <label className='block text-sm font-medium text-navy-200 mb-2'>
-                  Email
-                </label>
-                <input
-                  type='email'
-                  value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  required
-                  className={INPUT}
-                />
-              </div>
-              <div>
-                <label className='block text-sm font-medium text-navy-200 mb-2'>
-                  Visitor type
-                </label>
-                <div className='relative'>
-                  <select
-                    value={form.visitorTypeId}
-                    onChange={(e) =>
-                      setForm({ ...form, visitorTypeId: e.target.value })
-                    }
-                    required
-                    className={`${INPUT} appearance-none cursor-pointer`}
-                  >
-                    <option value='' disabled className='bg-navy-900'>
-                      Select visitor type
-                    </option>
-                    {visitorTypes.map((type) => (
-                      <option key={type.id} value={type.id} className='bg-navy-900'>
-                        {type.label}
-                      </option>
-                    ))}
-                  </select>
-                  <i className='fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-navy-400 text-xs pointer-events-none'></i>
-                </div>
-                {/* Reassurance that this changes nothing about permissions: the
-                    trainer/trainee *roles* were removed for exactly this reason. */}
-                <p className='text-navy-500 text-xs mt-1'>
-                  Descriptive only. Everyone here is a visitor with the same access -
-                  this is here so you can count who came to the orientation.
-                </p>
-              </div>
 
-              {/* Assigned room. Same picker as the register form, but storing the
+                {/* Assigned room. Same picker as the register form, but storing the
                   room id rather than the number: this value is persisted on
                   `users.pending_room_id` (migration 007) and resolved to a room at
                   check-in. The register form keeps the number in the visitor's
                   session instead, so the two differ deliberately. */}
-              <div>
-                <label
-                  htmlFor='pendingRoomId'
-                  className='block text-sm font-medium text-navy-200 mb-2'
-                >
-                  Assigned room
-                </label>
-                <div className='relative'>
-                  <select
-                    id='pendingRoomId'
-                    value={form.pendingRoomId}
-                    onChange={(e) => {
-                      // A deliberate choice: stop deriving the room from the course.
-                      roomTouched.current = true;
-                      setForm({ ...form, pendingRoomId: e.target.value });
-                    }}
-                    className={`${INPUT} appearance-none cursor-pointer`}
+                <div>
+                  <label
+                    htmlFor='pendingRoomId'
+                    className='block text-sm font-medium text-navy-200 mb-2'
                   >
-                    <option value='' className='bg-navy-900'>
-                      No assigned room
-                    </option>
-                    {rooms.map((room) => (
-                      <option key={room.id} value={room.id} className='bg-navy-900'>
-                        {room.name} ({room.roomNumber})
+                    Assigned room
+                  </label>
+                  <div className='relative'>
+                    <select
+                      id='pendingRoomId'
+                      value={form.pendingRoomId}
+                      onChange={(e) => {
+                        // A deliberate choice: stop deriving the room from the course.
+                        roomTouched.current = true;
+                        setForm({ ...form, pendingRoomId: e.target.value });
+                      }}
+                      className={`${INPUT} appearance-none cursor-pointer`}
+                    >
+                      <option value='' className='bg-navy-900'>
+                        No assigned room
                       </option>
-                    ))}
-                  </select>
-                  <i className='fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-navy-400 text-xs pointer-events-none'></i>
+                      {rooms.map((room) => (
+                        <option key={room.id} value={room.id} className='bg-navy-900'>
+                          {room.name} ({room.roomNumber})
+                        </option>
+                      ))}
+                    </select>
+                    <i className='fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-navy-400 text-xs pointer-events-none'></i>
+                  </div>
+                  <p className='text-navy-500 text-xs mt-1'>
+                    Filled in from the course; you can change it. Applied to their first
+                    check-in; after that the room is recorded when they scan a door code.
+                  </p>
                 </div>
-                <p className='text-navy-500 text-xs mt-1'>
-                  Filled in from the course; you can change it. Applied to their
-                  first check-in; after that the room is recorded when they scan
-                  a door code.
-                </p>
-              </div>
 
-              {/* Purpose. Same reasoning as the room above: seeded onto the first
+                {/* Purpose. Same reasoning as the room above: seeded onto the first
                   attendance record, not a permanent property of the person. */}
-              <div>
-                <label
-                  htmlFor='pendingPurposeId'
-                  className='block text-sm font-medium text-navy-200 mb-2'
-                >
-                  Purpose <span className='text-yellow-400'>*</span>
-                </label>
-                <div className='relative'>
-                  <select
-                    id='pendingPurposeId'
-                    value={form.pendingPurposeId}
-                    onChange={(e) =>
-                      setForm({ ...form, pendingPurposeId: e.target.value })
-                    }
-                    className={`${INPUT} appearance-none cursor-pointer`}
+                <div>
+                  <label
+                    htmlFor='pendingPurposeId'
+                    className='block text-sm font-medium text-navy-200 mb-2'
                   >
-                    <option value='' className='bg-navy-900'>
-                      Select a purpose
-                    </option>
-                    {purposes.map((purpose) => (
-                      <option key={purpose.id} value={purpose.id} className='bg-navy-900'>
-                        {purpose.label}
+                    Purpose <span className='text-yellow-400'>*</span>
+                  </label>
+                  <div className='relative'>
+                    <select
+                      id='pendingPurposeId'
+                      value={form.pendingPurposeId}
+                      onChange={(e) =>
+                        setForm({ ...form, pendingPurposeId: e.target.value })
+                      }
+                      className={`${INPUT} appearance-none cursor-pointer`}
+                    >
+                      <option value='' className='bg-navy-900'>
+                        Select a purpose
                       </option>
-                    ))}
-                  </select>
-                  <i className='fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-navy-400 text-xs pointer-events-none'></i>
+                      {purposes.map((purpose) => (
+                        <option
+                          key={purpose.id}
+                          value={purpose.id}
+                          className='bg-navy-900'
+                        >
+                          {purpose.label}
+                        </option>
+                      ))}
+                    </select>
+                    <i className='fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-navy-400 text-xs pointer-events-none'></i>
+                  </div>
+                  <p className='text-navy-500 text-xs mt-1'>
+                    Applied to their first check-in, and they can pick a different reason
+                    on later visits.
+                  </p>
                 </div>
-                <p className='text-navy-500 text-xs mt-1'>
-                  Applied to their first check-in, and they can pick a
-                  different reason on later visits.
-                </p>
-              </div>
 
-              {/* Course. Unlike room/purpose, this is a permanent attribute of
+                {/* Course. Unlike room/purpose, this is a permanent attribute of
                   the visitor, persisted on users.course_id. Required when
                   creating; an admin can change it later. */}
-              <div>
-                <label
-                  htmlFor='courseId'
-                  className='block text-sm font-medium text-navy-200 mb-2'
-                >
-                  Course <span className='text-yellow-400'>*</span>
-                </label>
-                <div className='relative'>
-                  <select
-                    id='courseId'
-                    value={form.courseId}
-                    onChange={(e) =>
-                      setForm({ ...form, courseId: e.target.value })
-                    }
-                    className={`${INPUT} appearance-none cursor-pointer`}
+                <div>
+                  <label
+                    htmlFor='courseId'
+                    className='block text-sm font-medium text-navy-200 mb-2'
                   >
-                    <option value='' className='bg-navy-900'>
-                      Select a course
-                    </option>
-                    {courses.map((course) => (
-                      <option key={course.id} value={course.id} className='bg-navy-900'>
-                        {course.label}
+                    Course <span className='text-yellow-400'>*</span>
+                  </label>
+                  <div className='relative'>
+                    <select
+                      id='courseId'
+                      value={form.courseId}
+                      onChange={(e) => setForm({ ...form, courseId: e.target.value })}
+                      className={`${INPUT} appearance-none cursor-pointer`}
+                    >
+                      <option value='' className='bg-navy-900'>
+                        Select a course
                       </option>
-                    ))}
-                  </select>
-                  <i className='fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-navy-400 text-xs pointer-events-none'></i>
+                      {courses.map((course) => (
+                        <option key={course.id} value={course.id} className='bg-navy-900'>
+                          {course.label}
+                        </option>
+                      ))}
+                    </select>
+                    <i className='fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-navy-400 text-xs pointer-events-none'></i>
+                  </div>
                 </div>
-              </div>
-              {/* `host_name` and `notes` are deliberately not editable here any more, so this
+                {/* `host_name` and `notes` are deliberately not editable here any more, so this
                   form matches what the register form collects: a visitor cannot
                   supply either, so letting staff set them here only created a
                   field one of two paths could fill. Both columns still exist and
                   existing values are still shown in the list above. */}
-              <div>
-                <label
-                  htmlFor='company'
-                  className='block text-sm font-medium text-navy-200 mb-2'
-                >
-                  Company / school
-                </label>
-                <input
-                  id='company'
-                  type='text'
-                  value={form.company}
-                  onChange={(e) => setForm({ ...form, company: e.target.value })}
-                  placeholder='e.g. ABC College'
-                  className={INPUT}
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor='phone'
-                  className='block text-sm font-medium text-navy-200 mb-2'
-                >
-                  Phone
-                </label>
-                <input
-                  id='phone'
-                  type='tel'
-                  inputMode='tel'
-                  autoComplete='tel'
-                  value={form.phone}
-                  onChange={(e) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      phone: sanitisePhone(e.target.value),
-                    }))
-                  }
-                  // Block the keystroke rather than filtering it afterwards: a
-                  // character that appears and then vanishes reads as a broken
-                  // field. onChange still sanitises, which is what catches a paste
-                  // (keydown does not fire for pasted content).
-                  onKeyDown={(e) => {
-                    if (!isAllowedPhoneKey(e.key, e.ctrlKey || e.metaKey)) {
-                      e.preventDefault();
+                <div>
+                  <label
+                    htmlFor='company'
+                    className='block text-sm font-medium text-navy-200 mb-2'
+                  >
+                    Company / school
+                  </label>
+                  <input
+                    id='company'
+                    type='text'
+                    value={form.company}
+                    onChange={(e) => setForm({ ...form, company: e.target.value })}
+                    placeholder='e.g. ABC College'
+                    className={INPUT}
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor='phone'
+                    className='block text-sm font-medium text-navy-200 mb-2'
+                  >
+                    Phone
+                  </label>
+                  <input
+                    id='phone'
+                    type='tel'
+                    inputMode='tel'
+                    autoComplete='tel'
+                    value={form.phone}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        phone: sanitisePhone(e.target.value),
+                      }))
                     }
-                  }}
-                  // Grouping runs on BLUR, not on every keystroke. Regrouping
-                  // mid-type reorders characters and drags the caret backwards
-                  // over what was just typed; on blur there is no caret to move,
-                  // so the number is tidied while the field is not being edited.
-                  onBlur={() =>
-                    setForm((prev) => ({ ...prev, phone: formatPhone(prev.phone) }))
-                  }
-                  placeholder='For the front desk to call ahead'
-                  className={INPUT}
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor='validUntil'
-                  className='block text-sm font-medium text-navy-200 mb-2'
-                >
-                  Pass valid until
-                </label>
-                <input
-                  id='validUntil'
-                  type='date'
-                  value={form.validUntil}
-                  onChange={(e) => setForm({ ...form, validUntil: e.target.value })}
-                  className={INPUT}
-                />
-                <p className='text-navy-500 text-xs mt-1'>
-                  Leave empty for a pass that never expires. Expired passes are
-                  flagged in the list but their history is kept.
-                </p>
-              </div>
-              {/* See the note above: `notes` is not editable here. */}
-              {/* The assigned room and purpose live on `users.pending_room_id` /
+                    // Block the keystroke rather than filtering it afterwards: a
+                    // character that appears and then vanishes reads as a broken
+                    // field. onChange still sanitises, which is what catches a paste
+                    // (keydown does not fire for pasted content).
+                    onKeyDown={(e) => {
+                      if (!isAllowedPhoneKey(e.key, e.ctrlKey || e.metaKey)) {
+                        e.preventDefault();
+                      }
+                    }}
+                    // Grouping runs on BLUR, not on every keystroke. Regrouping
+                    // mid-type reorders characters and drags the caret backwards
+                    // over what was just typed; on blur there is no caret to move,
+                    // so the number is tidied while the field is not being edited.
+                    onBlur={() =>
+                      setForm((prev) => ({ ...prev, phone: formatPhone(prev.phone) }))
+                    }
+                    placeholder='For the front desk to call ahead'
+                    className={INPUT}
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor='validUntil'
+                    className='block text-sm font-medium text-navy-200 mb-2'
+                  >
+                    Pass valid until
+                  </label>
+                  <input
+                    id='validUntil'
+                    type='date'
+                    value={form.validUntil}
+                    onChange={(e) => setForm({ ...form, validUntil: e.target.value })}
+                    className={INPUT}
+                  />
+                  <p className='text-navy-500 text-xs mt-1'>
+                    Leave empty for a pass that never expires. Expired passes are flagged
+                    in the list but their history is kept.
+                  </p>
+                </div>
+                {/* See the note above: `notes` is not editable here. */}
+                {/* The assigned room and purpose live on `users.pending_room_id` /
                   `pending_purpose_id` (migration 007) as PENDING intent, seeding the
                   first attendance record. The authoritative room and purpose are on
                   `clock_in_records`, one row per visit, because a person can attend a
@@ -1167,26 +1247,10 @@ if (editing) {
                   else has no such session. `host_name` and `notes` remain genuinely
                   uneditable — staff can still see them in the list, but the register
                   form does not collect them either. */}
-              <p className='text-navy-500 text-xs'>
-                Assigned rooms are no longer stored on the account. They are
-                recorded per visit when the person checks in.
-              </p>
-              {!editing && (
-                <div>
-                  <label className='block text-sm font-medium text-navy-200 mb-2'>
-                    Password
-                  </label>
-                  <input
-                    type='password'
-                    value={form.password}
-                    onChange={(e) => setForm({ ...form, password: e.target.value })}
-                    required
-                    minLength={6}
-                    placeholder='At least 6 characters'
-                    className={INPUT}
-                  />
-                </div>
-              )}
+                <p className='text-navy-500 text-xs'>
+                  Assigned rooms are no longer stored on the account. They are recorded
+                  per visit when the person checks in.
+                </p>
               </div>
 
               {/* Submit controls sit outside the scroll region. Inside it they
@@ -1229,8 +1293,8 @@ if (editing) {
                 <h2 className='text-white font-bold'>Archive user?</h2>
                 <p className='text-navy-300 text-sm mt-1'>
                   <span className='text-white font-semibold'>{deleteTarget.name}</span>{' '}
-                  will no longer be able to sign in, and will be hidden from this
-                  list. Their attendance and room-visit history is kept.
+                  will no longer be able to sign in, and will be hidden from this list.
+                  Their attendance and room-visit history is kept.
                 </p>
               </div>
             </div>

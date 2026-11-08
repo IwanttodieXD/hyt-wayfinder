@@ -5,10 +5,18 @@ import { useRoleGuard } from '@/hooks/useRoleGuard';
 import { useAttendanceStatus, useClockInProfile } from '@/hooks/useClockInProfile';
 import { useAutoCheckInAfterVerify } from '@/hooks/useAutoCheckInAfterVerify';
 import StudentMobileView from '@/components/StudentMobileView';
-import UserProfile from '@/components/UserProfile';
+import TraineeHeader from '@/components/TraineeHeader';
+import { Alert } from '@/components/ui';
 
+/**
+ * The trainee scanner.
+ *
+ * Camera, attendance and room-presence behaviour all live in QRScanner and are
+ * unchanged. This page only provides the shell around it: the shared trainee
+ * navigation and the automatic-check-in failure notice.
+ */
 export default function CheckInPage() {
-  const { user, isAuthenticated } = useAuthStore();
+  const { user } = useAuthStore();
 
   // Visitors check in from their own phone. Admins use the station instead, so
   // they are sent back to the dashboard.
@@ -21,7 +29,7 @@ export default function CheckInPage() {
   // "not checked in" for someone who is genuinely inside.
   useAttendanceStatus(user?.id);
 
-  // When the visitor arrives signed in from /verify, check them in
+  // When the trainee arrives signed in from /verify or /register, check them in
   // automatically (reusing the same action as a manual scan) instead of making
   // them scan the entrance code. Returns an error string if that write failed.
   const { error: autoCheckInError } = useAutoCheckInAfterVerify();
@@ -31,57 +39,28 @@ export default function CheckInPage() {
   }
 
   return (
-    <>
-      <div className='h-[100dvh] flex flex-col'>
-        {/* Header */}
-        <header className='app-header border-b flex-shrink-0'>
-          <div className='max-w-7xl mx-auto px-4 py-2.5 flex items-center justify-between'>
-            <div className='flex items-center gap-2.5 min-w-0'>
-              <div className='w-9 h-9 flex items-center justify-center overflow-hidden flex-shrink-0'>
-                <img
-                  src='/hyt_logo.png'
-                  alt='HYT Global Logo'
-                  className='w-full h-full object-contain'
-                />
-              </div>
-              <div className='min-w-0'>
-                <h1 className='text-white font-semibold text-sm leading-none'>
-                  Attendance
-                </h1>
-                <p className='text-navy-400 text-xs mt-0.5 truncate'>
-                  {isAuthenticated && user ? `${user.name} - ` : ''}My Check-In
-                </p>
-              </div>
-            </div>
+    <div className='flex h-[100dvh] flex-col'>
+      <TraineeHeader />
 
-            {/* User Profile. The old fallback here rendered a "System Online" badge when
-                signed out, but this page is role-guarded, so that branch was
-                unreachable. */}
-            {isAuthenticated && user ? <UserProfile /> : null}
+      {/* Automatic check-in failure. Shown instead of a false "checked in"
+          state: the trainee is genuinely not checked in, so the manual scan
+          remains the way forward. */}
+      {autoCheckInError && (
+        <div className='flex-shrink-0 border-b border-red-500/30 bg-red-500/10 px-4 py-2.5'>
+          <div className='mx-auto max-w-6xl'>
+            <Alert tone='danger' role='alert'>
+              {autoCheckInError}
+            </Alert>
           </div>
-        </header>
+        </div>
+      )}
 
-        {/* Automatic check-in failure. Shown instead of a false "checked in"
-            state: the visitor is genuinely not checked in, so they are pointed
-            at the manual scan that still works. */}
-        {autoCheckInError && (
-          <div className='flex-shrink-0 bg-red-500/10 border-b border-red-500/30 px-4 py-2'>
-            <p
-              role='alert'
-              className='max-w-7xl mx-auto text-red-300 text-xs flex items-start gap-2'
-            >
-              <i className='fa-solid fa-circle-exclamation mt-0.5'></i>
-              <span>{autoCheckInError}</span>
-            </p>
-          </div>
-        )}
-
-        {/* Main Content - Full Screen Mobile View. `min-h-0` lets this flex child
-            shrink so the mobile frame fits without pushing the header off screen. */}
-        <main className='flex-1 min-h-0 overflow-hidden'>
-          <StudentMobileView />
-        </main>
-      </div>
-    </>
+      {/* The page, not the phone frame, is what scrolls when the scanner
+          content is taller than the viewport. `min-h-0` lets the flex child
+          shrink so the header always stays put. */}
+      <main className='min-h-0 flex-1 overflow-y-auto overflow-x-hidden'>
+        <StudentMobileView />
+      </main>
+    </div>
   );
 }

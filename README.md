@@ -10,6 +10,8 @@ occupancy and check-in record dashboards.
 > gaps. This README is the setup and reference guide.
 >
 > Database design: [supabase/SCHEMA.md](./supabase/SCHEMA.md).
+> End-user guide: [USER_MANUAL.md](./USER_MANUAL.md).
+> Acceptance tests: [UAT.md](./UAT.md).
 
 ## Features
 
@@ -67,23 +69,22 @@ cp .env.example .env.local
 
 ### Database
 
-The schema is five tables: `rooms`, `purposes`, `users`, `clock_in_records` and
-`room_visits`. It ships as ordered migrations — run them in the Supabase SQL
-editor, **in numeric order** (the later files depend on the earlier ones):
+The schema is seven tables: `rooms`, `purposes`, `visitor_types`, `courses`,
+`users`, `clock_in_records` and `room_visits`. Everything — tables, functions,
+RLS policies, grants, reference data and the orientation cohort — ships in a
+**single migration**:
 
-1. `supabase/migrations/20260101000001_full_schema.sql` — tables, RLS, triggers
-2. `supabase/migrations/20260101000002_registration_fix.sql` — self-registration
-3. `supabase/migrations/20260101000003_retire_trainee_roles.sql` — folds the unused `trainer`/`trainee` roles into `visitor`
-4. `supabase/migrations/20260101000004_visitor_profiles.sql` — classification and profile columns
-5. `supabase/migrations/20260101000005_service_role_grants.sql` — grants for admin create/archive
-6. `supabase/migrations/20260101000006_default_pass_expiry.sql` — new accounts default to a pass that expires at end of today
-7. `supabase/migrations/20260101000007_pending_visit_intent.sql` — `pending_room_id` / `pending_purpose_id`, so an admin-assigned room and purpose survive until check-in
-8. `supabase/migrations/20260101000008_integrity_and_least_privilege.sql` — one open attendance row per user, and column-scoped `UPDATE` so a visit's timestamps and room cannot be rewritten after the fact
-9. `supabase/migrations/20260101000009_rooms_readable_by_anyone.sql` — lets the register form's room picker load before sign-in
-10. `supabase/seed.sql` — the 11 rooms and the visit purposes
+```text
+supabase/migrations/20260101000000_full_setup.sql
+```
 
-This is a **fresh** schema, not an upgrade path: it creates clean tables rather
-than `ALTER`ing the old ones, so there is no data migration to run.
+Paste it into the Supabase Dashboard → SQL Editor → New query and run it once
+against a fresh project. It is also safe to re-run on the same database.
+
+The file replaces the old numbered migrations and `supabase/seed.sql`, which
+have been removed. It is a **final-state** file rather than a replay, so it
+creates clean tables with `IF NOT EXISTS` rather than walking the historical
+`ALTER` chain.
 
 > **Old-format room posters still work.** Codes printed as
 > `HYT-KIOSK-01-CHECKIN-STATION:<ROOM>` are read as the room they name, so a door
@@ -132,18 +133,24 @@ mixed-case path otherwise produces two module copies and
 
 | Route | Purpose |
 | --- | --- |
-| `/` | Landing page; redirects by role |
+| `/` | Redirects to `/verify` — the entrance page the QR poster points at |
+| `/verify` | Entrance identification: first name, last name and course |
 | `/login`, `/register` | Authentication |
+| `/pass-expired` | Shown when a visitor's pass has expired |
+| `/successfully-registered` | Post-registration confirmation |
 | `/check-in` | Mobile QR scanner and check-in/out (visitor) |
+| `/check-in/success` | Check-in/check-out confirmation |
 | `/station` | Lobby kiosk — prints the check-in QR code and each room's door code |
-| `/visitor` | Visitor view |
+| `/visitor` | Visitor view; redirects to `/check-in` |
 | `/occupancy` | Live room occupancy. Each room is a button that drops down who is inside (admin only) |
 | `/admin` | Admin dashboard |
 | `/admin/records` | Attendance records (check-in/out) |
 | `/admin/room-records` | Room visit history, grouped per room |
 | `/admin/rooms` | Room management: add, rename, deactivate (admin only) |
 | `/admin/users` | Visitor management: classify, set pass expiry, archive/restore (requires `SUPABASE_SERVICE_ROLE_KEY`) |
+| `/admin/lookups` | Form options: purposes, visitor types and courses (admin only) |
 | `/api/admin/users` | Server route for visitor create/edit/archive/restore |
+| `/api/verify` | Server route for the entrance verification lookup |
 
 `/clock-in` permanently redirects to `/check-in`, so existing bookmarks and
 printed links keep working.
@@ -247,8 +254,7 @@ hooks/                      # Role guard, profile sync, live data
 lib/                        # Supabase client, QR parser, URL helpers
 store/                      # Zustand: auth, users, records, roomPresence, rooms, clockIn, theme
 scripts/                    # next-with-canonical-path.js (Windows casing fix)
-supabase/migrations/        # Ordered SQL migrations
-supabase/seed.sql           # The 11 rooms + purposes
+supabase/migrations/        # Single full_setup.sql migration
 public/                     # Static assets
 ```
 
@@ -268,7 +274,7 @@ npm run lint    # ESLint
 ## Security notes
 
 - Row Level Security is enabled on every table: `rooms`, `purposes`, `users`,
-  `clock_in_records`, `room_visits`, and `visitor_types`.
+  `clock_in_records`, `room_visits`, `visitor_types`, and `courses`.
 - `rooms`, `purposes` and `visitor_types` are lookup data — labels with no user
   information — so they are readable by anyone. That is deliberate: the register
   form runs before anyone has signed in, and its pickers would otherwise be
@@ -320,8 +326,8 @@ before the event they came for.
 The two creation paths differ on purpose:
 
 - **Self-registration** — no date is asked. The form sends the end of the registering
-  day, and `20260101000006_default_pass_expiry.sql` sets the same value as a column
-  DEFAULT, so even a writer that forgets the field still gets a one-day pass rather
+  day, and the `valid_until` column DEFAULT in `full_setup.sql` sets the same
+  value, so even a writer that forgets the field still gets a one-day pass rather
   than one that never expires.
 - **Admin** — the "Pass valid until" date input is manual, and an explicit `NULL`
   bypasses the DEFAULT. Staff know whether someone is on site for a week; a blanket
@@ -329,7 +335,7 @@ The two creation paths differ on purpose:
 
 An expired pass is refused at sign-in and at check-in, and is flagged red in the admin
 user list. **Their attendance history is kept** — expiry closes the door, it does not
-erase the record. Existing rows are untouched by that migration.
+erase the record.
 
 ### Roles vs visitor types
 
@@ -343,8 +349,8 @@ These are different things and the distinction is deliberate:
 
 The `trainer` and `trainee` *roles* were removed: no RLS policy ever distinguished
 them from `visitor`, and `/trainer` was a byte-identical copy of `/visitor`. The
-enum labels still exist in Postgres, which cannot drop them — see
-`20260101000003_retire_trainee_roles.sql`.
+enum labels still exist in Postgres, which cannot drop them — see the enum
+comments in `supabase/migrations/20260101000000_full_setup.sql`.
 
 At an event the people arriving are trainees, trainers and VIPs, but none of them
 need different *permissions*. Putting them on `role` is what created the dead roles

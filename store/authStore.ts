@@ -15,8 +15,8 @@ import { composeFullName, normaliseMiddleInitial } from '@/lib/fullName';
  * Note the `user_role` enum in Postgres still declares 'trainer' and 'trainee'.
  * They are retired but retained in the type, because Postgres cannot drop an enum
  * label and recreating the type would mean dropping and rebuilding a column on a
- * table that attendance history depends on. Nothing writes them any more; see
- * 20260101000003_retire_trainee_roles.sql, which normalises existing rows.
+ * table that attendance history depends on. Nothing writes them any more;
+ * full_setup.sql normalises existing rows.
  */
 export type UserRole = 'admin' | 'visitor';
 
@@ -236,7 +236,7 @@ interface AuthState {
     pendingPurposeId?: string;
     /**
      * The course this visitor is enrolled in (courses.id). Persisted as
-     * `users.course_id` by migration 20260101000011. Required by the register
+     * `users.course_id` by the full setup. Required by the register
      * form, but optional here so older callers don't break.
      */
     courseId?: string;

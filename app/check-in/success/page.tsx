@@ -5,18 +5,20 @@ import { useAuthStore } from '@/store/authStore';
 import { useRoleGuard } from '@/hooks/useRoleGuard';
 import { useAttendanceStatus, useClockInProfile } from '@/hooks/useClockInProfile';
 import { useClockInStore } from '@/store/clockInStore';
-import UserProfile from '@/components/UserProfile';
+import { personLabel } from '@/lib/trainee';
+import TraineeHeader from '@/components/TraineeHeader';
+import { Badge, Button, Card } from '@/components/ui';
 
 /**
  * Success page shown after a completed attendance scan.
  *
- * No camera, no scanner — just the success panel. The visitor's name and the
- * action time come from the existing clock-in store, so no query params or
- * extra state plumbing are needed. "Continue" sends the visitor back to
- * /check-in, which restarts the camera there.
+ * No camera, no scanner — just the confirmation panel. The trainee's name and
+ * the action time come from the existing clock-in store, so no query params or
+ * extra state plumbing are needed. "Scan again" sends them back to /check-in,
+ * which restarts the camera there.
  */
 export default function CheckInSuccessPage() {
-  const { user, isAuthenticated } = useAuthStore();
+  const { user } = useAuthStore();
   const { status, student, clockInTime } = useClockInStore();
   const router = useRouter();
 
@@ -28,134 +30,93 @@ export default function CheckInSuccessPage() {
   // check-in, so it distinguishes the two actions without a separate flag.
   const isCheckIn = status !== 'not-clocked-in';
   const actionTime = clockInTime ?? new Date();
-  const visitorName = student.name || user?.name || 'Visitor';
+  const visitorName = student.name || user?.name || 'Guest';
 
   if (!isAllowed) {
     return null;
   }
 
   return (
-    <div className='h-[100dvh] flex flex-col'>
-      <header className='app-header border-b flex-shrink-0'>
-        <div className='max-w-7xl mx-auto px-4 py-2.5 flex items-center justify-between'>
-          <div className='flex items-center gap-2.5 min-w-0'>
-            <div className='w-9 h-9 flex items-center justify-center overflow-hidden flex-shrink-0'>
-              <img
-                src='/hyt_logo.png'
-                alt='HYT Global Logo'
-                className='w-full h-full object-contain'
-              />
-            </div>
-            <div className='min-w-0'>
-              <h1 className='text-white font-semibold text-sm leading-none'>
-                Attendance
-              </h1>
-              <p className='text-navy-400 text-xs mt-0.5 truncate'>
-                {isAuthenticated && user ? `${user.name} - ` : ''}Check-In
-              </p>
-            </div>
-          </div>
-          {isAuthenticated && user ? <UserProfile /> : null}
-        </div>
-      </header>
+    <div className='flex min-h-[100dvh] flex-col'>
+      <TraineeHeader />
 
-      <main className='flex-1 min-h-0 overflow-hidden'>
-        <div className='w-full h-full flex items-center justify-center'>
-          {/* Same mobile device frame as /check-in so the transition is
-              visually continuous. */}
-          <div className='relative w-full h-full bg-navy-900 rounded-lg border-4 border-navy-800 overflow-hidden flex flex-col max-w-md max-h-[calc(100dvh-7rem)]'>
-            <div className='bg-navy-900 px-4 py-3 border-b border-navy-800/50'>
-              <div className='flex items-center justify-between gap-3'>
-                <div className='min-w-0'>
-                  <h2 className='text-white font-bold text-base leading-tight truncate'>
-                    {visitorName}
-                  </h2>
-                  <p className='text-navy-400 text-xs mt-0.5 truncate'>
-                    {user?.email}
-                  </p>
-                </div>
-                <div
-                  className={`flex-shrink-0 px-2.5 py-1 rounded-full text-xs font-bold ${
-                    isCheckIn
-                      ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                      : 'bg-navy-500/20 text-navy-300 border border-navy-500/30'
-                  }`}
-                >
-                  <i
-                    className={`fa-solid ${isCheckIn ? 'fa-circle-check' : 'fa-circle-xmark'} mr-1`}
-                  ></i>
-                  {isCheckIn ? 'Checked In' : 'Checked Out'}
-                </div>
+      <main className='flex-1 px-4 py-6 sm:py-10'>
+        <div className='mx-auto w-full max-w-lg'>
+          <Card className='text-center'>
+            <div className='mx-auto mb-5 flex h-20 w-20 animate-scale-in items-center justify-center rounded-full bg-green-500 shadow-lg shadow-green-500/30'>
+              <i className='fa-solid fa-check text-3xl text-paper'></i>
+            </div>
+
+            <Badge
+              tone={isCheckIn ? 'success' : 'neutral'}
+              dot
+              className='mb-3'
+            >
+              {isCheckIn ? 'Checked in' : 'Checked out'}
+            </Badge>
+
+            <h1 className='text-2xl font-bold leading-tight text-white'>
+              {isCheckIn
+                ? 'You are checked in'
+                : 'You have checked out'}
+            </h1>
+
+            <p className='mx-auto mt-2 max-w-sm text-sm leading-relaxed text-navy-300'>
+              {isCheckIn
+                ? 'Attendance has started. Scan a room door whenever you move to a new room.'
+                : 'Attendance and your open room visit were closed together. See you next time.'}
+            </p>
+
+            <dl className='mt-6 divide-y divide-navy-800 rounded-xl border border-navy-700 bg-navy-950/40 text-left text-sm'>
+              <div className='flex items-center justify-between gap-3 px-4 py-3'>
+                <dt className='flex items-center gap-2 text-navy-400'>
+                  <i className='fa-solid fa-user text-yellow-400'></i>
+                  {personLabel(user?.visitorType)}
+                </dt>
+                <dd className='truncate font-medium text-white'>
+                  {visitorName}
+                </dd>
               </div>
-            </div>
-
-            {/* Success Panel */}
-            <div className='flex-1 min-h-0 overflow-y-auto bg-navy-950 flex items-center justify-center p-6'>
-              <div className='w-full max-w-sm flex flex-col items-center text-center'>
-                {/* Success icon */}
-                <div className='w-24 h-24 rounded-full bg-green-500 flex items-center justify-center mb-6 animate-scale-in shadow-lg shadow-green-500/30'>
-                  <i className='fa-solid fa-check text-paper text-4xl'></i>
-                </div>
-
-                <h2 className='text-white font-bold text-2xl leading-tight mb-1'>
-                  {isCheckIn ? 'Successfully Checked In' : 'Successfully Checked Out'}
-                </h2>
-
-                <p className='text-navy-300 text-sm mb-6'>
-                  {isCheckIn
-                    ? 'You are now checked in.'
-                    : 'You have been checked out. See you next time.'}
-                </p>
-
-                {/* Detail card: name + time */}
-                <div className='w-full rounded-lg border border-navy-700 bg-navy-900/50 divide-y divide-navy-800 mb-8'>
-                  <div className='flex items-center justify-between gap-3 px-4 py-3'>
-                    <span className='text-navy-400 text-xs flex items-center gap-2'>
-                      <i className='fa-solid fa-user text-orange-400'></i>
-                      Visitor
-                    </span>
-                    <span className='text-white text-sm font-medium truncate'>
-                      {visitorName}
-                    </span>
-                  </div>
-                  <div className='flex items-center justify-between gap-3 px-4 py-3'>
-                    <span className='text-navy-400 text-xs flex items-center gap-2'>
-                      <i className='fa-solid fa-clock text-orange-400'></i>
-                      {isCheckIn ? 'Check-in time' : 'Check-out time'}
-                    </span>
-                    <span className='text-white text-sm font-medium'>
-                      {actionTime.toLocaleTimeString('en-US', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Continue button: returns to the scanner, which restarts
-                    the camera. */}
-                <button
-                  onClick={() => router.push('/check-in')}
-                  className='
-                    w-full px-4 py-3 rounded-lg font-bold text-base text-white
-                    bg-orange-500 hover:bg-orange-600
-                    transition-colors duration-150
-                    shadow-lg shadow-orange-500/20
-                  '
-                >
-                  <span className='flex items-center justify-center gap-2'>
-                    <i className='fa-solid fa-arrow-right'></i>
-                    Continue
-                  </span>
-                </button>
+              <div className='flex items-center justify-between gap-3 px-4 py-3'>
+                <dt className='flex items-center gap-2 text-navy-400'>
+                  <i className='fa-solid fa-clock text-yellow-400'></i>
+                  {isCheckIn ? 'Check-in time' : 'Check-out time'}
+                </dt>
+                <dd className='font-medium text-white'>
+                  {actionTime.toLocaleTimeString('en-US', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </dd>
               </div>
-            </div>
+              <div className='flex items-center justify-between gap-3 px-4 py-3'>
+                <dt className='flex items-center gap-2 text-navy-400'>
+                  <i className='fa-solid fa-location-dot text-yellow-400'></i>
+                  Assigned room
+                </dt>
+                <dd className='max-w-[60%] truncate text-right font-medium text-white'>
+                  {user?.destination || 'Not assigned'}
+                </dd>
+              </div>
+            </dl>
 
-            {/* Home Indicator (iOS style) */}
-            <div className='bg-navy-950 py-2 flex items-center justify-center'>
-              <div className='w-32 h-1 rounded-full bg-navy-700'></div>
-            </div>
-          </div>
+            <Button
+              onClick={() => router.push('/check-in')}
+              icon='fa-qrcode'
+              size='lg'
+              className='mt-6 w-full'
+            >
+              Open the scanner
+            </Button>
+
+            <Button
+              onClick={() => router.push('/check-in')}
+              variant='ghost'
+              className='mt-2 w-full'
+            >
+              Back to scanner
+            </Button>
+          </Card>
         </div>
       </main>
     </div>

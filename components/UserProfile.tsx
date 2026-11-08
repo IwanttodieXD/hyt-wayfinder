@@ -3,20 +3,20 @@
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
+import { ADMIN_NAV } from '@/lib/adminNav';
 import { visitorTypeStyle } from '@/lib/visitorTypeStyles';
 import ThemeToggle from '@/components/ThemeToggle';
 
-// Shared menu-item styling. Kept in one place so the six admin links, the theme
+// Shared menu-item styling. Kept in one place so the admin links, the theme
 // toggle and the logout row all get the same yellow hover/active/focus
 // treatment instead of drifting apart.
 const MENU_ITEM =
   'w-full px-4 py-2.5 rounded-lg text-left text-navy-200 hover:bg-yellow-500/10 hover:text-white active:bg-yellow-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-500/60 transition-colors flex items-center gap-3';
 
-// Visitors with no visitor_type fall back to this, mirroring the "Guest" colour
-// the register form picks by default. Keeps the chip readable when
-// `visitor_types` has not loaded yet.
-const DEFAULT_VISITOR_STYLE =
-  'bg-purple-500/20 text-purple-300 border-purple-500/30';
+// Unclassified accounts fall back to this neutral navy chip rather than
+// inventing a visitor type. Keeps the chip readable when `visitor_types` has not
+// loaded yet, and stays inside the navy/yellow palette.
+const DEFAULT_VISITOR_STYLE = 'bg-navy-800 text-navy-200 border-navy-600/60';
 
 export default function UserProfile() {
   const router = useRouter();
@@ -45,12 +45,13 @@ export default function UserProfile() {
     router.push('/verify');
   };
 
-  // Admin keeps the red shield badge. Visitors wear the colour of their
+  // Admin keeps the red shield badge. Everyone else wears the colour of their
   // `visitor_type_id` label (Trainee/Trainer/VIP/...), falling back to the
-  // neutral purple "visitor" chip when unclassified. The label shown next to
-  // the avatar mirrors the same choice.
+  // neutral "Guest" chip when unclassified. The label shown next to the avatar
+  // mirrors the same choice.
   const isAdmin = user.role === 'admin';
-  const badgeLabel = isAdmin ? 'admin' : user.visitorType ?? 'visitor';
+  const visitorLabel = user.visitorType ?? 'Guest';
+  const badgeLabel = isAdmin ? 'admin' : visitorLabel;
   const badgeClasses = isAdmin
     ? 'bg-red-500/20 text-red-300 border-red-500/30'
     : user.visitorType
@@ -100,79 +101,41 @@ export default function UserProfile() {
             </div>
           </div>
 
-          {/* Menu Items (admins only) */}
-          {user.role === 'admin' && (
+          {/* Trainee navigation. The scanner is the trainee's only page now,
+              kept here so the profile menu is useful on its own on a narrow
+              screen where the header nav is hidden. */}
+          {user.role === 'visitor' && (
             <div className='p-2'>
               <button
                 onClick={() => {
                   setIsOpen(false);
-                  router.push('/admin');
-                }}
-                className={MENU_ITEM}
-              >
-                <i className='fa-solid fa-chart-line w-5 text-yellow-400'></i>
-                <span>Dashboard</span>
-              </button>
-              <button
-                onClick={() => {
-                  setIsOpen(false);
-                  router.push('/admin/room-records');
-                }}
-                className={MENU_ITEM}
-              >
-                <i className='fa-solid fa-table w-5 text-yellow-400'></i>
-                <span>Room Visits Records</span>
-              </button>
-              <button
-                onClick={() => {
-                  setIsOpen(false);
-                  router.push('/admin/records');
-                }}
-                className={MENU_ITEM}
-              >
-                <i className='fa-solid fa-table w-5 text-yellow-400'></i>
-                <span>Attendance Records</span>
-              </button>
-              <button
-                onClick={() => {
-                  setIsOpen(false);
-                  router.push('/admin/rooms');
-                }}
-                className={MENU_ITEM}
-              >
-                <i className='fa-solid fa-door-closed w-5 text-yellow-400'></i>
-                <span>Manage Room</span>
-              </button>
-              <button
-                onClick={() => {
-                  setIsOpen(false);
-                  router.push('/admin/users');
-                }}
-                className={MENU_ITEM}
-              >
-                <i className='fa-solid fa-users-gear w-5 text-yellow-400'></i>
-                <span>Manage Users</span>
-              </button>
-              <button
-                onClick={() => {
-                  setIsOpen(false);
-                  router.push('/occupancy');
-                }}
-                className={MENU_ITEM}
-              >
-                <i className='fa-solid fa-door-open w-5 text-yellow-400'></i>
-                <span>Room Occupancy</span>
-              </button>
-              <button
-                onClick={() => {
-                  setIsOpen(false);
-                  router.push('/station');
+                  router.push('/check-in');
                 }}
                 className={MENU_ITEM}
               >
                 <i className='fa-solid fa-qrcode w-5 text-yellow-400'></i>
-                <span>QR Station</span>
+                <span>Check in & scanner</span>
               </button>
+            </div>
+          )}
+
+          {/* Admin navigation. Desktop already has the sidebar, so this copy
+              exists only on narrow screens where the rail is hidden. */}
+          {user.role === 'admin' && (
+            <div className='p-2 lg:hidden'>
+              {ADMIN_NAV.map((item) => (
+                <button
+                  key={item.href}
+                  onClick={() => {
+                    setIsOpen(false);
+                    router.push(item.href);
+                  }}
+                  className={MENU_ITEM}
+                >
+                  <i className={`fa-solid ${item.icon} w-5 text-yellow-400`}></i>
+                  <span>{item.title}</span>
+                </button>
+              ))}
             </div>
           )}
 

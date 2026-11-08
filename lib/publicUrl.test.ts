@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   DEFAULT_SITE_ORIGIN,
   fetchOrientationStatus,
+  isPassDateExpired,
   registrationUrl,
   siteOrigin,
   verificationUrl,
@@ -95,7 +96,7 @@ describe('fetchOrientationStatus', () => {
   });
 
   test('returns null when the RPC errors, and does not throw', async () => {
-    // Happens if migration 20260101000013 has not been applied. Registration
+    // Happens if the full setup has not been applied. Registration
     // must still work; it just cannot show a verdict.
     const result = await fetchOrientationStatus(
       'gemmaaranda05@gmail.com',
@@ -207,7 +208,7 @@ describe('verifyVisitor', () => {
   });
 
   test('surfaces a roster row that has no address, rather than pretending', async () => {
-    // Migration 20260101000014 made users.email nullable. The record still comes
+    // users.email is nullable in the current schema. The record still comes
     // back as 'found' - they ARE on the roster and approved - but email is null
     // and has_email is false, which is the page's cue to send them to the desk
     // instead of promising a magic link that cannot be delivered.
@@ -386,5 +387,27 @@ describe('verifyVisitor', () => {
     // /station is role-guarded and redirects non-admins to /admin, so a poster
     // aiming there would dead-end every walk-in.
     assert.ok(!registrationUrl().includes('/station'));
+  });
+});
+
+describe('isPassDateExpired', () => {
+  // Noon on 8 November 2026, local time, matching the start-of-day comparison
+  // the scanner and login page use.
+  const now = new Date(2026, 10, 8, 12, 0, 0);
+
+  test('a pass is still valid for the whole of its expiry day', () => {
+    assert.equal(isPassDateExpired('2026-11-08T00:00:00', now), false);
+    assert.equal(isPassDateExpired('2026-11-08T23:59:59.999', now), false);
+  });
+
+  test('a pass before today is expired', () => {
+    assert.equal(isPassDateExpired('2026-11-07T23:59:59.999', now), true);
+    assert.equal(isPassDateExpired('2026-11-01T08:00:00', now), true);
+  });
+
+  test('no expiry or an invalid date never blocks a visitor', () => {
+    assert.equal(isPassDateExpired(null, now), false);
+    assert.equal(isPassDateExpired(undefined, now), false);
+    assert.equal(isPassDateExpired('not-a-date', now), false);
   });
 });

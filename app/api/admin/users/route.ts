@@ -14,8 +14,8 @@ import { composeFullName, normaliseMiddleInitial } from '@/lib/fullName';
 
 // Note: role is no longer settable through this route. `admin` is a singleton
 // that is not creatable or editable here (see the partial unique index in
-// 20260101000004_visitor_profiles.sql), and the trainer/trainee labels are
-// retired - see 20260101000003_retire_trainee_roles.sql.
+// full_setup.sql), and the trainer/trainee labels are retired - see
+// full_setup.sql.
 
 const SERVICE_KEY_NOT_SET =
   'User creation/archiving needs SUPABASE_SERVICE_ROLE_KEY. Add it to .env.local to enable.';
@@ -272,6 +272,40 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: 'A user id is required' }, { status: 400 });
   }
 
+  // Renewal is a deliberately narrow write: one column, one person. It skips
+  // the full profile update (and the auth email sync) so a roster row with no
+  // email on file can still have its pass extended. Nothing else is touched.
+  if (body?.renew === true) {
+    if (typeof validUntil !== 'string' || !validUntil) {
+      return NextResponse.json(
+        { error: 'A new validUntil date is required to renew a pass' },
+        { status: 400 }
+      );
+    }
+
+    const renewed = new Date(validUntil);
+    if (Number.isNaN(renewed.getTime())) {
+      return NextResponse.json(
+        { error: 'validUntil is not a valid date' },
+        { status: 400 }
+      );
+    }
+
+    const { error: renewError } = await service
+      .from('users')
+      .update({ valid_until: renewed.toISOString() })
+      .eq('id', id);
+
+    if (renewError) {
+      return NextResponse.json(
+        { error: `Could not renew the pass: ${renewError.message}` },
+        { status: 400 }
+      );
+    }
+
+    return NextResponse.json({ success: true, id });
+  }
+
   if (
     typeof firstName !== 'string' ||
     !firstName.trim() ||
@@ -349,7 +383,7 @@ export async function PATCH(request: Request) {
     );
   }
 
-  // Nullable since migration 20260101000014: a cohort member with no address on
+  // Nullable in the current schema: a cohort member with no address on
   // file has NULL here. It is only read to roll back a failed profile write, and
   // this branch has already succeeded in setting a real address on the auth
   // row - so a NULL previous value means there is nothing to put back, not that
@@ -381,7 +415,7 @@ export async function PATCH(request: Request) {
   const { error } = await service.from('users').update(patch).eq('id', id);
 
   if (error) {
-    // There was no address to restore (nullable since 20260101000014), so the
+    // There was no address to restore (email is nullable in the current schema), so the
     // rollback is a no-op rather than a failure. Reporting it as one would send
     // the admin chasing a split state that does not exist.
     if (previousEmail === null) {

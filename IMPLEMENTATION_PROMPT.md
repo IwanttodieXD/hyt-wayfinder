@@ -15,25 +15,31 @@ scan**:
 - **Room presence** — one code per room door. Records only that someone is in
   that room. Table: `room_visits`.
 
-The database schema is being **replaced** with
-`supabase/migrations/20260101000001_full_schema.sql`. Rationale and ERD are in
-`supabase/SCHEMA.md`. The code currently does **not** match it.
+The database schema is defined by
+`supabase/migrations/20260101000000_full_setup.sql`. Rationale and ERD are in
+`supabase/SCHEMA.md`.
+
+> **Historical note.** This brief describes the original migration from the
+> mock/old schema. That work is complete. The setup file is now a single
+> final-state script rather than the historical `ALTER` chain.
 
 The target database is **fresh** — no data migration or backfill is needed.
-Create clean tables, don't write `ALTER` migrations.
+Create clean tables; the setup file uses `IF NOT EXISTS` so it is also safe to
+re-run.
 
 ---
 
 ## Section 1 — Run the new schema
 
-In the Supabase SQL editor, in order:
+In the Supabase SQL editor:
 
-1. `supabase/migrations/20260101000001_full_schema.sql`
-2. `supabase/seed.sql` (the 11 rooms)
+1. `supabase/migrations/20260101000000_full_setup.sql`
 
-Five tables: `rooms`, `purposes`, `users`, `clock_in_records`, `room_visits`.
+Seven tables: `rooms`, `purposes`, `visitor_types`, `courses`, `users`,
+`clock_in_records`, `room_visits`.
 
-Room list to seed:
+The setup file seeds the 11 rooms, purposes, visitor types and courses. Room
+list:
 
 | Room | Name | Floor |
 | --- | --- | --- |

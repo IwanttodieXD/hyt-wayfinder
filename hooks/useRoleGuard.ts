@@ -7,7 +7,8 @@ import { useAuthStore, type UserRole } from '@/store/authStore';
 /**
  * Client-side role gate for a page.
  *
- * Redirects unauthenticated visitors to `/login`, and authenticated users
+ * Redirects unauthenticated visitors to `/verify` (the entrance page is the
+ * app's front door; /login is the hidden admin door), and authenticated users
  * whose role is not allowed to `fallback`. Returns whether the current user is
  * allowed to render, so callers can bail out early instead of flashing
  * protected UI before the redirect lands.
@@ -16,7 +17,7 @@ import { useAuthStore, type UserRole } from '@/store/authStore';
  * talks to Supabase directly, so real authorization must also be enforced by
  * Supabase RLS policies.
  */
-export function useRoleGuard(allowed: UserRole[], fallback: string = '/login') {
+export function useRoleGuard(allowed: UserRole[], fallback: string = '/verify') {
   const router = useRouter();
   const { user, isAuthenticated, authResolved } = useAuthStore();
   const role = user?.role;
@@ -37,7 +38,7 @@ export function useRoleGuard(allowed: UserRole[], fallback: string = '/login') {
     if (!authResolved) return;
 
     if (!isAuthenticated) {
-      router.push('/login');
+      router.push('/verify');
       return;
     }
 

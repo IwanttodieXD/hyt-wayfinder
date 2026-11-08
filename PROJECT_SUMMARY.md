@@ -34,7 +34,7 @@ occupancy view is based on real scans rather than assumptions.
 | How many | Exactly one | One per room |
 | Where | Ground floor entrance | On each room door |
 | Effect | Clocks in / clocks out | Records presence only |
-| Table written | `clock_in_records` | `room_presence` |
+| Table written | `clock_in_records` | `room_visits` |
 
 `parseQrValue()` in `lib/wayfinding.ts` decides which kind was scanned, based on
 the prefix, and returns `null` for anything unrecognised rather than guessing.
@@ -64,7 +64,8 @@ edit users could otherwise grant themselves the keys.
 The `trainer` and `trainee` roles were removed. They were never granted
 anything: no RLS policy distinguished them from `visitor`, and `/trainer` was a
 byte-identical copy of `/visitor`. The enum labels still exist in Postgres,
-which cannot drop them — see `20260101000003_retire_trainee_roles.sql`.
+which cannot drop them — see the enum comments in
+`supabase/migrations/20260101000000_full_setup.sql`.
 
 ### Visitor types are not roles
 
@@ -76,7 +77,7 @@ table joined from `users.visitor_type_id`, alongside `company`, `host_name`,
 
 `role` answers "what may this person do" (two values). The visitor profile
 answers "who is this person" (many values). Neither grants anything the other
-does not. See `20260101000004_visitor_profiles.sql`.
+does not. See `supabase/migrations/20260101000000_full_setup.sql`.
 
 `valid_until` is enforced at login and on session restore, so an orientation's
 credentials stop working the morning after the event without anyone archiving
@@ -91,18 +92,25 @@ Admin-only pages are enforced with `useRoleGuard`, which redirects non-admins to
 
 | Route | Who | What it does |
 | --- | --- | --- |
-| `/` | Anyone | Redirects by auth state and role |
+| `/` | Anyone | Redirects to `/verify` |
+| `/verify` | Anyone | Entrance identification: first name, last name and course |
 | `/login` | Anyone | Sign in |
 | `/register` | Anyone | Create a visitor account |
+| `/pass-expired` | visitor | Explains that the pass has expired |
+| `/successfully-registered` | Anyone | Post-registration confirmation |
 | `/check-in` | visitor | Mobile scanner: check in/out, scan room doors |
-| `/visitor` | visitor | Visitor view |
+| `/check-in/success` | visitor | Check-in/check-out confirmation |
+| `/visitor` | visitor | Forwards to `/check-in` |
 | `/station` | admin | Print the attendance code and each room's door code. Room posters show a live headcount. Live occupancy moved to `/admin` |
 | `/occupancy` | admin | Who is inside which room right now |
 | `/admin` | admin | Dashboard |
 | `/admin/records` | admin | Attendance records (check-in/out), searchable, exportable |
 | `/admin/room-records` | admin | Room visit history, grouped per room |
 | `/admin/users` | admin | Manage visitors: classify, set host/company/pass expiry, archive and restore |
+| `/admin/rooms` | admin | Add, rename, deactivate rooms and print their codes |
+| `/admin/lookups` | admin | Manage purposes, visitor types and courses |
 | `/api/admin/users` | server | Visitor create/edit/archive/restore via the service role key |
+| `/api/verify` | server | Entrance verification lookup |
 
 ---
 
@@ -115,7 +123,7 @@ store/                  Zustand state: auth, users, records, roomPresence, clock
 lib/wayfinding.ts       QR code parser
 lib/supabase.ts         Supabase client
 hooks/                  Role guard, profile sync, live data
-supabase/migrations/    SQL migrations
+supabase/migrations/    Single full_setup.sql migration
 scripts/                next-with-canonical-path.js (Windows path-casing fix)
 ```
 
@@ -130,19 +138,20 @@ table via `store/roomsStore.ts`, so adding a room is a data change in
 `/admin/rooms`, not a code change.
 
 `store/roomPresenceStore.ts` owns all room-presence reads and writes. Nothing
-else touches the `room_presence` table.
+else touches the `room_visits` table.
 
 ---
 
 ## 6. Setting it up
 
-Full instructions are in [SUPABASE_SETUP.md](./SUPABASE_SETUP.md) and
-[README.md](./README.md). The short version:
+Full instructions are in [SUPABASE_SETUP.md](./SUPABASE_SETUP.md),
+[README.md](./README.md) and [USER_MANUAL.md](./USER_MANUAL.md). Acceptance tests
+are in [UAT.md](./UAT.md). The short version:
 
 ```bash
 npm install
 cp .env.example .env.local    # then fill in your Supabase keys
-# Run the SQL from SUPABASE_SETUP.md in the Supabase SQL editor
+# Run supabase/migrations/20260101000000_full_setup.sql in the Supabase SQL editor
 npm run dev
 ```
 
@@ -203,11 +212,10 @@ variables into new builds.
 
 Worth knowing before you rely on this:
 
-- **The database schema is being replaced.** The app still writes to the old
-  `room_presence` table and the old `clock_in_records` columns. The new schema is
-  in `supabase/migrations/20260101000001_full_schema.sql` (see
-  [supabase/SCHEMA.md](./supabase/SCHEMA.md)) but the code has not been updated
-  to match yet — see `IMPLEMENTATION_PROMPT.md`.
+- **The database setup is one file.** `supabase/migrations/20260101000000_full_setup.sql`
+  creates the complete final schema (see
+  [supabase/SCHEMA.md](./supabase/SCHEMA.md)). The old numbered migrations and
+  `supabase/seed.sql` were removed when this file replaced them.
 - **Old-format room posters still work.** Codes printed as
   `HYT-KIOSK-01-CHECKIN-STATION:<ROOM>` resolve to the room they name, so a door
   scan records presence and never touches attendance. Reprinting in the

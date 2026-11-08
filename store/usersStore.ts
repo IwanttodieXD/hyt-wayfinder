@@ -7,7 +7,7 @@ import { composeFullName, normaliseMiddleInitial } from '@/lib/fullName';
 export interface ManagedUser {
   id: string;
   /**
-   * Nullable since migration 20260101000014. A cohort member whose roster row
+   * Nullable in the current schema. A cohort member whose roster row
    * carried no address has NULL here, so anything that reads it must cope.
    */
   email: string | null;
@@ -17,7 +17,7 @@ export interface ManagedUser {
    */
   name: string;
   /**
-   * Name parts (migration 20260101000019). Empty strings / null on a database
+   * Name parts (added by the full setup). Empty strings / null on a database
    * where the backfill has not run, which the form shows as blank fields.
    */
   firstName: string;
@@ -65,6 +65,24 @@ export function isPassExpired(user: ManagedUser, now = new Date()): boolean {
   if (Number.isNaN(expiry.getTime())) return false;
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   return expiry.getTime() < startOfToday.getTime();
+}
+
+/**
+ * How long a renewed pass lasts. Thirty days from today, ending at the end of
+ * that day so the whole final day is usable - the same start-of-day comparison
+ * `isPassExpired` uses.
+ */
+export function renewedPassValidUntil(now = new Date()): string {
+  const renewed = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate() + 30,
+    23,
+    59,
+    59,
+    999
+  );
+  return renewed.toISOString();
 }
 
 export interface NewUserInput {
@@ -121,6 +139,14 @@ interface UsersState {
   archiveUser: (id: string) => Promise<{ success: boolean; error?: string }>;
   /** Reverses an archive, including lifting the Supabase Auth ban. */
   restoreUser: (id: string) => Promise<{ success: boolean; error?: string }>;
+  /**
+   * Extends one pass without touching any other profile field. Used by both
+   * the per-row Renew button and the "renew all" action.
+   */
+  renewPass: (
+    id: string,
+    validUntil: string
+  ) => Promise<{ success: boolean; error?: string }>;
   getUserCount: () => number;
   /** Active visitors grouped by `visitor_types` label. */
   getCountByVisitorType: () => { label: string; count: number }[];
@@ -520,6 +546,38 @@ export const useUsersStore = create<UsersState>()((set, get) => ({
       const message = err?.message || 'Failed to restore user';
       set({ isLoading: false, error: message });
       return { success: false, error: message };
+    }
+  },
+
+  renewPass: async (id, validUntil) => {
+    // No page-wide loading flag: renewing may be one row or many, and the table
+    // already shows its own busy state for the action that started it.
+    try {
+      const { ok, error } = await adminRequest('/api/admin/users', 'PATCH', {
+        id,
+        renew: true,
+        validUntil,
+      });
+
+      if (!ok) {
+        return { success: false, error: error || 'Failed to renew pass' };
+      }
+
+      set((state) => ({
+        users: state.users.map((u) =>
+          u.id === id ? { ...u, validUntil: new Date(validUntil) } : u
+        ),
+        archivedUsers: state.archivedUsers.map((u) =>
+          u.id === id ? { ...u, validUntil: new Date(validUntil) } : u
+        ),
+      }));
+
+      return { success: true };
+    } catch (err: any) {
+      return {
+        success: false,
+        error: err?.message || 'Failed to renew pass',
+      };
     }
   },
 

@@ -2,12 +2,22 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { useAuthStore } from '@/store/authStore';
 import { supabase } from '@/lib/supabase';
 import { ROOM_PREFIX_FACTORY } from '@/lib/wayfinding';
 import type { Room } from '@/store/roomsStore';
-import UserProfile from '@/components/UserProfile';
+import { usePagination } from '@/hooks/usePagination';
+import AdminPageHeader from '@/components/AdminPageHeader';
+import AdminShell from '@/components/AdminShell';
+import {
+  Alert,
+  Badge,
+  Card,
+  EmptyState,
+  StatCard,
+  TablePagination,
+  buttonStyles,
+} from '@/components/ui';
 
 /** Floors the schema's CHECK constraint permits. */
 const FLOORS = ['G', '2', '3', '4', 'Roof'] as const;
@@ -37,7 +47,10 @@ const EMPTY_FORM: FormState = {
 function suggestQrValue(roomNumber: string): string {
   if (!roomNumber.trim()) return '';
   return ROOM_PREFIX_FACTORY(
-    roomNumber.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '-')
+    roomNumber
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '-')
   );
 }
 
@@ -67,7 +80,7 @@ export default function RoomsPage() {
 
   useEffect(() => {
     if (!isAuthenticated || currentUser?.role !== 'admin') {
-      router.push('/login');
+      router.push('/verify');
     }
   }, [isAuthenticated, currentUser, router]);
 
@@ -116,10 +129,10 @@ export default function RoomsPage() {
     return () => clearTimeout(timer);
   }, [notice]);
 
-  const activeCount = useMemo(
-    () => rooms.filter((r) => r.isActive).length,
-    [rooms]
-  );
+  const activeCount = useMemo(() => rooms.filter((r) => r.isActive).length, [rooms]);
+
+  const pagination = usePagination(rooms.length, 'rooms');
+  const visibleRooms = rooms.slice(pagination.start, pagination.end);
 
   if (!isAuthenticated || currentUser?.role !== 'admin') {
     return null;
@@ -218,173 +231,123 @@ export default function RoomsPage() {
     await loadRooms();
   };
   return (
-    <div className='min-h-screen'>
-      {/* Header matches the other admin pages: sticky, logo lockup, px-4 py-3.
-          This page previously used a different bar (icon + text, px-6, not
-          sticky), which made it read as a separate app when navigating between
-          admin screens. */}
-      <header className='app-header border-b sticky top-0 z-50'>
-        <div className='max-w-7xl mx-auto px-4 py-3 flex items-center justify-between'>
-          <Link href='/admin' className='flex items-center gap-3'>
-            <div className='w-12 h-12 flex items-center justify-center overflow-hidden'>
-              <img
-                src='/hyt_logo.png'
-                alt='HYT Logo'
-                className='w-full h-full object-contain'
-              />
-            </div>
-            <div>
-              <h1 className='text-white font-bold text-lg leading-none'>
-                Manage Rooms
-              </h1>
-              <p className='text-navy-300 text-xs mt-0.5'>
-                Rooms and their door codes
-              </p>
-            </div>
-          </Link>
-          <UserProfile />
-        </div>
-      </header>
-
-      <main className='max-w-7xl mx-auto px-4 py-5'>
-        {/* Back link on the left, primary action on the right - the same row
-            layout as /admin/records and /admin/users. */}
-        <div className='mb-6 flex items-center justify-between gap-4'>
-          <Link
-            href='/admin'
-            className='text-navy-300 hover:text-navy-200 flex items-center gap-2 transition-colors'
-          >
-            <i className='fa-solid fa-arrow-left'></i>
-            <span>Back to Dashboard</span>
-          </Link>
-          <button
-            onClick={openCreate}
-            className='px-4 py-2 rounded-lg bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 hover:bg-yellow-500/30 transition-colors flex items-center gap-2 font-semibold text-sm'
-          >
-            <i className='fa-solid fa-plus'></i>
+    <AdminShell>
+      <AdminPageHeader
+        eyebrow='Manage'
+        title='Manage Rooms'
+        subtitle='Rooms and their door codes'
+        actions={
+          <button onClick={openCreate} className={buttonStyles('quiet', 'md')}>
+            <i className='fa-solid fa-plus text-xs'></i>
             Add Room
           </button>
+        }
+      />
+
+      {/* Summary tiles, matching the dashboard metrics. */}
+      <div className='mb-4 grid grid-cols-2 gap-3 md:grid-cols-4'>
+        <StatCard
+          label='Total rooms'
+          value={rooms.length}
+          hint='Including retired rooms'
+          icon='fa-door-closed'
+          tone='brand'
+        />
+        <StatCard
+          label='Active'
+          value={activeCount}
+          hint='Scannable right now'
+          icon='fa-circle-check'
+          tone='success'
+        />
+        <StatCard
+          label='Inactive'
+          value={rooms.length - activeCount}
+          hint='Codes do not resolve'
+          icon='fa-circle-pause'
+          tone='neutral'
+        />
+        <StatCard
+          label='Floors in use'
+          value={new Set(rooms.filter((r) => r.isActive).map((r) => r.floor)).size}
+          hint='Across active rooms'
+          icon='fa-layer-group'
+          tone='info'
+        />
+      </div>
+
+      <p className='mb-4 text-sm text-navy-400'>
+        Rooms are never deleted &mdash; deactivating one keeps its visit history
+        queryable.
+      </p>
+
+      {notice && (
+        <Alert tone={notice.kind === 'success' ? 'success' : 'danger'} className='mb-4'>
+          {notice.text}
+        </Alert>
+      )}
+
+      <Card padded={false} className='overflow-hidden'>
+        <div className='overflow-x-auto'>
+          <table className='w-full'>
+            <thead className='bg-navy-900/30 border-b border-navy-800'>
+              <tr>
+                {['Room', 'Name', 'Floor', 'QR Code', 'Status', 'Actions'].map((h) => (
+                  <th
+                    key={h}
+                    className='px-3 py-2 text-left text-xs font-semibold text-navy-300 uppercase tracking-wider'
+                  >
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {visibleRooms.map((room) => (
+                <tr key={room.id} className='border-b border-navy-800/50 last:border-0'>
+                  <td className='px-3 py-2 font-medium'>{room.roomNumber}</td>
+                  <td className='px-3 py-2 text-navy-200'>{room.name}</td>
+                  <td className='px-3 py-2 text-navy-300'>{room.floor}</td>
+                  <td className='px-3 py-2'>
+                    <code className='text-xs text-navy-400'>{room.qrValue}</code>
+                  </td>
+                  <td className='px-3 py-2'>
+                    <Badge tone={room.isActive ? 'success' : 'neutral'} dot>
+                      {room.isActive ? 'Active' : 'Inactive'}
+                    </Badge>
+                  </td>
+                  <td className='px-3 py-2'>
+                    <div className='flex gap-2'>
+                      <button
+                        onClick={() => openEdit(room)}
+                        className='px-3 py-1.5 rounded-lg bg-navy-700 hover:bg-navy-600 text-xs font-semibold transition-colors'
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => toggleActive(room)}
+                        className='px-3 py-1.5 rounded-lg bg-navy-700 hover:bg-navy-600 text-xs font-semibold transition-colors'
+                      >
+                        {room.isActive ? 'Deactivate' : 'Reactivate'}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
 
-        {/* Summary tiles, matching the glass-panel stat cards used on the
-            dashboard and the room-visits page. */}
-        <div className='grid grid-cols-2 md:grid-cols-4 gap-3 mb-6'>
-          <div className='glass-panel border-navy-800 p-5 rounded-lg'>
-            <p className='text-navy-300 text-sm mb-1'>Total Rooms</p>
-            <p className='text-white text-3xl font-bold'>{rooms.length}</p>
-          </div>
-          <div className='glass-panel border-navy-800 p-5 rounded-lg'>
-            <p className='text-navy-300 text-sm mb-1'>Active</p>
-            <p className='text-green-400 text-3xl font-bold'>{activeCount}</p>
-          </div>
-          <div className='glass-panel border-navy-800 p-5 rounded-lg'>
-            <p className='text-navy-300 text-sm mb-1'>Inactive</p>
-            <p className='text-navy-300 text-3xl font-bold'>
-              {rooms.length - activeCount}
-            </p>
-          </div>
-          <div className='glass-panel border-navy-800 p-5 rounded-lg'>
-            <p className='text-navy-300 text-sm mb-1'>Floors In Use</p>
-            <p className='text-white text-3xl font-bold'>
-              {new Set(
-                rooms.filter((r) => r.isActive).map((r) => r.floor)
-              ).size}
-            </p>
-          </div>
-        </div>
-
-        <p className='text-navy-400 text-sm mb-4'>
-          Rooms are never deleted &mdash; deactivating one keeps its visit history
-          queryable.
-        </p>
-
-        {notice && (
-          <div
-            className={`mb-4 px-4 py-3 rounded-lg text-sm ${
-              notice.kind === 'success'
-                ? 'bg-green-500/10 border border-green-500/30 text-green-300'
-                : 'bg-red-500/10 border border-red-500/30 text-red-300'
-            }`}
-          >
-            {notice.text}
-          </div>
+        {!isLoading && rooms.length === 0 && (
+          <EmptyState
+            icon='fa-door-closed'
+            title='No rooms yet'
+            description='Add one, or run the seed script.'
+          />
         )}
 
-        <div className='glass-panel border-navy-800 rounded-lg overflow-hidden'>
-          <div className='overflow-x-auto'>
-            <table className='w-full'>
-              <thead className='bg-navy-900/30 border-b border-navy-800'>
-                <tr>
-                  {['Room', 'Name', 'Floor', 'QR Code', 'Status', 'Actions'].map(
-                    (h) => (
-                      <th
-                        key={h}
-                        className='px-4 py-3 text-left text-xs font-semibold text-navy-300 uppercase tracking-wider'
-                      >
-                        {h}
-                      </th>
-                    )
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {rooms.map((room) => (
-                  <tr
-                    key={room.id}
-                    className='border-b border-navy-800/50 last:border-0'
-                  >
-                    <td className='px-4 py-3 font-medium'>{room.roomNumber}</td>
-                    <td className='px-4 py-3 text-navy-200'>{room.name}</td>
-                    <td className='px-4 py-3 text-navy-300'>{room.floor}</td>
-                    <td className='px-4 py-3'>
-                      <code className='text-xs text-navy-400'>
-                        {room.qrValue}
-                      </code>
-                    </td>
-                    <td className='px-4 py-3'>
-                      <span
-                        className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${
-                          room.isActive
-                            ? 'bg-green-500/20 text-green-300 border border-green-500/30'
-                            : 'bg-navy-700 text-navy-300 border border-navy-600'
-                        }`}
-                      >
-                        {room.isActive ? 'Active' : 'Inactive'}
-                      </span>
-                    </td>
-                    <td className='px-4 py-3'>
-                      <div className='flex gap-2'>
-                        <button
-                          onClick={() => openEdit(room)}
-                          className='px-3 py-1.5 rounded-lg bg-navy-700 hover:bg-navy-600 text-xs font-semibold transition-colors'
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => toggleActive(room)}
-                          className='px-3 py-1.5 rounded-lg bg-navy-700 hover:bg-navy-600 text-xs font-semibold transition-colors'
-                        >
-                          {room.isActive ? 'Deactivate' : 'Reactivate'}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {!isLoading && rooms.length === 0 && (
-            <div className='text-center py-12'>
-              <i className='fa-solid fa-door-closed text-navy-600 text-4xl mb-4'></i>
-              <p className='text-navy-300'>No rooms yet.</p>
-              <p className='text-navy-500 text-sm mt-1'>
-                Add one, or run the seed script.
-              </p>
-            </div>
-          )}
-        </div>
-      </main>
+        <TablePagination pagination={pagination} itemLabel='rooms' />
+      </Card>
       {/* Add / edit modal. Scroll container + height cap, matching the Add Visitor
           modal on /admin/users: on a phone a form this tall would otherwise run
           past the bottom of the screen with no way to reach its buttons. */}
@@ -428,9 +391,7 @@ export default function RoomsPage() {
                   <select
                     className={INPUT}
                     value={form.floor}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, floor: e.target.value }))
-                    }
+                    onChange={(e) => setForm((f) => ({ ...f, floor: e.target.value }))}
                   >
                     {FLOORS.map((f) => (
                       <option key={f} value={f} className='bg-navy-900'>
@@ -448,9 +409,7 @@ export default function RoomsPage() {
                 <input
                   className={INPUT}
                   value={form.name}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, name: e.target.value }))
-                  }
+                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                   placeholder='Room 304'
                 />
               </div>
@@ -462,9 +421,7 @@ export default function RoomsPage() {
                 <input
                   className={INPUT}
                   value={form.building}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, building: e.target.value }))
-                  }
+                  onChange={(e) => setForm((f) => ({ ...f, building: e.target.value }))}
                 />
               </div>
 
@@ -475,14 +432,12 @@ export default function RoomsPage() {
                 <input
                   className={INPUT}
                   value={form.qrValue}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, qrValue: e.target.value }))
-                  }
+                  onChange={(e) => setForm((f) => ({ ...f, qrValue: e.target.value }))}
                   placeholder='HYT-ROOM-01:ROOM-304'
                 />
                 <p className='text-navy-500 text-xs mt-1'>
-                  Must be unique. Changing it after posters are printed means
-                  reprinting them.
+                  Must be unique. Changing it after posters are printed means reprinting
+                  them.
                 </p>
               </div>
 
@@ -490,9 +445,7 @@ export default function RoomsPage() {
                 <input
                   type='checkbox'
                   checked={form.isActive}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, isActive: e.target.checked }))
-                  }
+                  onChange={(e) => setForm((f) => ({ ...f, isActive: e.target.checked }))}
                 />
                 Active
               </label>
@@ -521,6 +474,6 @@ export default function RoomsPage() {
           </div>
         </div>
       )}
-    </div>
+    </AdminShell>
   );
 }

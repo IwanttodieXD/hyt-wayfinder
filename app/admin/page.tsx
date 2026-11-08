@@ -1,14 +1,58 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useAuthStore } from '@/store/authStore';
 import { useRecordsStore } from '@/store/recordsStore';
 import { useRoomPresenceStore } from '@/store/roomPresenceStore';
 import { useLiveData } from '@/hooks/useLiveData';
+import { ADMIN_NAV } from '@/lib/adminNav';
 import LiveBadge from '@/components/LiveBadge';
-import Link from 'next/link';
-import UserProfile from '@/components/UserProfile';
+import AdminPageHeader from '@/components/AdminPageHeader';
+import AdminShell from '@/components/AdminShell';
+import { Badge, buttonStyles, Card, EmptyState } from '@/components/ui';
+
+/** Compact destinations for phones, where the desktop sidebar is hidden. */
+const MOBILE_ACTIONS = ADMIN_NAV.filter(
+  (item) => item.href !== '/admin' && item.href !== '/admin/lookups'
+);
+
+interface MetricProps {
+  label: string;
+  value: ReactNode;
+  hint: string;
+  icon: string;
+  accent: string;
+}
+
+/**
+ * One cell of the overview panel.
+ *
+ * Deliberately flat: the panel around these cells owns the surface and the
+ * dividers, so each metric is a block of information rather than another card
+ * floating inside a card. The small icon is an accent, not the focus.
+ */
+function Metric({ label, value, hint, icon, accent }: MetricProps) {
+  return (
+    <div className='bg-navy-900 p-5 sm:p-6'>
+      <div className='flex items-start justify-between gap-3'>
+        <p className='text-[11px] font-semibold uppercase tracking-[0.14em] text-navy-400'>
+          {label}
+        </p>
+        <span
+          className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg ${accent}`}
+        >
+          <i className={`fa-solid ${icon} text-[11px]`}></i>
+        </span>
+      </div>
+      <p className='mt-3 text-4xl font-bold leading-none text-white tabular-nums sm:text-5xl'>
+        {value}
+      </p>
+      <p className='mt-2 text-xs leading-relaxed text-navy-400'>{hint}</p>
+    </div>
+  );
+}
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -30,7 +74,7 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     if (!isAuthenticated || user?.role !== 'admin') {
-      router.push('/login');
+      router.push('/verify');
     }
   }, [isAuthenticated, user, router]);
 
@@ -47,344 +91,222 @@ export default function AdminDashboard() {
   // counted here - that is the whole value of the number.
   const occupancy = getOccupancyByRoom();
   const inARoom = occupancy.reduce((sum, entry) => sum + entry.people.length, 0);
+  const notInRoom = Math.max(activeCount - inARoom, 0);
+
+  // The busiest room sets the width of every occupancy bar. Capacities are not
+  // stored, so the bar is relative occupancy - never a "room is full" signal.
+  const busiestRoom = occupancy.reduce(
+    (max, entry) => Math.max(max, entry.people.length),
+    1
+  );
+
+  const today = new Date().toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  });
 
   return (
-    <>
-      <div className='min-h-screen'>
-        {/* Header */}
-        <header className='app-header border-b sticky top-0 z-50'>
-          <div className='max-w-7xl mx-auto px-4 py-3 flex items-center justify-between'>
-            <div className='flex items-center gap-3'>
-              <Link href='/' className='flex items-center gap-3'>
-                <div className='w-12 h-12 flex items-center justify-center overflow-hidden'>
-                  <img
-                    src='/hyt_logo.png'
-                    alt='HYT Logo'
-                    className='w-full h-full object-contain'
-                  />
-                </div>
-                <div>
-                  <h1 className='text-white font-bold text-lg leading-none'>
-                    HYT Global
-                  </h1>
-                  <p className='text-navy-300 text-xs mt-0.5'>Admin Dashboard</p>
-                </div>
-              </Link>
-            </div>
+    <AdminShell>
+      <AdminPageHeader
+        eyebrow={today}
+        title={`Welcome back, ${user.name}`}
+        subtitle="Here's what's happening with trainee check-ins today."
+        actions={<LiveBadge lastRefreshed={lastRefreshed} />}
+      />
 
-            <UserProfile />
-          </div>
-        </header>
+      {/* Live overview. One surface with hairline dividers instead of four
+          separate cards, so the numbers read as a single answer to "how busy is
+          the building right now?". Total users deliberately lives on
+          /admin/users - this is about movement, not the size of the account
+          list. */}
+      <section className='overflow-hidden rounded-2xl border border-navy-700/60 bg-navy-700/40'>
+        <div className='grid grid-cols-1 gap-px sm:grid-cols-2'>
+          <Metric
+            label='Checked in now'
+            value={activeCount}
+            hint='Open attendance records'
+            icon='fa-users'
+            accent='bg-green-500/15 text-green-400'
+          />
+          <Metric
+            label='Attendance today'
+            value={todayCount}
+            hint='Completed visits today'
+            icon='fa-user-check'
+            accent='bg-blue-500/15 text-blue-400'
+          />
+          <Metric
+            label='Inside a room'
+            value={inARoom}
+            hint={`${occupancy.length} room${occupancy.length === 1 ? '' : 's'} occupied`}
+            icon='fa-door-open'
+            accent='bg-yellow-500/15 text-yellow-400'
+          />
+          <Metric
+            label='Not in a room yet'
+            value={notInRoom}
+            hint='Checked in, still in the lobby'
+            icon='fa-person-walking'
+            accent='bg-teal-500/15 text-teal-300'
+          />
+        </div>
+      </section>
 
-        {/* Main Content */}
-        <main className='max-w-7xl mx-auto px-4 py-5'>
-          {/* Welcome Section */}
-          <div className='mb-8 flex items-start justify-between gap-4'>
+      {/* Phone shortcuts. The desktop rail is hidden below `lg`, so the
+          most-used destinations get compact tiles here; the profile menu
+          still carries the complete list. */}
+      <section className='mt-4 lg:hidden' aria-label='Quick actions'>
+        <div className='grid grid-cols-2 gap-2'>
+          {MOBILE_ACTIONS.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className='group flex items-center gap-3 rounded-xl border border-navy-700/60 bg-navy-900/80 px-3 py-3 transition-colors hover:border-yellow-500/50 hover:bg-navy-800/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-500/60'
+            >
+              <span className='flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-yellow-500/15 text-yellow-400 transition-transform duration-200 group-hover:scale-110'>
+                <i className={`fa-solid ${item.icon} text-xs`}></i>
+              </span>
+              <span className='truncate text-sm font-semibold text-white'>
+                {item.short}
+              </span>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      {/* Bottom split. Both sides share the same surface and spacing so the
+          dashboard reads as one view rather than two card designs. */}
+      <div className='mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]'>
+        {/* Live Room Occupancy. Per-room breakdown rather than a single total:
+            an admin needs to know which room is filling up, not just how many
+            people are in the building. */}
+        <Card>
+          <div className='flex items-start justify-between gap-3'>
             <div>
-              <h2 className='text-3xl font-bold text-white mb-2'>
-                Welcome back, {user.name}
-              </h2>
-              <p className='text-navy-300'>
-                Here&apos;s what&apos;s happening with the Visitor Management System today
+              <h3 className='text-sm font-semibold text-white'>Room occupancy</h3>
+              <p className='mt-0.5 text-xs text-navy-400'>
+                Who is inside each room right now
               </p>
             </div>
-            <LiveBadge lastRefreshed={lastRefreshed} />
-          </div>
-
-          {/* Live Metrics. Total users deliberately lives on /admin/users rather than
-              here — this dashboard is about today's movement through the
-              building, not the size of the account list. */}
-          <div className='grid grid-cols-1 md:grid-cols-2 gap-3 mb-8'>
-            {/* Active Check-Ins */}
-            <div className='glass-panel border-navy-800 p-6 rounded-lg'>
-              <div className='flex items-center justify-between mb-4'>
-                <div className='w-12 h-12 rounded-lg bg-green-500/20 flex items-center justify-center'>
-                  <i className='fa-solid fa-users text-green-400 text-xl'></i>
-                </div>
-                <div className='flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-500/10 border border-green-500/30'>
-                  <div className='w-2 h-2 rounded-full bg-green-400 animate-pulse'></div>
-                  <span className='text-green-300 text-xs font-semibold uppercase'>
-                    Live
-                  </span>
-                </div>
-              </div>
-              <p className='text-navy-300 text-sm mb-1'>Active Check-Ins</p>
-              <p className='text-white text-3xl font-bold'>{activeCount}</p>
-            </div>
-
-            {/* Attendance Today */}
-            <div className='glass-panel border-navy-800 p-6 rounded-lg'>
-              <div className='flex items-center justify-between mb-4'>
-                <div className='w-12 h-12 rounded-lg bg-yellow-500/20 flex items-center justify-center'>
-                  <i className='fa-solid fa-user-check text-yellow-400 text-xl'></i>
-                </div>
-                <Link
-                  href='/admin/records'
-                  className='text-navy-400 hover:text-yellow-300 transition-colors'
-                >
-                  <i className='fa-solid fa-arrow-right'></i>
-                </Link>
-              </div>
-              <p className='text-navy-300 text-sm mb-1'>Attendance Today</p>
-              <p className='text-white text-3xl font-bold'>{todayCount}</p>
-            </div>
-          </div>
-
-          {/* Quick Actions */}
-          <div className='grid grid-cols-1 md:grid-cols-2 gap-3 mb-8'>
-            <Link
-              href='/admin/records'
-              className='glass-panel border-navy-800 p-6 rounded-lg hover:border-yellow-500/50 transition-colors group'
-            >
-              <div className='flex items-center gap-3'>
-                <div className='w-14 h-14 rounded-lg bg-yellow-500/20 flex items-center justify-center group-hover:bg-yellow-500/30 transition-colors'>
-                  <i className='fa-solid fa-table text-yellow-400 text-2xl'></i>
-                </div>
-                <div>
-                  <h3 className='text-white font-semibold text-lg mb-1'>
-                    Attendance Records
-                  </h3>
-                  <p className='text-navy-300 text-sm'>
-                    Who checked in and out of the building
-                  </p>
-                </div>
-              </div>
-            </Link>
-
-            <Link
-              href='/admin/room-records'
-              className='glass-panel border-navy-800 p-6 rounded-lg hover:border-yellow-500/50 transition-colors group'
-            >
-              <div className='flex items-center gap-3'>
-                <div className='w-14 h-14 rounded-lg bg-yellow-500/20 flex items-center justify-center group-hover:bg-yellow-500/30 transition-colors'>
-                  <i className='fa-solid fa-table text-yellow-400 text-2xl'></i>
-                </div>
-                <div>
-                  <h3 className='text-white font-semibold text-lg mb-1'>
-                    Room Visits Records
-                  </h3>
-                  <p className='text-navy-300 text-sm'>
-                    Who entered each room, and when
-                  </p>
-                </div>
-              </div>
-            </Link>
-
-            <Link
-              href='/admin/rooms'
-              className='glass-panel border-navy-800 p-6 rounded-lg hover:border-yellow-500/50 transition-colors group'
-            >
-              <div className='flex items-center gap-3'>
-                <div className='w-14 h-14 rounded-lg bg-yellow-500/20 flex items-center justify-center group-hover:bg-yellow-500/30 transition-colors'>
-                  <i className='fa-solid fa-door-closed text-yellow-400 text-2xl'></i>
-                </div>
-                <div>
-                  <h3 className='text-white font-semibold text-lg mb-1'>
-                    Manage Rooms
-                  </h3>
-                  <p className='text-navy-300 text-sm'>
-                    Add, rename or retire rooms and their codes
-                  </p>
-                </div>
-              </div>
-            </Link>
-
             <Link
               href='/occupancy'
-              className='glass-panel border-navy-800 p-6 rounded-lg hover:border-yellow-500/50 transition-colors group'
+              className={buttonStyles('ghost', 'sm', 'flex-shrink-0')}
             >
-              <div className='flex items-center gap-3'>
-                <div className='w-14 h-14 rounded-lg bg-yellow-500/20 flex items-center justify-center group-hover:bg-yellow-500/30 transition-colors'>
-                  <i className='fa-solid fa-door-open text-yellow-400 text-2xl'></i>
-                </div>
-                <div>
-                  <h3 className='text-white font-semibold text-lg mb-1'>Room Occupancy</h3>
-                  <p className='text-navy-300 text-sm'>See visitors who occupies a room</p>
-                </div>
-              </div>
+              View all
+              <i className='fa-solid fa-arrow-right text-[10px]'></i>
             </Link>
-	
-	    <Link
-              href='/admin/users'
-              className='glass-panel border-navy-800 p-6 rounded-lg hover:border-yellow-500/50 transition-colors group'
-            >
-              <div className='flex items-center gap-3'>
-                <div className='w-14 h-14 rounded-lg bg-yellow-500/20 flex items-center justify-center group-hover:bg-yellow-500/30 transition-colors'>
-                  <i className='fa-solid fa-users-gear text-yellow-400 text-2xl'></i>
-                </div>
-                <div>
-                  <h3 className='text-white font-semibold text-lg mb-1'>Manage Users</h3>
-                  <p className='text-navy-300 text-sm'>Accounts and roles</p>
-                </div>
-              </div>
-            </Link>
-          
-            <Link
-              href='/station'
-              className='glass-panel border-navy-800 p-6 rounded-lg hover:border-yellow-500/50 transition-colors group'
-            >
-              <div className='flex items-center gap-3'>
-                <div className='w-14 h-14 rounded-lg bg-yellow-500/20 flex items-center justify-center group-hover:bg-yellow-500/30 transition-colors'>
-                  <i className='fa-solid fa-qrcode text-yellow-400 text-2xl'></i>
-                </div>
-                <div>
-                  <h3 className='text-white font-semibold text-lg mb-1'>QR Station</h3>
-                  <p className='text-navy-300 text-sm'>QR Codes for Attendance and Rooms</p>
-                </div>
-              </div>
-            </Link>
-	  </div>
-
-          {/* Live Room Occupancy. Moved here from /station: it is a question about the
-              building right now, and the station is a kiosk for printing codes.
-              Per-room breakdown included, because a single total hides the thing
-              an admin actually needs - which room is filling up. */}
-          <div className='glass-panel border-navy-800 rounded-lg p-6 mb-8'>
-            <div className='flex items-center justify-between mb-6'>
-              <div>
-                <h3 className='text-xl font-bold text-white'>Room Occupancy</h3>
-                <p className='text-navy-300 text-sm mt-1'>
-                  Who is inside each room right now
-                </p>
-              </div>
-              <Link
-                href='/occupancy'
-                className='text-yellow-400 hover:text-yellow-300 text-sm font-semibold flex items-center gap-2 transition-colors'
-              >
-                View All Occupancy
-                <i className='fa-solid fa-arrow-right'></i>
-              </Link>
-            </div>
-
-            <div className='grid grid-cols-2 md:grid-cols-4 gap-3 mb-6'>
-              <div className='bg-navy-900/50 border border-navy-800 rounded-lg p-4'>
-                <p className='text-navy-300 text-xs mb-1'>Inside Right Now</p>
-                <p className='text-white text-3xl font-bold leading-none'>
-                  {inARoom}
-                </p>
-              </div>
-              <div className='bg-navy-900/50 border border-navy-800 rounded-lg p-4'>
-                <p className='text-navy-300 text-xs mb-1'>Rooms Occupied</p>
-                <p className='text-white text-3xl font-bold leading-none'>
-                  {occupancy.length}
-                </p>
-              </div>
-              <div className='bg-navy-900/50 border border-navy-800 rounded-lg p-4'>
-                <p className='text-navy-300 text-xs mb-1'>Checked In</p>
-                <p className='text-white text-3xl font-bold leading-none'>
-                  {activeCount}
-                </p>
-              </div>
-              {/* The gap the headline number above cannot show: people who are in
-                  the building but have not scanned a door yet. */}
-              <div className='bg-navy-900/50 border border-navy-800 rounded-lg p-4'>
-                <p className='text-navy-300 text-xs mb-1'>Not Yet in a Room</p>
-                <p className='text-white text-3xl font-bold leading-none'>
-                  {Math.max(activeCount - inARoom, 0)}
-                </p>
-              </div>
-            </div>
-
-            {occupancy.length > 0 && (
-              <div className='space-y-2'>
-                {occupancy.map((entry) => (
-                  <div
-                    key={entry.roomId}
-                    className='flex items-center justify-between p-3 rounded-lg bg-navy-900/50 border border-navy-800'
-                  >
-                    <div className='min-w-0'>
-                      <p className='text-white font-medium text-sm truncate'>
-                        {entry.roomLabel}
-                      </p>
-                      <p className='text-navy-500 text-xs'>{entry.room}</p>
-                    </div>
-                    <span className='px-3 py-1 rounded-full text-xs font-bold bg-green-500/20 text-green-300 border border-green-500/30 flex-shrink-0 ml-3'>
-                      {entry.people.length}{' '}
-                      {entry.people.length === 1 ? 'person' : 'people'}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {occupancy.length === 0 && (
-              <div className='text-center py-8'>
-                <i className='fa-solid fa-door-closed text-navy-600 text-3xl mb-3'></i>
-                <p className='text-navy-300'>Nobody is in a room right now</p>
-                <p className='text-navy-500 text-sm mt-1'>
-                  People appear here once they scan a room door code
-                </p>
-              </div>
-            )}
           </div>
 
-          {/* Recent Activity */}
-          <div className='glass-panel border-navy-800 rounded-lg p-6'>
-            <div className='flex items-center justify-between mb-6'>
-              <h3 className='text-xl font-bold text-white'>Recent Activity</h3>
-              <Link
-                href='/admin/records'
-                className='text-yellow-400 hover:text-yellow-300 text-sm font-semibold flex items-center gap-2 transition-colors'
-              >
-                View All Attendance
-                <i className='fa-solid fa-arrow-right'></i>
-              </Link>
+          {occupancy.length > 0 ? (
+            <div className='mt-4 space-y-3'>
+              {occupancy.map((entry) => (
+                <div key={entry.roomId}>
+                  <div className='flex items-center justify-between gap-3'>
+                    <div className='min-w-0'>
+                      <p className='truncate text-sm font-medium text-white'>
+                        {entry.roomLabel}
+                      </p>
+                      <p className='text-xs text-navy-500'>{entry.room}</p>
+                    </div>
+                    <span className='flex-shrink-0 text-sm font-semibold tabular-nums text-white'>
+                      {entry.people.length}
+                      <span className='ml-1 text-xs font-normal text-navy-500'>
+                        {entry.people.length === 1 ? 'person' : 'people'}
+                      </span>
+                    </span>
+                  </div>
+                  <div className='mt-1.5 h-1.5 overflow-hidden rounded-full bg-navy-800'>
+                    <div
+                      className='h-full rounded-full bg-green-500/70'
+                      style={{
+                        width: `${Math.max(
+                          (entry.people.length / busiestRoom) * 100,
+                          4
+                        )}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+              <p className='pt-1 text-[11px] text-navy-500'>
+                Bar length is relative to the busiest room.
+              </p>
             </div>
+          ) : (
+            <EmptyState
+              icon='fa-door-closed'
+              title='Nobody is in a room right now'
+              description='People appear here once they scan a room door code.'
+            />
+          )}
+        </Card>
 
-            <div className='space-y-3'>
+        {/* Recent Activity */}
+        <Card>
+          <div className='flex items-start justify-between gap-3'>
+            <div>
+              <h3 className='text-sm font-semibold text-white'>Recent activity</h3>
+              <p className='mt-0.5 text-xs text-navy-400'>
+                The latest attendance records
+              </p>
+            </div>
+            <Link
+              href='/admin/records'
+              className={buttonStyles('ghost', 'sm', 'flex-shrink-0')}
+            >
+              View all
+              <i className='fa-solid fa-arrow-right text-[10px]'></i>
+            </Link>
+          </div>
+
+          {recentRecords.length > 0 ? (
+            <div className='mt-4 space-y-2'>
               {recentRecords.map((record) => (
                 <div
                   key={record.id}
-                  className='p-4 rounded-lg bg-navy-900/50 border border-navy-800 flex items-center justify-between'
+                  className='flex items-center gap-3 rounded-xl border border-navy-700/60 bg-navy-950/30 px-3 py-2.5'
                 >
-                  <div className='flex items-center gap-3'>
-                    <div
-                      className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                        record.status === 'active'
-                          ? 'bg-green-500/20 text-green-400'
-                          : 'bg-navy-700 text-navy-300'
-                      }`}
-                    >
-                      <i className='fa-solid fa-user'></i>
-                    </div>
-                    <div>
-                      <p className='text-white font-semibold'>
-                        {record.userName || 'User ' + record.userId.slice(0, 8)}
-                      </p>
-                      <p className='text-navy-300 text-sm'>
-                        {record.purposeLabel || 'No purpose recorded'} •{' '}
-                        {record.room}
-                      </p>
-                    </div>
-                  </div>
-                  <div className='text-right'>
-                    <p
-                      className={`text-sm font-semibold mb-1 ${
-                        record.status === 'active' ? 'text-green-400' : 'text-navy-300'
-                      }`}
-                    >
-                      {record.status === 'active' ? 'Active' : 'Completed'}
+                  <span
+                    className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl ${
+                      record.status === 'active'
+                        ? 'bg-green-500/15 text-green-400'
+                        : 'bg-navy-800 text-navy-300'
+                    }`}
+                  >
+                    <i className='fa-solid fa-user text-xs'></i>
+                  </span>
+                  <div className='min-w-0 flex-1'>
+                    <p className='truncate text-sm font-medium text-white'>
+                      {record.userName || `User ${record.userId.slice(0, 8)}`}
                     </p>
-                    <p className='text-navy-500 text-xs'>
+                    <p className='truncate text-xs text-navy-400'>
+                      {record.purposeLabel || 'No purpose recorded'} · {record.room}
+                    </p>
+                  </div>
+                  <div className='flex flex-shrink-0 flex-col items-end gap-1'>
+                    <Badge tone={record.status === 'active' ? 'success' : 'neutral'}>
+                      {record.status === 'active' ? 'Active' : 'Done'}
+                    </Badge>
+                    <span className='text-[11px] tabular-nums text-navy-500'>
                       {record.timeIn.toLocaleTimeString('en-US', {
                         hour: '2-digit',
                         minute: '2-digit',
                       })}
-                    </p>
+                    </span>
                   </div>
                 </div>
               ))}
-
-              {recentRecords.length === 0 && (
-                <div className='text-center py-3'>
-                  <i className='fa-solid fa-inbox text-navy-600 text-4xl mb-3'></i>
-                  <p className='text-navy-300'>No recent activity</p>
-                </div>
-              )}
             </div>
-          </div>
-        </main>
+          ) : (
+            <EmptyState
+              icon='fa-inbox'
+              title='No recent activity'
+              description='Check-ins will appear here as they happen.'
+            />
+          )}
+        </Card>
       </div>
-    </>
+    </AdminShell>
   );
 }

@@ -3,10 +3,40 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
-import { useRecordsStore, formatDurationMinutes, type ClockInRecord } from '@/store/recordsStore';
+import {
+  useRecordsStore,
+  formatDurationMinutes,
+  type ClockInRecord,
+} from '@/store/recordsStore';
 import { useLiveData } from '@/hooks/useLiveData';
-import Link from 'next/link';
-import UserProfile from '@/components/UserProfile';
+import { usePagination } from '@/hooks/usePagination';
+import { isTraineeType } from '@/lib/trainee';
+import AdminPageHeader from '@/components/AdminPageHeader';
+import AdminShell from '@/components/AdminShell';
+import {
+  Badge,
+  Card,
+  DatePeriodFilter,
+  EmptyState,
+  TablePagination,
+  buttonStyles,
+  controlClass,
+  type DatePeriodMode,
+} from '@/components/ui';
+
+/** Compact pill used by the course and status filter groups. */
+const filterChipClass = (active: boolean) =>
+  `inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-500/50 ${
+    active
+      ? 'border-yellow-500/60 bg-yellow-500/15 text-yellow-200'
+      : 'border-navy-700 bg-navy-950/40 text-navy-300 hover:border-navy-500 hover:bg-navy-800/70 hover:text-white'
+  }`;
+
+/** The count inside a filter pill, quieter than the label. */
+const filterCountClass = (active: boolean) =>
+  `rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none tabular-nums ${
+    active ? 'bg-yellow-500/20 text-yellow-200' : 'bg-navy-800 text-navy-400'
+  }`;
 
 /** Columns the records table can be sorted by. */
 type SortKey =
@@ -17,20 +47,6 @@ type SortKey =
   | 'timeOut'
   | 'durationMinutes'
   | 'status';
-
-/**
- * Visitor types that are enrolled in a course. For every other type the Course
- * column and Course filter are hidden, because a course is not part of their
- * visit.
- */
-const COURSE_VISITOR_TYPES = ['trainee', 'trainer'];
-
-function isCourseVisitorType(label: string): boolean {
-  return (
-    label === 'all' ||
-    COURSE_VISITOR_TYPES.includes(label.trim().toLowerCase())
-  );
-}
 
 /**
  * Reduces a record to a value the comparator can order.
@@ -64,21 +80,20 @@ export default function RecordsPage() {
   const { records } = useRecordsStore();
 
   const [searchTerm, setSearchTerm] = useState('');
-  // Visitor type is joined from the visitor's profile, like the course. Course
-  // only applies to trainees and trainers, so the Course column and filter are
-  // hidden for every other type.
-  const [visitorTypeFilter, setVisitorTypeFilter] = useState('all');
   // Course is joined from the visitor's profile, so the filter matches the
   // label already shown in the Course column rather than a separate id.
   const [courseFilter, setCourseFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'completed'>('all');
-  // Date selection. The calendar picks a specific day; "All month" switches the
-  // filter to the whole selected month instead.
+  // Date selection. `periodMode` decides whether the filter covers one day or
+  // every day in the selected month, so the scope lives in the picker itself
+  // rather than in a separate toggle.
   const now = new Date();
   const [selectedYear, setSelectedYear] = useState(String(now.getFullYear()));
   const [selectedMonth, setSelectedMonth] = useState(String(now.getMonth() + 1));
   const [selectedDay, setSelectedDay] = useState(String(now.getDate()));
+  const [periodMode, setPeriodMode] = useState<DatePeriodMode>('day');
   const [exportOpen, setExportOpen] = useState(false);
+  const [exportScope, setExportScope] = useState<'all' | 'page'>('all');
   const exportRef = useRef<HTMLDivElement>(null);
 
   // Column sorting. `timeIn` descending is the default because the table is a
@@ -96,7 +111,7 @@ export default function RecordsPage() {
 
   useEffect(() => {
     if (!isAuthenticated || user?.role !== 'admin') {
-      router.push('/login');
+      router.push('/verify');
     }
   }, [isAuthenticated, user, router]);
 
@@ -110,10 +125,6 @@ export default function RecordsPage() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
-
-  if (!isAuthenticated || user?.role !== 'admin') {
-    return null;
-  }
 
   // Filter records
   // Dates are compared field-by-field using LOCAL time, so a record matches the
@@ -133,14 +144,17 @@ export default function RecordsPage() {
     'December',
   ];
 
-  // `yyyy-mm-dd`, the value a native date input expects. When the whole month
-  // is selected, the input shows the first of that month as an anchor for the
-  // calendar header while the filter ignores the day.
+  // `yyyy-mm-dd`, the value a native date input expects.
   const selectedDateValue = [
     selectedYear,
     String(selectedMonth).padStart(2, '0'),
-    String(selectedDay === 'all' ? 1 : Number(selectedDay)).padStart(2, '0'),
+    String(selectedDay).padStart(2, '0'),
   ].join('-');
+
+  // `yyyy-mm`, the value a native month input expects.
+  const selectedMonthValue = [selectedYear, String(selectedMonth).padStart(2, '0')].join(
+    '-'
+  );
 
   const handleDateChange = (value: string) => {
     const [year, month, day] = value.split('-');
@@ -149,25 +163,47 @@ export default function RecordsPage() {
     setSelectedYear(String(Number(year)));
     setSelectedMonth(String(Number(month)));
     setSelectedDay(String(Number(day)));
+    setPeriodMode('day');
   };
 
-  // Switching back to a specific day anchors on the 1st of the visible month;
-  // the admin can then pick any day from the calendar.
-  const toggleWholeMonth = () =>
-    setSelectedDay((day) => (day === 'all' ? '1' : 'all'));
+  const handleMonthChange = (value: string) => {
+    const [year, month] = value.split('-');
+    if (!year || !month) return;
 
-  // Course tally for the filter buttons. Counted from every loaded record, the
-  // same way the Manage Users visitor-type buttons count users: the number is a
-  // property of the course, not of the current search or status selection.
+    setSelectedYear(String(Number(year)));
+    setSelectedMonth(String(Number(month)));
+    setPeriodMode('month');
+  };
+
+  // Switching from Month back to Day keeps the same day where possible. A day
+  // like the 31st does not exist in every month, so clamp it to the selected
+  // month instead of handing the date input an invalid value.
+  const handlePeriodModeChange = (mode: DatePeriodMode) => {
+    if (mode === 'day') {
+      const daysInMonth = new Date(
+        Number(selectedYear),
+        Number(selectedMonth),
+        0
+      ).getDate();
+      setSelectedDay((day) => String(Math.min(Number(day) || 1, daysInMonth)));
+    }
+    setPeriodMode(mode);
+  };
+
+  // This page is trainee-only. The visitor type is joined from the profile, so
+  // the scope is applied before search/course/status/date filtering. Records
+  // whose profile has no type (legacy rows) are not trainees and stay hidden.
+  const traineeRecords = records.filter((record) => isTraineeType(record.visitorType));
+
+  // Course tally for the filter buttons. Counted from every loaded trainee
+  // record: the number is a property of the course, not of the current search
+  // or status selection.
   const courseCounts = (() => {
     const counts = new Map<string, number>();
 
-    for (const record of records) {
+    for (const record of traineeRecords) {
       if (!record.courseLabel) continue;
-      counts.set(
-        record.courseLabel,
-        (counts.get(record.courseLabel) ?? 0) + 1
-      );
+      counts.set(record.courseLabel, (counts.get(record.courseLabel) ?? 0) + 1);
     }
 
     return [...counts.entries()]
@@ -175,26 +211,7 @@ export default function RecordsPage() {
       .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
   })();
 
-  // Visitor type tally for the filter buttons. Same rule as the course tally:
-  // counted from every loaded record, not from the current search/status view.
-  const visitorTypeCounts = (() => {
-    const counts = new Map<string, number>();
-
-    for (const record of records) {
-      if (!record.visitorType) continue;
-      counts.set(record.visitorType, (counts.get(record.visitorType) ?? 0) + 1);
-    }
-
-    return [...counts.entries()]
-      .map(([label, count]) => ({ label, count }))
-      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
-  })();
-
-  // Course is a trainee/trainer attribute, so it is only shown while the
-  // visitor-type filter is "all", "Trainee" or "Trainer".
-  const showCourse = isCourseVisitorType(visitorTypeFilter);
-
-  const filteredRecords = records.filter((record) => {
+  const filteredRecords = traineeRecords.filter((record) => {
     const term = searchTerm.toLowerCase();
     const matchesSearch =
       record.userName?.toLowerCase().includes(term) ||
@@ -205,15 +222,9 @@ export default function RecordsPage() {
       (record.courseLabel?.toLowerCase().includes(term) ?? false) ||
       record.room.toLowerCase().includes(term);
 
-    const matchesVisitorType =
-      visitorTypeFilter === 'all' || record.visitorType === visitorTypeFilter;
-
-    // Ignored while the Course filter is hidden, so a filter chosen for trainees
-    // cannot silently keep excluding records after switching to another type.
-    const matchesCourse =
-      !showCourse ||
-      courseFilter === 'all' ||
-      record.courseLabel === courseFilter;
+    // Course is always shown here: every record in scope is a trainee, and a
+    // trainee is enrolled in a course.
+    const matchesCourse = courseFilter === 'all' || record.courseLabel === courseFilter;
 
     const matchesStatus = statusFilter === 'all' || record.status === statusFilter;
 
@@ -221,15 +232,9 @@ export default function RecordsPage() {
     const matchesDate =
       timeIn.getFullYear() === Number(selectedYear) &&
       timeIn.getMonth() + 1 === Number(selectedMonth) &&
-      (selectedDay === 'all' || timeIn.getDate() === Number(selectedDay));
+      (periodMode === 'month' || timeIn.getDate() === Number(selectedDay));
 
-    return (
-      matchesSearch &&
-      matchesVisitorType &&
-      matchesCourse &&
-      matchesStatus &&
-      matchesDate
-    );
+    return matchesSearch && matchesCourse && matchesStatus && matchesDate;
   });
 
   // Clicking a header sorts by it; clicking the active header flips direction.
@@ -241,17 +246,6 @@ export default function RecordsPage() {
     } else {
       setSortKey(key);
       setSortDir('asc');
-    }
-  };
-
-  // Selecting a type that has no course clears the now-hidden course filter and
-  // moves sorting off the hidden Course column, so neither keeps affecting the
-  // table invisibly.
-  const selectVisitorType = (label: string) => {
-    setVisitorTypeFilter(label);
-    if (!isCourseVisitorType(label)) {
-      setCourseFilter('all');
-      if (sortKey === 'courseLabel') setSortKey('timeIn');
     }
   };
 
@@ -269,6 +263,28 @@ export default function RecordsPage() {
     }
     return String(av).localeCompare(String(bv)) * dir;
   });
+
+  // The table only renders the current page. Sorting runs on the full filtered
+  // list above, so page 1 is always the top of the sorted result.
+  const pagination = usePagination(
+    sortedRecords.length,
+    [
+      searchTerm,
+      courseFilter,
+      statusFilter,
+      selectedYear,
+      selectedMonth,
+      selectedDay,
+      periodMode,
+      sortKey,
+      sortDir,
+    ].join('|')
+  );
+  const visibleRecords = sortedRecords.slice(pagination.start, pagination.end);
+
+  // What the export menu currently points at.
+  const exportRows =
+    exportScope === 'page' ? visibleRecords : sortedRecords;
 
   // A sortable header: the whole label is the click target, and the arrow shows
   // the current column and direction (a faint fa-sort marks the inactive ones).
@@ -293,14 +309,14 @@ export default function RecordsPage() {
   );
 
   // --- Export helpers -------------------------------------------------------
-  // Shared tabular view of the currently filtered records.
-  const buildExportData = () => {
-    // Match the on-screen table: the Course column is only present when the
-    // current visitor-type filter is all/trainee/trainer.
+  // Shared tabular view of a record list. The caller decides whether that is
+  // every filtered record or just the page on screen.
+  const buildExportData = (records: ClockInRecord[] = exportRows) => {
+    // Every exported row is a trainee, so Course is always a column.
     const headers = [
       'User',
       'User ID',
-      ...(showCourse ? ['Course'] : []),
+      'Course',
       'Purpose',
       'Building',
       'Room',
@@ -311,10 +327,10 @@ export default function RecordsPage() {
     ];
 
     // Exported in the order shown on screen, so a sorted view and its export agree.
-    const rows = sortedRecords.map((record) => [
+    const rows = records.map((record) => [
       record.userName || 'User ' + record.userId.slice(0, 8),
       record.userId,
-      ...(showCourse ? [record.courseLabel ?? ''] : []),
+      record.courseLabel ?? '',
       record.purposeLabel ?? '',
       record.building ?? '',
       record.room,
@@ -329,12 +345,19 @@ export default function RecordsPage() {
   };
 
   const periodLabel =
-    selectedDay === 'all'
+    periodMode === 'month'
       ? `${MONTH_NAMES[Number(selectedMonth) - 1]} ${selectedYear}`
       : `${MONTH_NAMES[Number(selectedMonth) - 1]} ${selectedDay}, ${selectedYear}`;
 
   const exportFileName = (ext: string) =>
-    'attendance-records-' + selectedYear + '-' + selectedMonth + '-' + selectedDay + '.' + ext;
+    'attendance-records-' +
+    selectedYear +
+    '-' +
+    selectedMonth +
+    '-' +
+    selectedDay +
+    '.' +
+    ext;
 
   const downloadBlob = (blob: Blob, filename: string) => {
     const url = URL.createObjectURL(blob);
@@ -424,7 +447,7 @@ export default function RecordsPage() {
         'th { background: #f3f4f6; text-transform: uppercase; letter-spacing: 0.03em; }' +
         '</style></head><body>' +
         '<h1>Attendance Records</h1>' +
-        `<p>${filteredRecords.length} record(s) &middot; ${escapeHtml(periodLabel)}</p>` +
+        `<p>${exportRows.length} record(s) &middot; ${escapeHtml(periodLabel)}</p>` +
         `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>` +
         '</body></html>'
     );
@@ -433,398 +456,291 @@ export default function RecordsPage() {
     printWindow.print();
   };
 
+  if (!isAuthenticated || user?.role !== 'admin') {
+    return null;
+  }
+
   return (
-    <>
-      <div className='min-h-screen'>
-        {/* Header */}
-        <header className='app-header border-b sticky top-0 z-50'>
-          <div className='max-w-7xl mx-auto px-4 py-3 flex items-center justify-between'>
-            <div className='flex items-center gap-3'>
-              <Link href='/admin' className='flex items-center gap-3'>
-                <div className='w-12 h-12 flex items-center justify-center overflow-hidden'>
-                  <img
-                    src='/hyt_logo.png'
-                    alt='HYT Logo'
-                    className='w-full h-full object-contain'
-                  />
-                </div>
-                <div>
-                  <h1 className='text-white font-bold text-lg leading-none'>
-                    Attendance Records
-                  </h1>
-                  <p className='text-navy-300 text-xs mt-0.5'>
-                    All check-in/check-out logs
-                  </p>
-                </div>
-              </Link>
-            </div>
-
-            <UserProfile />
-          </div>
-        </header>
-
-        {/* Main Content */}
-        <main className='max-w-7xl mx-auto px-4 py-5'>
-          {/* Page Header */}
-          <div className='flex items-center justify-between mb-6'>
-            <Link
-              href='/admin'
-              className='text-navy-300 hover:text-navy-200 flex items-center gap-2 transition-colors'
+    <AdminShell>
+      <AdminPageHeader
+        eyebrow='Attendance'
+        title='Attendance Records'
+        subtitle='Trainee check-in/check-out logs'
+        actions={
+          <div className='relative' ref={exportRef}>
+            <button
+              onClick={() => setExportOpen((v) => !v)}
+              className={buttonStyles('quiet', 'md')}
             >
-              <i className='fa-solid fa-arrow-left'></i>
-              <span>Back to Dashboard</span>
-            </Link>
+              <i className='fa-solid fa-download text-xs'></i>
+              Export
+              <i
+                className={`fa-solid fa-chevron-down text-xs transition-transform ${exportOpen ? 'rotate-180' : ''}`}
+              ></i>
+            </button>
 
-            <div className='relative' ref={exportRef}>
-              <button
-                onClick={() => setExportOpen((v) => !v)}
-                className='px-4 py-2 rounded-lg bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 hover:bg-yellow-500/30 transition-colors flex items-center gap-2'
-              >
-                <i className='fa-solid fa-download'></i>
-                Export
-                <i
-                  className={`fa-solid fa-chevron-down text-xs transition-transform ${exportOpen ? 'rotate-180' : ''}`}
-                ></i>
-              </button>
-
-              {exportOpen && (
-                <div className='absolute right-0 mt-2 w-52 bg-navy-900 border border-navy-700 rounded-lg shadow-black/50 overflow-hidden z-50'>
-                  {[
-                    { label: 'CSV (.csv)', icon: 'fa-file-csv', handler: handleExportCSV },
-                    {
-                      label: 'Excel (.xls)',
-                      icon: 'fa-file-excel',
-                      handler: handleExportExcel,
-                    },
-                    { label: 'PDF', icon: 'fa-file-pdf', handler: handleExportPDF },
-                    { label: 'JSON (.json)', icon: 'fa-file-code', handler: handleExportJSON },
-                  ].map((option) => (
-                    <button
-                      key={option.label}
-                      onClick={() => {
-                        setExportOpen(false);
-                        option.handler();
-                      }}
-                      className='w-full px-4 py-2.5 text-left text-navy-200 hover:bg-navy-800/50 hover:text-white transition-colors flex items-center gap-3'
-                    >
-                      <i className={`fa-solid ${option.icon} w-5`}></i>
-                      <span>{option.label}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Search - its own panel above the filters so the input spans the
-              full width instead of sharing a column with the filter buttons. */}
-          <div className='glass-panel border-navy-800 rounded-lg p-6 mb-6'>
-            <label className='block text-sm font-medium text-navy-200 mb-2'>
-              Search
-            </label>
-            <div className='relative'>
-              <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
-                <i className='fa-solid fa-magnifying-glass text-navy-500'></i>
-              </div>
-              <input
-                type='text'
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder='Search by name, course, purpose, or room...'
-                className='
-                  w-full pl-12 pr-4 py-3 rounded-lg
-                  bg-navy-900/50 border border-navy-700
-                  text-white placeholder-navy-500
-                  focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500
-                  transition-colors
-                  '
-              />
-            </div>
-          </div>
-
-          {/* Filters */}
-          <div className='glass-panel border-navy-800 rounded-lg p-6 mb-6'>
-            <div className='grid grid-cols-1 md:grid-cols-3 gap-3'>
-              {/* Visitor type and course. Buttons rather than a select so each
-                  option's record count is visible at a glance, matching the
-                  filter on Manage Users. */}
-              <div>
-                <label className='block text-sm font-medium text-navy-200 mb-2'>
-                  Visitor type
-                </label>
-                <div className='flex flex-wrap gap-2'>
-                  <button
-                    type='button'
-                    onClick={() => selectVisitorType('all')}
-                    className={`px-4 py-2.5 rounded-lg font-semibold text-sm transition-colors border-2 ${
-                      visitorTypeFilter === 'all'
-                        ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500'
-                        : 'bg-navy-900/50 text-navy-300 border-navy-700 hover:border-navy-600'
-                    }`}
-                  >
-                    All ({records.length})
-                  </button>
-                  {visitorTypeCounts.map(({ label, count }) => (
-                    <button
-                      type='button'
-                      key={label}
-                      onClick={() => selectVisitorType(label)}
-                      className={`px-4 py-2.5 rounded-lg font-semibold text-sm transition-colors border-2 ${
-                        visitorTypeFilter === label
-                          ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500'
-                          : 'bg-navy-900/50 text-navy-300 border-navy-700 hover:border-navy-600'
-                      }`}
-                    >
-                      {label} ({count})
-                    </button>
-                  ))}
-                </div>
-
-                {/* Course only applies to trainees and trainers, so the whole
-                    filter disappears for every other visitor type. Buttons
-                    rather than a select so each course's record count is visible
-                    at a glance. */}
-                {showCourse && (
-                  <>
-                    <label className='block text-sm font-medium text-navy-200 mt-3 mb-2'>
-                      Course
-                    </label>
-                    <div className='flex flex-wrap gap-2'>
+            {exportOpen && (
+              <div className='absolute right-0 z-50 mt-2 w-56 overflow-hidden rounded-xl border border-navy-700 bg-navy-900 shadow-2xl shadow-black/40'>
+                {/* Which rows the next export should include. "All rows" is the
+                    default because a report is normally the whole filtered set;
+                    "This page" is there for copying exactly what is on screen. */}
+                <div className='border-b border-navy-700 p-2'>
+                  <p className='px-2 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-navy-400'>
+                    Include
+                  </p>
+                  <div className='grid grid-cols-2 gap-1'>
+                    {[
+                      { key: 'all' as const, label: 'All rows', count: sortedRecords.length },
+                      { key: 'page' as const, label: 'This page', count: visibleRecords.length },
+                    ].map((option) => (
                       <button
+                        key={option.key}
                         type='button'
-                        onClick={() => setCourseFilter('all')}
-                        className={`px-4 py-2.5 rounded-lg font-semibold text-sm transition-colors border-2 ${
-                          courseFilter === 'all'
-                            ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500'
-                            : 'bg-navy-900/50 text-navy-300 border-navy-700 hover:border-navy-600'
+                        onClick={() => setExportScope(option.key)}
+                        className={`rounded-lg px-2 py-1.5 text-center text-xs font-semibold transition-colors ${
+                          exportScope === option.key
+                            ? 'bg-yellow-500/20 text-yellow-300'
+                            : 'text-navy-300 hover:bg-navy-800/60 hover:text-white'
                         }`}
                       >
-                        All ({records.length})
+                        {option.label}
+                        <span className='block text-[10px] font-normal opacity-80'>
+                          {option.count} {option.count === 1 ? 'row' : 'rows'}
+                        </span>
                       </button>
-                      {courseCounts.map(({ label, count }) => (
-                        <button
-                          type='button'
-                          key={label}
-                          onClick={() => setCourseFilter(label)}
-                          className={`px-4 py-2.5 rounded-lg font-semibold text-sm transition-colors border-2 ${
-                            courseFilter === label
-                              ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500'
-                              : 'bg-navy-900/50 text-navy-300 border-navy-700 hover:border-navy-600'
-                          }`}
-                        >
-                          {label} ({count})
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {/* Status Filter */}
-              <div>
-                <label className='block text-sm font-medium text-navy-200 mb-2'>
-                  Status
-                </label>
-                <div className='flex gap-2'>
-                  {(['all', 'active', 'completed'] as const).map((status) => (
-                    <button
-                      key={status}
-                      onClick={() => setStatusFilter(status)}
-                      className={`
-                  flex-1 px-4 py-3 rounded-lg font-semibold text-sm transition-colors
-                  ${
-                    statusFilter === status
-                      ? 'bg-yellow-500/20 text-yellow-300 border-2 border-yellow-500'
-                      : 'bg-navy-900/50 text-navy-300 border-2 border-navy-700 hover:border-navy-600'
-                  }
-                      `}
-                    >
-                      {status.charAt(0).toUpperCase() + status.slice(1)}
-                    </button>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
 
-              {/* Date Filter - calendar day, or the whole selected month */}
-              <div>
-                <label className='block text-sm font-medium text-navy-200 mb-2'>
-                  Date
-                </label>
-                <div className='flex flex-col sm:flex-row gap-2'>
-                  <input
-                    type='date'
-                    value={selectedDateValue}
-                    onChange={(e) => handleDateChange(e.target.value)}
-                    aria-label='Filter records by date'
-                    className='
-                      flex-1 min-w-0 px-4 py-3 rounded-lg
-                      bg-navy-900/50 border border-navy-700
-                      text-white font-semibold text-sm
-                      focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500
-                      transition-colors cursor-pointer
-                      '
-                  />
+                {[
+                  { label: 'CSV (.csv)', icon: 'fa-file-csv', handler: handleExportCSV },
+                  {
+                    label: 'Excel (.xls)',
+                    icon: 'fa-file-excel',
+                    handler: handleExportExcel,
+                  },
+                  { label: 'PDF', icon: 'fa-file-pdf', handler: handleExportPDF },
+                  {
+                    label: 'JSON (.json)',
+                    icon: 'fa-file-code',
+                    handler: handleExportJSON,
+                  },
+                ].map((option) => (
+                  <button
+                    key={option.label}
+                    onClick={() => {
+                      setExportOpen(false);
+                      option.handler();
+                    }}
+                    className='flex w-full items-center gap-3 px-4 py-2.5 text-left text-navy-200 transition-colors hover:bg-navy-800/50 hover:text-white'
+                  >
+                    <i className={`fa-solid ${option.icon} w-5`}></i>
+                    <span>{option.label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        }
+      />
+
+      {/* Search - its own panel above the filters so the input spans the
+              full width instead of sharing a column with the filter buttons. */}
+      <Card className='mb-4'>
+        <label className='mb-2 block text-sm font-medium text-navy-200'>Search</label>
+        <div className='relative'>
+          <div className='pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4'>
+            <i className='fa-solid fa-magnifying-glass text-navy-500'></i>
+          </div>
+          <input
+            type='text'
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder='Search trainee name, course, purpose, or room...'
+            className={`${controlClass} pl-12`}
+          />
+        </div>
+      </Card>
+
+      {/* Filters */}
+      <Card className='mb-4'>
+        <div className='grid grid-cols-1 md:grid-cols-3 gap-3'>
+          {/* Course. This page only shows trainees, so the filter is always
+                  present. Buttons rather than a select so each course's record
+                  count is visible at a glance. */}
+          <div>
+            <label className='mb-2 block text-xs font-semibold uppercase tracking-wider text-navy-400'>
+              Course
+            </label>
+            <div className='flex flex-wrap gap-1.5'>
+              <button
+                type='button'
+                onClick={() => setCourseFilter('all')}
+                className={filterChipClass(courseFilter === 'all')}
+              >
+                All
+                <span className={filterCountClass(courseFilter === 'all')}>
+                  {traineeRecords.length}
+                </span>
+              </button>
+              {courseCounts.map(({ label, count }) => {
+                const active = courseFilter === label;
+                return (
                   <button
                     type='button'
-                    onClick={toggleWholeMonth}
-                    aria-pressed={selectedDay === 'all'}
-                    className={`px-4 py-3 rounded-lg font-semibold text-sm transition-colors border-2 flex items-center justify-center gap-2 ${
-                      selectedDay === 'all'
-                        ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500'
-                        : 'bg-navy-900/50 text-navy-300 border-navy-700 hover:border-navy-600'
-                    }`}
+                    key={label}
+                    onClick={() => setCourseFilter(label)}
+                    className={filterChipClass(active)}
                   >
-                    <i
-                      className={`fa-solid ${
-                        selectedDay === 'all'
-                          ? 'fa-calendar-days'
-                          : 'fa-calendar-day'
-                      }`}
-                    ></i>
-                    All month
+                    {label}
+                    <span className={filterCountClass(active)}>{count}</span>
                   </button>
-                </div>
-
-                {/* Active date description */}
-                <p className='text-navy-500 text-xs mt-2'>
-                  Showing{' '}
-                  {selectedDay === 'all'
-                    ? `all records in ${MONTH_NAMES[Number(selectedMonth) - 1]} ${selectedYear}`
-                    : `${MONTH_NAMES[Number(selectedMonth) - 1]} ${selectedDay}, ${selectedYear}`}
-                </p>
-              </div>
+                );
+              })}
             </div>
           </div>
 
-          {/* Records Table */}
-          <div className='glass-panel border-navy-800 rounded-lg overflow-hidden'>
-            <div className='overflow-x-auto'>
-              <table className='w-full'>
-                <thead className='bg-navy-900/50 border-b border-navy-800'>
-                  <tr>
-                    <th className='px-4 py-3 text-left text-xs font-semibold text-navy-300'>
-                      {sortHeader('User', 'userName')}
-                    </th>
-                    {showCourse && (
-                      <th className='px-4 py-3 text-left text-xs font-semibold text-navy-300'>
-                        {sortHeader('Course', 'courseLabel')}
-                      </th>
+          {/* Status Filter */}
+          <div>
+            <label className='mb-2 block text-xs font-semibold uppercase tracking-wider text-navy-400'>
+              Status
+            </label>
+            <div className='flex flex-wrap gap-1.5'>
+              {(['all', 'active', 'completed'] as const).map((status) => (
+                <button
+                  key={status}
+                  onClick={() => setStatusFilter(status)}
+                  className={filterChipClass(statusFilter === status)}
+                >
+                  {status.charAt(0).toUpperCase() + status.slice(1)}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Date Filter - Day or Month scope, picked directly. */}
+          <div>
+            <label className='mb-2 block text-xs font-semibold uppercase tracking-wider text-navy-400'>
+              Date
+            </label>
+            <DatePeriodFilter
+              mode={periodMode}
+              onModeChange={handlePeriodModeChange}
+              dateValue={selectedDateValue}
+              onDateChange={handleDateChange}
+              monthValue={selectedMonthValue}
+              onMonthChange={handleMonthChange}
+              summary={`Showing ${periodLabel}`}
+            />
+          </div>
+        </div>
+      </Card>
+
+      {/* Records Table */}
+      <Card padded={false} className='overflow-hidden'>
+        <div className='overflow-x-auto'>
+          <table className='w-full'>
+            <thead className='bg-navy-900/50 border-b border-navy-800'>
+              <tr>
+                <th className='px-3 py-2 text-left text-xs font-semibold text-navy-300'>
+                  {sortHeader('User', 'userName')}
+                </th>
+                <th className='px-3 py-2 text-left text-xs font-semibold text-navy-300'>
+                  {sortHeader('Course', 'courseLabel')}
+                </th>
+                <th className='px-3 py-2 text-left text-xs font-semibold text-navy-300'>
+                  {sortHeader('Purpose / Room', 'purposeLabel')}
+                </th>
+                <th className='px-3 py-2 text-left text-xs font-semibold text-navy-300'>
+                  {sortHeader('Time In', 'timeIn')}
+                </th>
+                <th className='px-3 py-2 text-left text-xs font-semibold text-navy-300'>
+                  {sortHeader('Time Out', 'timeOut')}
+                </th>
+                <th className='px-3 py-2 text-left text-xs font-semibold text-navy-300'>
+                  {sortHeader('Duration', 'durationMinutes')}
+                </th>
+                <th className='px-3 py-2 text-left text-xs font-semibold text-navy-300'>
+                  {sortHeader('Status', 'status')}
+                </th>
+              </tr>
+            </thead>
+            <tbody className='divide-y divide-navy-800'>
+              {visibleRecords.map((record) => (
+                <tr key={record.id} className='hover:bg-navy-900/30 transition-colors'>
+                  <td className='px-3 py-2 whitespace-nowrap'>
+                    <div className='flex items-center gap-3'>
+                      <div className='flex h-8 w-8 items-center justify-center rounded-lg bg-yellow-500/20'>
+                        <i className='fa-solid fa-user text-sm text-yellow-400'></i>
+                      </div>
+                      <div>
+                        <p className='text-sm font-semibold text-white'>
+                          {record.userName || 'User ' + record.userId.slice(0, 8)}
+                        </p>
+                        <p className='text-navy-500 text-xs'>{record.userId}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className='px-3 py-2 whitespace-nowrap'>
+                    {record.courseLabel ? (
+                      <span className='px-2.5 py-1 rounded-md bg-yellow-500/10 text-yellow-300 border border-yellow-500/20 text-xs font-medium'>
+                        {record.courseLabel}
+                      </span>
+                    ) : (
+                      <span className='text-navy-500 text-sm'>—</span>
                     )}
-                    <th className='px-4 py-3 text-left text-xs font-semibold text-navy-300'>
-                      {sortHeader('Purpose / Room', 'purposeLabel')}
-                    </th>
-                    <th className='px-4 py-3 text-left text-xs font-semibold text-navy-300'>
-                      {sortHeader('Time In', 'timeIn')}
-                    </th>
-                    <th className='px-4 py-3 text-left text-xs font-semibold text-navy-300'>
-                      {sortHeader('Time Out', 'timeOut')}
-                    </th>
-                    <th className='px-4 py-3 text-left text-xs font-semibold text-navy-300'>
-                      {sortHeader('Duration', 'durationMinutes')}
-                    </th>
-                    <th className='px-4 py-3 text-left text-xs font-semibold text-navy-300'>
-                      {sortHeader('Status', 'status')}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className='divide-y divide-navy-800'>
-                  {sortedRecords.map((record) => (
-                    <tr
-                      key={record.id}
-                      className='hover:bg-navy-900/30 transition-colors'
-                    >
-                      <td className='px-4 py-3 whitespace-nowrap'>
-                        <div className='flex items-center gap-3'>
-                          <div className='w-10 h-10 rounded-lg bg-yellow-500/20 flex items-center justify-center'>
-                            <i className='fa-solid fa-user text-yellow-400'></i>
-                          </div>
-                          <div>
-                            <p className='text-white font-semibold'>
-                              {record.userName || 'User ' + record.userId.slice(0, 8)}
-                            </p>
-                            <p className='text-navy-500 text-xs'>{record.userId}</p>
-                          </div>
-                        </div>
-                      </td>
-                      {showCourse && (
-                        <td className='px-4 py-3 whitespace-nowrap'>
-                          {record.courseLabel ? (
-                            <span className='px-2.5 py-1 rounded-md bg-yellow-500/10 text-yellow-300 border border-yellow-500/20 text-xs font-medium'>
-                              {record.courseLabel}
-                            </span>
-                          ) : (
-                            <span className='text-navy-500 text-sm'>—</span>
-                          )}
-                        </td>
-                      )}
-                      <td className='px-4 py-3'>
-                        <p className='text-white font-medium'>
-                          {record.purposeLabel || 'No purpose recorded'}
-                        </p>
-                        <p className='text-navy-300 text-sm'>
-                          {record.building ? `${record.building} • ` : ''}
-                          {record.room}
-                        </p>
-                      </td>
-                      <td className='px-4 py-3 whitespace-nowrap text-navy-200'>
-                        {record.timeIn.toLocaleString('en-US', {
+                  </td>
+                  <td className='px-3 py-2'>
+                    <p className='text-white font-medium'>
+                      {record.purposeLabel || 'No purpose recorded'}
+                    </p>
+                    <p className='text-navy-300 text-sm'>
+                      {record.building ? `${record.building} • ` : ''}
+                      {record.room}
+                    </p>
+                  </td>
+                  <td className='px-3 py-2 whitespace-nowrap text-navy-200'>
+                    {record.timeIn.toLocaleString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </td>
+                  <td className='px-3 py-2 whitespace-nowrap text-navy-200'>
+                    {record.timeOut
+                      ? record.timeOut.toLocaleString('en-US', {
                           month: 'short',
                           day: 'numeric',
                           hour: '2-digit',
                           minute: '2-digit',
-                        })}
-                      </td>
-                      <td className='px-4 py-3 whitespace-nowrap text-navy-200'>
-                        {record.timeOut
-                          ? record.timeOut.toLocaleString('en-US', {
-                              month: 'short',
-                              day: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })
-                          : '—'}
-                      </td>
-                      <td className='px-4 py-3 whitespace-nowrap text-navy-200'>
-                        {formatDurationMinutes(record.durationMinutes)}
-                      </td>
-                      <td className='px-4 py-3 whitespace-nowrap'>
-                        <span
-                          className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${
-                            record.status === 'active'
-                              ? 'bg-green-500/20 text-green-300 border border-green-500/30'
-                              : 'bg-navy-700 text-navy-200'
-                          }`}
-                        >
-                          {record.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                        })
+                      : '—'}
+                  </td>
+                  <td className='px-3 py-2 whitespace-nowrap text-navy-200'>
+                    {formatDurationMinutes(record.durationMinutes)}
+                  </td>
+                  <td className='px-3 py-2 whitespace-nowrap'>
+                    <Badge tone={record.status === 'active' ? 'success' : 'neutral'} dot>
+                      {record.status}
+                    </Badge>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
 
-              {filteredRecords.length === 0 && (
-                <div className='text-center py-8'>
-                  <i className='fa-solid fa-inbox text-navy-600 text-5xl mb-4'></i>
-                  <p className='text-navy-300 text-lg'>No records found</p>
-                  <p className='text-navy-500 text-sm mt-1'>
-                    No check-in records for the selected date. Try another month or day,
-                    or adjust your filters.
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
+          {filteredRecords.length === 0 && (
+            <EmptyState
+              icon='fa-inbox'
+              title='No trainee records found'
+              description='No trainee check-in records for the selected date. Try another month or day, or adjust your filters.'
+            />
+          )}
+        </div>
 
-          {/* Results Summary */}
-          <div className='mt-4 text-center text-navy-300 text-sm'>
-            Showing {filteredRecords.length} of {records.length} records
-            {selectedDay === 'all'
-              ? ` (${MONTH_NAMES[Number(selectedMonth) - 1]} ${selectedYear})`
-              : ` (${MONTH_NAMES[Number(selectedMonth) - 1]} ${selectedDay}, ${selectedYear})`}
-          </div>
-        </main>
-      </div>
-    </>
+        <TablePagination pagination={pagination} itemLabel='records' />
+      </Card>
+    </AdminShell>
   );
 }

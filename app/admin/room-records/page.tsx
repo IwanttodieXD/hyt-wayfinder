@@ -1,8 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import Link from 'next/link';
-import { useAuthStore } from '@/store/authStore';
 import {
   useRoomPresenceStore,
   visitDuration,
@@ -10,13 +8,36 @@ import {
 } from '@/store/roomPresenceStore';
 import { useRoomsStore } from '@/store/roomsStore';
 import { formatDurationMinutes } from '@/store/recordsStore';
-import UserProfile from '@/components/UserProfile';
 import { useRoleGuard } from '@/hooks/useRoleGuard';
 import { useLiveData } from '@/hooks/useLiveData';
+import { usePagination } from '@/hooks/usePagination';
+import AdminPageHeader from '@/components/AdminPageHeader';
+import AdminShell from '@/components/AdminShell';
+import {
+  Badge,
+  Card,
+  DatePeriodFilter,
+  EmptyState,
+  StatCard,
+  TablePagination,
+  buttonStyles,
+  controlClass,
+  type DatePeriodMode,
+} from '@/components/ui';
 
 const MONTH_NAMES = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
 ];
 
 /**
@@ -31,8 +52,7 @@ const MONTH_NAMES = [
  * empty, rather than silently vanishing from the report.
  */
 export default function RoomRecordsPage() {
-  const { user } = useAuthStore();
-  const isAllowed = useRoleGuard(['admin'], '/admin');
+  const isAllowed = useRoleGuard(['admin'], '/verify');
 
   const { presence } = useRoomPresenceStore();
   const { getAllRooms, fetchRooms } = useRoomsStore();
@@ -45,8 +65,10 @@ export default function RoomRecordsPage() {
   const [selectedYear, setSelectedYear] = useState(String(now.getFullYear()));
   const [selectedMonth, setSelectedMonth] = useState(String(now.getMonth() + 1));
   const [selectedDay, setSelectedDay] = useState(String(now.getDate()));
-const [exportOpen, setExportOpen] = useState(false);
-const exportRef = useRef<HTMLDivElement>(null);
+  const [periodMode, setPeriodMode] = useState<DatePeriodMode>('day');
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportScope, setExportScope] = useState<'all' | 'page'>('all');
+  const exportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (isAllowed) {
@@ -68,14 +90,17 @@ const exportRef = useRef<HTMLDivElement>(null);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // `yyyy-mm-dd`, the value a native date input expects. When the whole month
-  // is selected, the input shows the first of that month as an anchor for the
-  // calendar header while the filter ignores the day.
+  // `yyyy-mm-dd`, the value a native date input expects.
   const selectedDateValue = [
     selectedYear,
     String(selectedMonth).padStart(2, '0'),
-    String(selectedDay === 'all' ? 1 : Number(selectedDay)).padStart(2, '0'),
+    String(selectedDay).padStart(2, '0'),
   ].join('-');
+
+  // `yyyy-mm`, the value a native month input expects.
+  const selectedMonthValue = [selectedYear, String(selectedMonth).padStart(2, '0')].join(
+    '-'
+  );
 
   const handleDateChange = (value: string) => {
     const [year, month, day] = value.split('-');
@@ -84,12 +109,32 @@ const exportRef = useRef<HTMLDivElement>(null);
     setSelectedYear(String(Number(year)));
     setSelectedMonth(String(Number(month)));
     setSelectedDay(String(Number(day)));
+    setPeriodMode('day');
   };
 
-  // Switching back to a specific day anchors on the 1st of the visible month;
-  // the admin can then pick any day from the calendar.
-  const toggleWholeMonth = () =>
-    setSelectedDay((day) => (day === 'all' ? '1' : 'all'));
+  const handleMonthChange = (value: string) => {
+    const [year, month] = value.split('-');
+    if (!year || !month) return;
+
+    setSelectedYear(String(Number(year)));
+    setSelectedMonth(String(Number(month)));
+    setPeriodMode('month');
+  };
+
+  // Switching from Month back to Day keeps the same day where possible. A day
+  // like the 31st does not exist in every month, so clamp it to the selected
+  // month instead of handing the date input an invalid value.
+  const handlePeriodModeChange = (mode: DatePeriodMode) => {
+    if (mode === 'day') {
+      const daysInMonth = new Date(
+        Number(selectedYear),
+        Number(selectedMonth),
+        0
+      ).getDate();
+      setSelectedDay((day) => String(Math.min(Number(day) || 1, daysInMonth)));
+    }
+    setPeriodMode(mode);
+  };
 
   // Dates are compared field-by-field in LOCAL time so a visit matches the
   // calendar day the admin sees, regardless of the stored UTC offset.
@@ -98,7 +143,7 @@ const exportRef = useRef<HTMLDivElement>(null);
     return (
       entered.getFullYear() === Number(selectedYear) &&
       entered.getMonth() + 1 === Number(selectedMonth) &&
-      (selectedDay === 'all' || entered.getDate() === Number(selectedDay))
+      (periodMode === 'month' || entered.getDate() === Number(selectedDay))
     );
   };
 
@@ -107,6 +152,7 @@ const exportRef = useRef<HTMLDivElement>(null);
     const matchesSearch =
       !term ||
       entry.userName?.toLowerCase().includes(term) ||
+      entry.courseLabel?.toLowerCase().includes(term) ||
       entry.userId.toLowerCase().includes(term) ||
       entry.room.toLowerCase().includes(term) ||
       entry.roomLabel.toLowerCase().includes(term);
@@ -116,12 +162,35 @@ const exportRef = useRef<HTMLDivElement>(null);
     return matchesSearch && matchesRoom && matchesDate(entry);
   });
 
-  // Group into per-room sections, keyed by room id. Rooms from the `rooms` table
-  // come first so sections keep a stable, familiar order, then any room that was
-  // retired but still has visits against it.
+  // Rooms are counted from every filtered visit, not just the visible page, so
+  // the summary tile does not change when the admin flips pages.
+  const roomCount = new Set(filtered.map((entry) => entry.roomId)).size;
+
+  // Paginate the flat visit list, then group only that slice. Paginating after
+  // grouping would make a room's section break across pages in an unpredictable
+  // order; slicing first keeps every page a fixed number of rows.
+  const pagination = usePagination(
+    filtered.length,
+    [
+      searchTerm,
+      roomFilter,
+      selectedYear,
+      selectedMonth,
+      selectedDay,
+      periodMode,
+    ].join('|')
+  );
+  const visibleEntries = filtered.slice(pagination.start, pagination.end);
+
+  // What the export menu currently points at.
+  const exportRows = exportScope === 'page' ? visibleEntries : filtered;
+
+  // Group the visible visits into per-room sections, keyed by room id. Rooms from
+  // the `rooms` table come first so sections keep a stable, familiar order, then
+  // any room that was retired but still has visits against it.
   const grouped = useMemo(() => {
     const byRoom = new Map<string, RoomPresence[]>();
-    for (const entry of filtered) {
+    for (const entry of visibleEntries) {
       const list = byRoom.get(entry.roomId) ?? [];
       list.push(entry);
       byRoom.set(entry.roomId, list);
@@ -147,7 +216,7 @@ const exportRef = useRef<HTMLDivElement>(null);
       }));
 
     return [...known, ...extra];
-  }, [filtered, getAllRooms]);
+  }, [visibleEntries, getAllRooms]);
 
   // Rooms in the filter dropdown: every room in the table, so an admin can pick a
   // room that currently has no visits instead of it being missing.
@@ -181,9 +250,10 @@ const exportRef = useRef<HTMLDivElement>(null);
       ? 'All rooms'
       : (roomOptions.find((r) => r.roomId === roomFilter)?.label ?? 'Selected room');
 
-  const buildExportData = () => {
+  const buildExportData = (entries: RoomPresence[] = exportRows) => {
     const headers = [
       'User',
+      'Course',
       'User ID',
       'Room',
       'Room Name',
@@ -193,8 +263,9 @@ const exportRef = useRef<HTMLDivElement>(null);
       'Status',
     ];
 
-    const rows = filtered.map((entry) => [
+    const rows = entries.map((entry) => [
       entry.userName || 'Unknown user',
+      entry.courseLabel ?? '',
       entry.userId,
       entry.room,
       entry.roomLabel,
@@ -217,7 +288,7 @@ const exportRef = useRef<HTMLDivElement>(null);
     '-' +
     String(selectedMonth).padStart(2, '0') +
     '-' +
-    (selectedDay === 'all' ? 'all-days' : String(selectedDay).padStart(2, '0')) +
+    (periodMode === 'month' ? 'all-days' : String(selectedDay).padStart(2, '0')) +
     '.' +
     ext;
 
@@ -309,7 +380,7 @@ const exportRef = useRef<HTMLDivElement>(null);
         'th { background: #f3f4f6; text-transform: uppercase; letter-spacing: 0.03em; }' +
         '</style></head><body>' +
         '<h1>Room Visits</h1>' +
-        `<p>${filtered.length} visit(s) &middot; ${escapeHtml(periodLabel)} &middot; ${escapeHtml(scopeLabel)}</p>` +
+        `<p>${exportRows.length} visit(s) &middot; ${escapeHtml(periodLabel)} &middot; ${escapeHtml(scopeLabel)}</p>` +
         `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>` +
         '</body></html>'
     );
@@ -319,47 +390,23 @@ const exportRef = useRef<HTMLDivElement>(null);
   };
 
   const periodLabel =
-    selectedDay === 'all'
+    periodMode === 'month'
       ? `${MONTH_NAMES[Number(selectedMonth) - 1]} ${selectedYear}`
       : `${MONTH_NAMES[Number(selectedMonth) - 1]} ${selectedDay}, ${selectedYear}`;
 
   if (!isAllowed) return null;
 
   return (
-    <div className='min-h-screen'>
-      <header className='app-header border-b sticky top-0 z-50'>
-        <div className='max-w-7xl mx-auto px-4 py-3 flex items-center justify-between'>
-          <Link href='/admin' className='flex items-center gap-3'>
-            <div className='w-12 h-12 flex items-center justify-center overflow-hidden'>
-              <img src='/hyt_logo.png' alt='HYT Logo' className='w-full h-full object-contain' />
-            </div>
-            <div>
-              <h1 className='text-white font-bold text-lg leading-none'>
-                Room Visits
-              </h1>
-              <p className='text-navy-300 text-xs mt-0.5'>
-                Who entered each room, and when
-              </p>
-            </div>
-          </Link>
-          {user ? <UserProfile /> : null}
-        </div>
-      </header>
-
-      <main className='max-w-7xl mx-auto px-4 py-5'>
-        <div className='mb-6 flex items-center justify-between gap-4'>
-          <Link
-            href='/admin'
-            className='text-navy-300 hover:text-navy-200 flex items-center gap-2 transition-colors'
-          >
-            <i className='fa-solid fa-arrow-left'></i>
-            <span>Back to Dashboard</span>
-          </Link>
-
-          {/* Disabled rather than hidden when there is nothing to export: a
-              missing button reads as "this page can't export" rather than
-              "there are no rows for the filters you picked". */}
+    <AdminShell>
+      <AdminPageHeader
+        eyebrow='Activity'
+        title='Room Visits'
+        subtitle='Who entered each room, and when'
+        actions={
           <div className='relative' ref={exportRef}>
+            {/* Disabled rather than hidden when there is nothing to export: a
+                missing button reads as "this page can't export" rather than
+                "there are no rows for the filters you picked". */}
             <button
               onClick={() => setExportOpen((v) => !v)}
               disabled={filtered.length === 0}
@@ -368,9 +415,9 @@ const exportRef = useRef<HTMLDivElement>(null);
                   ? 'No room visits match the current filters'
                   : 'Export the filtered visits'
               }
-              className='px-4 py-2 rounded-lg bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 hover:bg-yellow-500/30 transition-colors flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-yellow-500/20'
+              className={`${buttonStyles('quiet', 'md')} disabled:cursor-not-allowed disabled:opacity-40`}
             >
-              <i className='fa-solid fa-download'></i>
+              <i className='fa-solid fa-download text-xs'></i>
               Export
               <i
                 className={`fa-solid fa-chevron-down text-xs transition-transform ${exportOpen ? 'rotate-180' : ''}`}
@@ -378,7 +425,41 @@ const exportRef = useRef<HTMLDivElement>(null);
             </button>
 
             {exportOpen && filtered.length > 0 && (
-              <div className='absolute right-0 mt-2 w-52 bg-navy-900 border border-navy-700 rounded-lg shadow-black/50 overflow-hidden z-50'>
+              <div className='absolute right-0 mt-2 w-56 bg-navy-900 border border-navy-700 rounded-lg shadow-black/50 overflow-hidden z-50'>
+                {/* Which visits the next export should include. Defaults to the
+                    whole filtered set; "This page" copies exactly what is shown. */}
+                <div className='border-b border-navy-700 p-2'>
+                  <p className='px-2 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-navy-400'>
+                    Include
+                  </p>
+                  <div className='grid grid-cols-2 gap-1'>
+                    {[
+                      { key: 'all' as const, label: 'All rows', count: filtered.length },
+                      {
+                        key: 'page' as const,
+                        label: 'This page',
+                        count: visibleEntries.length,
+                      },
+                    ].map((option) => (
+                      <button
+                        key={option.key}
+                        type='button'
+                        onClick={() => setExportScope(option.key)}
+                        className={`rounded-lg px-2 py-1.5 text-center text-xs font-semibold transition-colors ${
+                          exportScope === option.key
+                            ? 'bg-yellow-500/20 text-yellow-300'
+                            : 'text-navy-300 hover:bg-navy-800/60 hover:text-white'
+                        }`}
+                      >
+                        {option.label}
+                        <span className='block text-[10px] font-normal opacity-80'>
+                          {option.count} {option.count === 1 ? 'visit' : 'visits'}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 {[
                   { label: 'CSV (.csv)', icon: 'fa-file-csv', handler: handleExportCSV },
                   {
@@ -387,7 +468,11 @@ const exportRef = useRef<HTMLDivElement>(null);
                     handler: handleExportExcel,
                   },
                   { label: 'PDF', icon: 'fa-file-pdf', handler: handleExportPDF },
-                  { label: 'JSON (.json)', icon: 'fa-file-code', handler: handleExportJSON },
+                  {
+                    label: 'JSON (.json)',
+                    icon: 'fa-file-code',
+                    handler: handleExportJSON,
+                  },
                 ].map((option) => (
                   <button
                     key={option.label}
@@ -404,238 +489,195 @@ const exportRef = useRef<HTMLDivElement>(null);
               </div>
             )}
           </div>
-        </div>
+        }
+      />
 
-        {/* Summary */}
-        <div className='grid grid-cols-1 md:grid-cols-3 gap-3 mb-6'>
-          <div className='glass-panel border-navy-800 p-5 rounded-lg'>
-            <p className='text-navy-300 text-sm mb-1'>Total Visits</p>
-            <p className='text-white text-3xl font-bold'>{filtered.length}</p>
-          </div>
-          <div className='glass-panel border-navy-800 p-5 rounded-lg'>
-            <p className='text-navy-300 text-sm mb-1'>Rooms Visited</p>
-            <p className='text-white text-3xl font-bold'>{grouped.length}</p>
-          </div>
-          <div className='glass-panel border-navy-800 p-5 rounded-lg'>
-            <p className='text-navy-300 text-sm mb-1'>Still Inside</p>
-            <p className='text-white text-3xl font-bold'>
-              {filtered.filter((e) => !e.exitedAt).length}
-            </p>
-          </div>
-        </div>
+      {/* Summary */}
+      <div className='mb-4 grid grid-cols-1 gap-3 md:grid-cols-3'>
+        <StatCard
+          label='Total visits'
+          value={filtered.length}
+          hint={periodLabel}
+          icon='fa-person-walking-arrow-right'
+          tone='brand'
+        />
+        <StatCard
+          label='Rooms visited'
+          value={roomCount}
+          hint='Rooms with at least one visit'
+          icon='fa-door-open'
+          tone='info'
+        />
+        <StatCard
+          label='Still inside'
+          value={filtered.filter((entry) => !entry.exitedAt).length}
+          hint='Visits without an exit scan'
+          icon='fa-user-clock'
+          tone='success'
+        />
+      </div>
 
-        {/* Filters */}
-        <div className='glass-panel border-navy-800 rounded-lg p-6 mb-6'>
-          <div className='grid grid-cols-1 md:grid-cols-3 gap-3'>
-            <div>
-              <label className='block text-sm font-medium text-navy-200 mb-2'>
-                Search
-              </label>
-              <div className='relative'>
-                <div className='absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none'>
-                  <i className='fa-solid fa-magnifying-glass text-navy-500'></i>
-                </div>
-                <input
-                  type='text'
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder='Search by name or room...'
-                  className='
-                    w-full pl-12 pr-4 py-3 rounded-lg
-                    bg-navy-900/50 border border-navy-700
-                    text-white placeholder-navy-500
-                    focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500
-                    transition-colors
-                  '
-                />
+      {/* Filters */}
+      <Card className='mb-4'>
+        <div className='grid grid-cols-1 gap-3 md:grid-cols-3'>
+          <div>
+            <label className='block text-sm font-medium text-navy-200 mb-2'>Search</label>
+            <div className='relative'>
+              <div className='pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4'>
+                <i className='fa-solid fa-magnifying-glass text-navy-500'></i>
               </div>
+              <input
+                type='text'
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder='Search by name, course, or room...'
+                className={`${controlClass} pl-12`}
+              />
             </div>
+          </div>
 
-            <div>
-              <label className='block text-sm font-medium text-navy-200 mb-2'>
-                Room
-              </label>
-              <div className='relative'>
-                <select
-                  value={roomFilter}
-                  onChange={(e) => setRoomFilter(e.target.value)}
-                  className='
-                    w-full px-4 py-3 rounded-lg appearance-none
-                    bg-navy-900/50 border border-navy-700
-                    text-white font-semibold text-sm
-                    focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500
-                    transition-colors cursor-pointer
-                  '
-                >
-                  <option value='all' className='bg-navy-900'>
-                    All rooms
+          <div>
+            <label className='block text-sm font-medium text-navy-200 mb-2'>Room</label>
+            <div className='relative'>
+              <select
+                value={roomFilter}
+                onChange={(e) => setRoomFilter(e.target.value)}
+                className={`${controlClass} appearance-none pr-10`}
+              >
+                <option value='all' className='bg-navy-900'>
+                  All rooms
+                </option>
+                {roomOptions.map((r) => (
+                  <option key={r.roomId} value={r.roomId} className='bg-navy-900'>
+                    {r.label} ({r.room})
                   </option>
-                  {roomOptions.map((r) => (
-                    <option key={r.roomId} value={r.roomId} className='bg-navy-900'>
-                      {r.label} ({r.room})
-                    </option>
-                  ))}
-                </select>
-                <i className='fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-navy-300 text-xs pointer-events-none'></i>
-              </div>
+                ))}
+              </select>
+              <i className='fa-solid fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-navy-300 text-xs pointer-events-none'></i>
             </div>
+          </div>
 
-            <div>
-              <label className='block text-sm font-medium text-navy-200 mb-2'>
-                Date
-              </label>
-              <div className='flex flex-col sm:flex-row gap-2'>
-                <input
-                  type='date'
-                  value={selectedDateValue}
-                  onChange={(e) => handleDateChange(e.target.value)}
-                  aria-label='Filter room visits by date'
-                  className='
-                    flex-1 min-w-0 px-4 py-3 rounded-lg
-                    bg-navy-900/50 border border-navy-700
-                    text-white font-semibold text-sm
-                    focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500
-                    transition-colors cursor-pointer
-                  '
-                />
-                <button
-                  type='button'
-                  onClick={toggleWholeMonth}
-                  aria-pressed={selectedDay === 'all'}
-                  className={`px-4 py-3 rounded-lg font-semibold text-sm transition-colors border-2 flex items-center justify-center gap-2 ${
-                    selectedDay === 'all'
-                      ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500'
-                      : 'bg-navy-900/50 text-navy-300 border-navy-700 hover:border-navy-600'
-                  }`}
-                >
-                  <i
-                    className={`fa-solid ${
-                      selectedDay === 'all'
-                        ? 'fa-calendar-days'
-                        : 'fa-calendar-day'
-                    }`}
-                  ></i>
-                  All month
-                </button>
-              </div>
-              <p className='text-navy-500 text-xs mt-2'>
-                Showing {selectedDay === 'all' ? `all visits in ${periodLabel}` : periodLabel}
-              </p>
-            </div>
+          <div>
+            <label className='block text-sm font-medium text-navy-200 mb-2'>Date</label>
+            <DatePeriodFilter
+              mode={periodMode}
+              onModeChange={handlePeriodModeChange}
+              dateValue={selectedDateValue}
+              onDateChange={handleDateChange}
+              monthValue={selectedMonthValue}
+              onMonthChange={handleMonthChange}
+              summary={`Showing ${periodLabel}`}
+            />
           </div>
         </div>
+      </Card>
 
-        {/* Per-room sections */}
-        {grouped.length === 0 ? (
-          <div className='glass-panel border-navy-800 rounded-lg py-12 text-center'>
-            <i className='fa-solid fa-inbox text-navy-600 text-5xl mb-4'></i>
-            <p className='text-navy-300 text-lg'>No room visits found</p>
-            <p className='text-navy-500 text-sm mt-1'>
-              No one scanned a room door code for this date. Try another month or
-              day, or adjust your filters.
-            </p>
-          </div>
-        ) : (
-          <div className='space-y-6'>
-            {grouped.map(({ roomId, room, label, visits }) => {
-              const inside = visits.filter((v) => !v.exitedAt).length;
-              return (
-                <div key={roomId} className='glass-panel border-navy-800 rounded-lg overflow-hidden'>
-                  <div className='flex items-center justify-between px-5 py-4 bg-navy-900/50 border-b border-navy-800'>
-                    <div className='flex items-center gap-3'>
-                      <i className='fa-solid fa-door-closed text-navy-400'></i>
-                      <div>
-                        <h2 className='text-white font-bold'>{label}</h2>
-                        <p className='text-navy-400 text-xs'>{room}</p>
-                      </div>
-                    </div>
-                    <div className='flex items-center gap-4 text-sm'>
-                      <span className='text-navy-300'>
-                        {visits.length} {visits.length === 1 ? 'visit' : 'visits'}
-                      </span>
-                      {inside > 0 && (
-                        <span className='px-2.5 py-1 rounded-full text-xs font-bold bg-green-500/20 text-green-400 border border-green-500/30'>
-                          {inside} inside
-                        </span>
-                      )}
+      {/* Per-room sections */}
+      {grouped.length === 0 ? (
+        <Card>
+          <EmptyState
+            icon='fa-inbox'
+            title='No room visits found'
+            description='No one scanned a room door code for this date. Try another month or day, or adjust your filters.'
+          />
+        </Card>
+      ) : (
+        <div className='space-y-4'>
+          {grouped.map(({ roomId, room, label, visits }) => {
+            const inside = visits.filter((v) => !v.exitedAt).length;
+            return (
+              <Card key={roomId} padded={false} className='overflow-hidden'>
+                <div className='flex items-center justify-between border-b border-navy-800 bg-navy-900/50 px-4 py-3'>
+                  <div className='flex items-center gap-3'>
+                    <span className='flex h-9 w-9 items-center justify-center rounded-xl bg-navy-800 text-navy-300'>
+                      <i className='fa-solid fa-door-closed text-sm'></i>
+                    </span>
+                    <div>
+                      <h2 className='font-bold text-white'>{label}</h2>
+                      <p className='text-xs text-navy-400'>{room}</p>
                     </div>
                   </div>
-
-                  <div className='overflow-x-auto'>
-                    <table className='w-full'>
-                      <thead className='bg-navy-900/30 border-b border-navy-800'>
-                        <tr>
-                          {['User', 'Entered', 'Exited', 'Duration', 'Status'].map((h) => (
-                            <th
-                              key={h}
-                              className='px-4 py-3 text-left text-xs font-semibold text-navy-300 uppercase tracking-wider'
-                            >
-                              {h}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {visits.map((visit) => (
-                          <tr
-                            key={visit.id}
-                            className='border-b border-navy-800/50 last:border-0'
-                          >
-                            <td className='px-4 py-3'>
-                              <p className='text-white font-medium'>
-                                {visit.userName || 'Unknown user'}
-                              </p>
-                              <p className='text-navy-500 text-xs'>
-                                {visit.userId.slice(0, 8)}
-                              </p>
-                            </td>
-                            <td className='px-4 py-3 whitespace-nowrap text-navy-200'>
-                              {visit.enteredAt.toLocaleString('en-US', {
-                                month: 'short',
-                                day: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit',
-                              })}
-                            </td>
-                            <td className='px-4 py-3 whitespace-nowrap text-navy-200'>
-                              {visit.exitedAt
-                                ? visit.exitedAt.toLocaleString('en-US', {
-                                    month: 'short',
-                                    day: 'numeric',
-                                    hour: '2-digit',
-                                    minute: '2-digit',
-                                  })
-                                : '—'}
-                            </td>
-                            <td className='px-4 py-3 whitespace-nowrap text-navy-200'>
-                              {visitDuration(visit.enteredAt, visit.exitedAt)}
-                            </td>
-                            <td className='px-4 py-3 whitespace-nowrap'>
-                              <span
-                                className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${
-                                  visit.exitedAt
-                                    ? 'bg-navy-700 text-navy-200'
-                                    : 'bg-green-500/20 text-green-300 border border-green-500/30'
-                                }`}
-                              >
-                                {visit.exitedAt ? 'left' : 'inside'}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div className='flex items-center gap-3 text-sm'>
+                    <span className='text-navy-300'>
+                      {visits.length} {visits.length === 1 ? 'visit' : 'visits'}
+                    </span>
+                    {inside > 0 && (
+                      <Badge tone='success' dot>
+                        {inside} inside
+                      </Badge>
+                    )}
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        )}
 
-        <div className='mt-4 text-center text-navy-300 text-sm'>
-          Showing {filtered.length} of {presence.length} total room visits
+                <div className='overflow-x-auto'>
+                  <table className='w-full'>
+                    <thead className='bg-navy-900/30 border-b border-navy-800'>
+                      <tr>
+                        {['User', 'Entered', 'Exited', 'Duration', 'Status'].map((h) => (
+                          <th
+                            key={h}
+                            className='px-3 py-2 text-left text-xs font-semibold text-navy-300 uppercase tracking-wider'
+                          >
+                            {h}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {visits.map((visit) => (
+                        <tr
+                          key={visit.id}
+                          className='border-b border-navy-800/50 last:border-0'
+                        >
+                          <td className='px-3 py-2'>
+                            <p className='text-sm font-medium text-white'>
+                              {visit.userName || 'Unknown user'}
+                            </p>
+                            <p className='text-navy-500 text-xs'>
+                              {visit.courseLabel ?? 'No course'} ·{' '}
+                              {visit.userId.slice(0, 8)}
+                            </p>
+                          </td>
+                          <td className='px-3 py-2 whitespace-nowrap text-navy-200'>
+                            {visit.enteredAt.toLocaleString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </td>
+                          <td className='px-3 py-2 whitespace-nowrap text-navy-200'>
+                            {visit.exitedAt
+                              ? visit.exitedAt.toLocaleString('en-US', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })
+                              : '—'}
+                          </td>
+                          <td className='px-3 py-2 whitespace-nowrap text-navy-200'>
+                            {visitDuration(visit.enteredAt, visit.exitedAt)}
+                          </td>
+                          <td className='px-3 py-2 whitespace-nowrap'>
+                            <Badge tone={visit.exitedAt ? 'neutral' : 'success'} dot>
+                              {visit.exitedAt ? 'left' : 'inside'}
+                            </Badge>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            );
+          })}
         </div>
-      </main>
-    </div>
+      )}
+
+      <Card padded={false} className='mt-4 overflow-hidden'>
+        <TablePagination pagination={pagination} itemLabel='visits' />
+      </Card>
+    </AdminShell>
   );
 }

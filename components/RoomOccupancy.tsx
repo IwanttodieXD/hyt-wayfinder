@@ -65,13 +65,23 @@ function floorLabel(floor: string): string {
 }
 
 export default function RoomOccupancy() {
-  const { getActiveCount } = useRecordsStore();
+  const { getActiveCount, getActiveRecords } = useRecordsStore();
   const { getOccupancyByRoom } = useRoomPresenceStore();
   const { getActiveRooms, getAllRooms, fetchRooms } = useRoomsStore();
 
   // Room ids the visitor has opened. A Set rather than a single id so opening one
   // room never closes another.
   const [expandedRooms, setExpandedRooms] = useState<Set<string>>(new Set());
+
+  // Which of the two headline totals is expanded to show its people. Only one
+  // at a time: the lists are long, and comparing "in" with "not in" is not the
+  // reason someone opens them.
+  const [expandedSummary, setExpandedSummary] = useState<
+    'in' | 'out' | null
+  >(null);
+
+  const toggleSummary = (key: 'in' | 'out') =>
+    setExpandedSummary((current) => (current === key ? null : key));
 
   // Rooms are fetched once - they change rarely. The live figures come from
   // useLiveData below, so this page polls attendance and presence on the same
@@ -135,13 +145,58 @@ export default function RoomOccupancy() {
     return [...known, ...extra];
   })();
 
-  const trackedCount = entries.reduce((sum, r) => sum + r.people.length, 0);
+  // The people behind the "In a room" total, flattened out of the per-room
+  // groups. Deduplicated by user id: one open presence row per person is the
+  // database rule, but a stale or duplicated row must not make the total count
+  // the same person twice.
+  const inRoomPeople = (() => {
+    const seen = new Set<string>();
+    const people: {
+      userId: string;
+      userName: string;
+      roomLabel: string;
+      enteredAt: Date;
+    }[] = [];
 
-  // The two headline figures: active people who have scanned into a room, and
-  // active people who have not (still in the lobby, a corridor, or on their way
-  // to one). Clamped because a stale presence row could otherwise push the
-  // "not in a room" figure below zero.
-  const notInRoomCount = Math.max(0, insideCount - trackedCount);
+    for (const entry of entries) {
+      for (const person of entry.people) {
+        if (seen.has(person.userId)) continue;
+        seen.add(person.userId);
+        people.push({
+          userId: person.userId,
+          userName: person.userName || 'Unknown user',
+          roomLabel: entry.label,
+          enteredAt: person.enteredAt,
+        });
+      }
+    }
+
+    return people.sort((a, b) => a.userName.localeCompare(b.userName));
+  })();
+
+  const inRoomCount = inRoomPeople.length;
+
+  // The people behind "Not in a room": active attendance records whose user has
+  // no open presence row. Sorted by check-in time, longest waiting first, since
+  // that is who a front desk should look for. Deduplicated for the same reason
+  // as above: a duplicated active record must not list or count someone twice.
+  const inRoomUserIds = new Set(inRoomPeople.map((person) => person.userId));
+  const notInRoomPeople = (() => {
+    const seen = new Set<string>();
+
+    return getActiveRecords()
+      .filter((record) => !inRoomUserIds.has(record.userId))
+      .sort((a, b) => a.timeIn.getTime() - b.timeIn.getTime())
+      .filter((record) => {
+        // Set membership has to be recorded after the sort so the earliest
+        // check-in wins, not whichever row happened to come back first.
+        if (seen.has(record.userId)) return false;
+        seen.add(record.userId);
+        return true;
+      });
+  })();
+
+  const notInRoomCount = notInRoomPeople.length;
 
   // Bucket into floors. `entries` is already floor-ordered by the store, and Map
   // preserves insertion order, so the groups come out ground-first without a
@@ -183,35 +238,144 @@ export default function RoomOccupancy() {
       </div>
 
       <p className='text-navy-400 text-xs mb-4'>
-        Tap a room to see who is inside it. {trackedCount} of {insideCount}{' '}
+        Tap a total to see who it counts, or a room to see who is inside it.{' '}
+        {inRoomCount} of {insideCount}{' '}
         {insideCount === 1 ? 'person has' : 'people have'} scanned a room door
         code. Anyone in the building without a room is in a corridor or the lobby.
       </p>
 
       {/* Two headline totals, split by whether the active visitor has scanned a
-          room door. They add up to the "in the building" figure above. */}
+          room door. They add up to the "in the building" figure above. Each
+          total expands to the exact people behind it, so the number is never a
+          dead end. */}
       <div className='grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5'>
-        <div className='rounded-lg border border-green-500/30 bg-green-500/10 p-4'>
-          <p className='text-green-300 text-xs font-semibold uppercase tracking-wider flex items-center gap-2'>
-            <i className='fa-solid fa-door-closed'></i>
-            In a room
-          </p>
-          <p className='text-white text-3xl font-bold mt-1'>{trackedCount}</p>
-          <p className='text-navy-300 text-xs mt-1'>
-            Active {trackedCount === 1 ? 'user' : 'users'} inside a room
-          </p>
+        <div className='rounded-lg border border-green-500/30 bg-green-500/10 overflow-hidden'>
+          <button
+            type='button'
+            onClick={() => toggleSummary('in')}
+            aria-expanded={expandedSummary === 'in'}
+            className='w-full text-left p-4 flex items-start justify-between gap-3 hover:bg-green-500/10 transition-colors'
+          >
+            <div className='min-w-0'>
+              <p className='text-green-300 text-xs font-semibold uppercase tracking-wider flex items-center gap-2'>
+                <i className='fa-solid fa-door-closed'></i>
+                In a room
+              </p>
+              <p className='text-white text-3xl font-bold mt-1'>
+                {inRoomCount}
+              </p>
+              <p className='text-navy-300 text-xs mt-1'>
+                Active {inRoomCount === 1 ? 'user' : 'users'} inside a room
+              </p>
+            </div>
+            <i
+              className={`fa-solid fa-chevron-down text-green-300 text-xs mt-1 transition-transform ${
+                expandedSummary === 'in' ? 'rotate-180' : ''
+              }`}
+            ></i>
+          </button>
+
+          {expandedSummary === 'in' && (
+            <div className='px-4 pb-4 border-t border-green-500/20'>
+              {inRoomPeople.length > 0 ? (
+                <ul className='space-y-1.5 pt-3'>
+                  {inRoomPeople.map((person) => (
+                    <li
+                      key={person.userId}
+                      className='flex items-center justify-between gap-2 text-sm'
+                    >
+                      <span className='flex items-center gap-2 text-navy-200 min-w-0'>
+                        <i className='fa-solid fa-user text-navy-500 text-xs'></i>
+                        <span className='truncate'>{person.userName}</span>
+                      </span>
+                      <span className='flex items-center gap-2 flex-shrink-0 text-xs text-navy-500'>
+                        <span className='px-2 py-0.5 rounded-full border border-navy-700 bg-navy-900/60 text-navy-300 whitespace-nowrap'>
+                          {person.roomLabel}
+                        </span>
+                        <span className='tabular-nums whitespace-nowrap'>
+                          {person.enteredAt.toLocaleTimeString('en-US', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className='text-navy-500 text-xs pt-3'>
+                  Nobody has scanned into a room yet.
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
-        <div className='rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-4'>
-          <p className='text-yellow-300 text-xs font-semibold uppercase tracking-wider flex items-center gap-2'>
-            <i className='fa-solid fa-person-walking'></i>
-            Not in a room
-          </p>
-          <p className='text-white text-3xl font-bold mt-1'>{notInRoomCount}</p>
-          <p className='text-navy-300 text-xs mt-1'>
-            Active {notInRoomCount === 1 ? 'user' : 'users'} in the lobby or
-            corridors
-          </p>
+        <div className='rounded-lg border border-yellow-500/30 bg-yellow-500/10 overflow-hidden'>
+          <button
+            type='button'
+            onClick={() => toggleSummary('out')}
+            aria-expanded={expandedSummary === 'out'}
+            className='w-full text-left p-4 flex items-start justify-between gap-3 hover:bg-yellow-500/10 transition-colors'
+          >
+            <div className='min-w-0'>
+              <p className='text-yellow-300 text-xs font-semibold uppercase tracking-wider flex items-center gap-2'>
+                <i className='fa-solid fa-person-walking'></i>
+                Not in a room
+              </p>
+              <p className='text-white text-3xl font-bold mt-1'>
+                {notInRoomCount}
+              </p>
+              <p className='text-navy-300 text-xs mt-1'>
+                Active {notInRoomCount === 1 ? 'user' : 'users'} in the lobby or
+                corridors
+              </p>
+            </div>
+            <i
+              className={`fa-solid fa-chevron-down text-yellow-300 text-xs mt-1 transition-transform ${
+                expandedSummary === 'out' ? 'rotate-180' : ''
+              }`}
+            ></i>
+          </button>
+
+          {expandedSummary === 'out' && (
+            <div className='px-4 pb-4 border-t border-yellow-500/20'>
+              {notInRoomPeople.length > 0 ? (
+                <ul className='space-y-1.5 pt-3'>
+                  {notInRoomPeople.map((record) => (
+                    <li
+                      key={record.id}
+                      className='flex items-center justify-between gap-2 text-sm'
+                    >
+                      <span className='flex items-center gap-2 text-navy-200 min-w-0'>
+                        <i className='fa-solid fa-user text-navy-500 text-xs'></i>
+                        <span className='truncate'>
+                          {record.userName || 'Unknown user'}
+                        </span>
+                      </span>
+                      <span className='flex items-center gap-2 flex-shrink-0 text-xs text-navy-500'>
+                        {record.purposeLabel && (
+                          <span className='max-w-[9rem] truncate text-navy-400'>
+                            {record.purposeLabel}
+                          </span>
+                        )}
+                        <span className='tabular-nums whitespace-nowrap'>
+                          {record.timeIn.toLocaleTimeString('en-US', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className='text-navy-500 text-xs pt-3'>
+                  Everyone checked in is inside a room.
+                </p>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

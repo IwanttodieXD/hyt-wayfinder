@@ -9,10 +9,10 @@
   --navy-800: 17 26 58;
   --navy-700: 26 37 73;
   --navy-600: 36 50 92;
-  --navy-500: 51 66 111;
-  --navy-400: 100 119 168;
-  --navy-300: 139 156 199;
-  --navy-200: 182 195 224;
+  --navy-500: 108 124 168;
+  --navy-400: 133 151 196;
+  --navy-300: 160 176 212;
+  --navy-200: 196 207 231;
   --white: 255 255 255;
   --paper: 255 255 255;
   --yellow-50: 254 252 232;
@@ -34,6 +34,11 @@
   --pattern-star-cool: 147 197 253;
   --pattern-star-warm: 250 204 21;
   --pattern-stars-opacity: 1;
+  /* Expired-pass rows in the admin tables. The dark theme darkens the whole
+     row; the light theme overrides these with a warm sand tint below. */
+  --expired-row: 0 0 0;
+  --expired-row-alpha: 0.6;
+  --expired-cell-opacity: 0.3;
   --red-300: 252 165 165;
   --red-400: 248 113 113;
   --red-500: 239 68 68;
@@ -62,46 +67,55 @@
 
 /* Light theme.
 
-   Blue-tinted neutrals: the surfaces and text carry a cool blue cast rather
-   than the neutral grey they used to be, so panels read as related to the blue
-   accents instead of sitting beside them. The scale is still inverted relative
-   to dark mode (950 lightest = page, 200 darkest = strongest text). */
+   Sky and amber: the page, raised surfaces and borders are a pale sky blue,
+   while panels stay near-white so content remains crisp. The warm amber
+   accents (buttons, active nav, badges) are kept as the counterpoint, and the
+   text ramp turns cool navy so it sits naturally on the blue surfaces. The
+   scale is inverted relative to dark mode (950 lightest = page, 200 darkest =
+   strongest text). */
 html.light {
   /* Surfaces: page -> panel -> raised -> borders */
-  --navy-950: 240 245 252; /* page background, faint blue */
-  --navy-900: 255 255 255; /* panel surface */
-  --navy-800: 234 241 250; /* raised / inset surface */
-  --navy-700: 214 226 242; /* border */
-  --navy-600: 186 203 226; /* stronger border, hover fill */
-  --navy-500: 130 157 192; /* muted icon, placeholder, disabled */
+  --navy-950: 232 244 255; /* page background, pale sky */
+  --navy-900: 250 253 255; /* panel surface, near-white */
+  --navy-800: 240 248 255; /* raised / inset surface */
+  --navy-700: 209 230 249; /* border */
+  --navy-600: 181 212 242; /* stronger border, hover fill */
+  --navy-500: 100 116 139; /* muted icon, placeholder, disabled */
   /* Text: muted -> secondary -> body -> emphasis */
-  --navy-400: 71 105 148; /* secondary / muted text */
-  --navy-300: 40 70 112; /* body text */
-  --navy-200: 16 42 78; /* headings / emphasis */
+  --navy-400: 71 85 105; /* secondary / muted text */
+  --navy-300: 51 65 85; /* body text */
+  --navy-200: 15 23 42; /* headings / emphasis */
   --white: 15 23 42;
   --paper: 255 255 255;
   /* Accent: the text steps (200-400) go dark for contrast on light surfaces,
-     while the fill steps (500-600) stay golden so buttons read the same in
-     both themes. */
-  --yellow-50: 254 252 232;
-  --yellow-100: 254 249 195;
-  --yellow-200: 113 63 18;
-  --yellow-300: 133 77 14;
-  --yellow-400: 161 98 7;
-  --yellow-500: 234 179 8;
-  --yellow-600: 202 138 4;
-  --yellow-700: 161 98 7;
-  --yellow-800: 133 77 14;
-  --yellow-900: 113 63 18;
-  --yellow-950: 66 32 6;
-  /* The same pattern, but a faint gold/neutral version: lower opacity and warm
-     tones so it reads on the bright page without competing with text. */
-  --pattern-diamond: 202 138 4;
-  --pattern-diamond-alpha: 0.12;
-  --pattern-star: 100 119 168;
+     while the fill steps (500-600) stay vivid so buttons read the same in
+     both themes. Light mode currently leans orange rather than lemon. */
+  --yellow-50: 255 247 237;
+  --yellow-100: 255 237 213;
+  --yellow-200: 124 45 18;
+  --yellow-300: 154 52 18;
+  --yellow-400: 194 65 12;
+  --yellow-500: 249 115 22;
+  --yellow-600: 234 88 12;
+  --yellow-700: 194 65 12;
+  --yellow-800: 154 52 18;
+  --yellow-900: 124 45 18;
+  --yellow-950: 67 20 7;
+  /* The same pattern in a faint sky version: low opacity so it reads as
+     drifting texture on the pale blue page rather than competing with the
+     content. A few amber stars keep the warm accent present. */
+  --pattern-diamond: 96 165 250;
+  --pattern-diamond-alpha: 0.09;
+  --pattern-star: 150 190 235;
   --pattern-star-cool: 96 165 250;
-  --pattern-star-warm: 202 138 4;
-  --pattern-stars-opacity: 0.35;
+  --pattern-star-warm: 249 115 22;
+  --pattern-stars-opacity: 0.45;
+  /* Expired rows: in light mode they fade toward white instead of deepening
+     into the page, so "expired" reads as washed-out rather than dark. The
+     gentler opacity keeps the text legible while still clearly muted. */
+  --expired-row: 255 255 255;
+  --expired-row-alpha: 0.85;
+  --expired-cell-opacity: 0.45;
   --red-300: 185 28 28;
   --red-400: 220 38 38;
   --red-500: 239 68 68;
@@ -123,8 +137,8 @@ html.light {
   --teal-500: 20 184 166;
   --purple-300: 126 34 206;
   --purple-500: 168 85 247;
-  --background: 240 245 252;
-  --foreground: 16 42 78;
+  --background: 232 244 255;
+  --foreground: 15 23 42;
   color-scheme: light;
 }
 
@@ -200,27 +214,128 @@ body {
   /* -----------------------------------------------------------------------
      App header.
 
-     Dark mode keeps the deep navy bar. Light mode is a bright, clean surface -
-     a faint yellow wash (`yellow-50`) with a soft gold hairline and a barely
-     there shadow - so the header reads as light and modern rather than a
-     saturated colour band, with the yellow theme carried by the accents.
-
-     Because the light bar is a light surface, the theme-driven text tokens
-     (`text-white`, `text-navy-300`) resolve to their light-mode (dark) values
-     on their own, and the user dropdown - positioned inside the bar - becomes
-     a light panel that matches. That is why there is no palette re-declaration
-     under `html.light` any more: the old one existed only to force
-     light-on-dark text onto a coloured band.
+     The bar is deep navy in both themes, so the brand reads the same against
+     the pale sky light page and the dark page. In light mode the header
+     re-declares the dark palette locally: that keeps `text-white`,
+     `text-navy-*`, the role badges and the user dropdown legible on navy
+     instead of inheriting the dark-on-light tokens used by the page.
   ------------------------------------------------------------------------ */
   .app-header {
-    background-color: rgb(var(--navy-900));
+    background-color: rgb(var(--navy-800));
     border-bottom-color: rgb(var(--navy-700));
   }
 
   html.light .app-header {
-    background-color: rgb(var(--yellow-50));
-    border-bottom-color: rgb(var(--yellow-500) / 0.3);
-    box-shadow: 0 1px 3px rgb(var(--yellow-900) / 0.08);
+    --navy-950: 6 15 52;
+    --navy-900: 10 16 39;
+    --navy-800: 17 26 58;
+    --navy-700: 26 37 73;
+    --navy-600: 36 50 92;
+    --navy-500: 108 124 168;
+    --navy-400: 133 151 196;
+    --navy-300: 160 176 212;
+    --navy-200: 196 207 231;
+    --white: 255 255 255;
+    --paper: 255 255 255;
+    --yellow-200: 254 240 138;
+    --yellow-300: 253 224 71;
+    --yellow-400: 250 204 21;
+    --red-300: 252 165 165;
+    --red-400: 248 113 113;
+    --green-300: 134 239 172;
+    --blue-300: 147 197 253;
+    --teal-300: 94 234 212;
+    --purple-300: 216 180 254;
+    background-color: rgb(var(--navy-800));
+    border-bottom-color: rgb(var(--navy-700));
+    box-shadow: 0 1px 3px rgb(15 23 42 / 0.22);
+  }
+
+  /* -----------------------------------------------------------------------
+     Expired-pass rows.
+
+     The wash comes from theme tokens: the dark theme darkens the row, while
+     the light theme fades it toward white. Hovering restores the ordinary
+     (non-expired) look - the shared blue hover plus full-strength text - so an
+     expired row reads clearly while you are pointing at it.
+  ------------------------------------------------------------------------ */
+  .row-expired {
+    background-color: rgb(var(--expired-row) / var(--expired-row-alpha));
+  }
+
+  .row-expired-cell {
+    opacity: var(--expired-cell-opacity);
+  }
+
+  html.light .row-expired:hover .row-expired-cell {
+    opacity: 1;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Theme-change wave.
+
+   The toggle snapshots the page through the View Transition API. The old
+   snapshot is held completely still; the new one is revealed through a circle
+   that expands from the toggle. That circle is the only animation running, so
+   there is no full-page colour transition over every themed surface.
+
+   The wave starts where the person clicked and is deliberately slow: 1.4s with
+   a gentle ease-in-out curve, so the circle gathers pace instead of snapping
+   open in the first few frames. `--theme-origin-x` / `--theme-origin-y` are set
+   from the click position by ThemeToggle, along with `--theme-radius`, the exact
+   distance to the farthest screen corner. The fallbacks keep the wave centred
+   and large enough if they are ever missing.
+
+   Everything that could steal frames from the sweep is shut off for its
+   duration: the animated background is paused (below), and every per-element
+   transition is frozen (see `html.theme-switching` further down).
+--------------------------------------------------------------------------- */
+@keyframes theme-wave {
+  from {
+    clip-path: circle(0px at var(--theme-origin-x, 50%) var(--theme-origin-y, 50%));
+  }
+  to {
+    clip-path: circle(
+      var(--theme-radius, 150vmax) at var(--theme-origin-x, 50%) var(--theme-origin-y, 50%)
+    );
+  }
+}
+
+::view-transition-old(root) {
+  animation: none;
+}
+
+::view-transition-new(root) {
+  /* One clipped snapshot is all that moves. The symmetric ease keeps the
+     velocity gentle at both ends, so the sweep never starts or stops abruptly. */
+  animation: theme-wave 1400ms cubic-bezier(0.37, 0, 0.63, 1) both;
+  will-change: clip-path;
+}
+
+/* Every themed element that has a Tailwind transition would otherwise start
+   its own colour transition the moment the `<html>` class flips: the reveal and
+   a few dozen fading surfaces then fight for the same frames. Freezing those
+   transitions for the duration leaves the reveal as the only thing animating,
+   which is what makes the motion even on large desktop viewports. The
+   view-transition pseudo-elements are not matched by `*`, so the reveal itself
+   keeps running. */
+html.theme-switching *,
+html.theme-switching *::before,
+html.theme-switching *::after {
+  transition: none !important;
+}
+
+html.theme-switching .animated-bg__checker,
+html.theme-switching .animated-bg__diamond,
+html.theme-switching .animated-bg__drift {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
   }
 }
 
@@ -233,7 +348,7 @@ body {
    - `.animated-bg__checker`: a big board centred on the viewport. Every other
      cell holds a square rotated 45 degrees into a diamond. Its colour and alpha
      come from the `--pattern-diamond*` variables, so dark mode gets the
-     original dark diamonds and light mode a faint gold version. The board
+     original dark diamonds and light mode a faint sky version. The board
      drifts up-and-right by exactly one cell, which lands the checkerboard back
      on itself, so the loop has no seam.
    - `.animated-bg__diamond`: each square slowly shrinks and returns to its
@@ -330,9 +445,9 @@ body {
   }
 }
 
-/* The pattern runs in both themes. Light mode swaps in the faint gold/neutral
+/* The pattern runs in both themes. Light mode swaps in the faint sky-blue
    variables declared under `html.light`, so the same shapes read as a subtle
-   texture on the bright page instead of being hidden. */
+   drifting texture on the pale blue page instead of being hidden. */
 
 /* Respect the OS setting - keep the shapes, drop the motion. */
 @media (prefers-reduced-motion: reduce) {
@@ -352,10 +467,21 @@ body {
   box-sizing: border-box;
 }
 
-html,
-body {
+/* The page scrolls on the root element only.
+
+   `overflow-y` on `body` makes the body a scroll container. Its box grows with
+   the content, so it never actually scrolls - but it does become the nearest
+   scrollport for `position: sticky` descendants (the admin sidebar and the
+   headers), which then have no room to stick and simply scroll away. Keeping
+   the overflow on `html` preserves momentum scrolling without that trap. */
+html {
   width: 100%;
   min-height: 100%;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+}
+
+body {
+  width: 100%;
+  min-height: 100%;
 }

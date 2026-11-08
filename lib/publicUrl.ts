@@ -69,7 +69,7 @@ export const verificationUrl = registrationUrl;
 // Orientation verdict lookup
 // ---------------------------------------------------------------------------
 
-/** The three states from migration 20260101000012. */
+/** The three orientation states. */
 export type OrientationStatus = 'approved' | 'declined' | 'pending';
 
 export interface OrientationRecord {
@@ -87,7 +87,7 @@ export interface OrientationRecord {
  * declined, and the UI should say so rather than guess.
  *
  * Also returns null on any failure. This runs against an RLS-protected table via
- * a SECURITY DEFINER function (migration 20260101000013); if that migration has
+ * a SECURITY DEFINER function (full_setup.sql); if that setup has
  * not been applied yet the call rejects, and the registration form must still
  * work. A failed lookup degrades to "no verdict", never to a blocked sign-up.
  */
@@ -144,7 +144,7 @@ export const VERIFIED_CHECKIN_PATH = '/check-in?verified=1';
 
 export interface VerifyRecord {
   /**
-   * `users.id` of the matched row, returned by migration 20260101000017.
+   * `users.id` of the matched row, returned by the current verify_visitor.
    *
    * The server route needs it to provision a login and mint a session. It is
    * deliberately NOT forwarded to the browser - `shownRecord` in
@@ -157,7 +157,7 @@ export interface VerifyRecord {
   programme: string | null;
   course_id: string | null;
   /**
-   * Nullable since migration 20260101000014: a roster row with no address on
+   * Nullable in the current schema: a roster row with no address on
    * file has no email. The route still signs this person in - it derives a
    * synthetic login address from the profile id - so a missing address is no
    * longer a reason to turn anyone away.
@@ -166,7 +166,7 @@ export interface VerifyRecord {
   /** False when there is no address on file. Informational only. */
   has_email: boolean;
   /**
-   * Migration 20260101000015: approved, or already a signed-in account. Absent
+   * `recognized`: approved, or already a signed-in account. Absent
    * on an un-migrated database, which is read as false (fail safe -> review).
    */
   recognized?: boolean;
@@ -217,13 +217,13 @@ export type VerifyOutcome =
 /**
  * Resolves who somebody claims to be.
  *
- * IDENTIFICATION ONLY - this does not authenticate. See the header of migration
- * 20260101000013 for why name and course cannot stand in for a credential.
+ * IDENTIFICATION ONLY - this does not authenticate. See full_setup.sql
+ * for why name and course cannot stand in for a credential.
  *
  * Keyed on first + last name and course rather than email, because the visitor
  * picks a course from a list instead of typing an address. The database matches
  * the first and last WORD of the stored full name, so a visitor may omit their
- * middle name (see migration 20260101000017). The returned record still carries
+ * middle name (see verify_visitor in full_setup.sql). The returned record still carries
  * the email, and that - never anything the caller supplied - is where the sign-in
  * goes. So a visitor cannot redirect their own sign-in by typing a different
  * address here.
@@ -311,10 +311,35 @@ export type VerifyLoginResponse =
     }
   | { kind: 'declined'; record: VerifyLoginRecord }
   | { kind: 'review'; record: VerifyLoginRecord }
+  /**
+   * The record is valid, but the pass date has passed. No session is minted:
+   * an expired pass is a business rule, not an authentication failure.
+   */
+  | { kind: 'expired'; record: VerifyLoginRecord }
   | { kind: 'not-found' }
   | { kind: 'ambiguous' }
   | { kind: 'unavailable'; message: string }
   | { kind: 'error'; message: string };
+
+/**
+ * True when a pass date is before the start of today.
+ *
+ * Compared against the start of today rather than the current instant, so a
+ * pass that expires "on the 10th" stays usable for the whole of the 10th. A
+ * null date means the pass never expires. Mirrors `isPassExpired` in
+ * `store/usersStore.ts`, but takes the raw value the database returns so the
+ * server can make the same decision without importing client state.
+ */
+export function isPassDateExpired(
+  validUntil: string | null | undefined,
+  now = new Date()
+): boolean {
+  if (!validUntil) return false;
+  const expiry = new Date(validUntil);
+  if (Number.isNaN(expiry.getTime())) return false;
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return expiry.getTime() < startOfToday.getTime();
+}
 
 /**
  * Verifies a first + last name and a course, and when the record is approved,

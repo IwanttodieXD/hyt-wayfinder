@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import {
   decideVerification,
+  isPassDateExpired,
   verifyVisitor,
   type VerifyLoginRecord,
   type VerifyLoginResponse,
@@ -73,7 +74,7 @@ function getServiceClient() {
  * Anon client, used ONLY for the `verify_visitor` lookup.
  *
  * The lookup is granted to `anon` / `authenticated` and deliberately NOT to
- * `service_role` (see migration 20260101000013, which revokes PUBLIC and grants
+ * `service_role` (see full_setup.sql, which revokes PUBLIC and grants
  * those two roles). Calling it with the service client therefore fails with
  * "permission denied for function verify_visitor". The service key is still what
  * mints the session below.
@@ -123,7 +124,7 @@ function syntheticEmailFor(id: string): string {
  * (`auth.uid() = user_id`) and what makes the check-in page resolve the person.
  *
  * Relies on the fixed `handle_new_user` trigger treating the already-present
- * profile row as a no-op (migration 20260101000016); without it the create
+ * profile row as a no-op (full_setup.sql); without it the create
  * fails and the caller reports the failure rather than a false success.
  *
  * Returns true only when a login now exists (created, or already there).
@@ -236,9 +237,41 @@ export async function POST(request: Request) {
     return NextResponse.json({ kind: 'review', record: shown } satisfies VerifyLoginResponse);
   }
 
-  // Approved / recognized. The lookup already returned the profile's id and the
-  // address on file, so there is no second query to resolve them - the matched
-  // row IS the profile.
+  // Approved / recognized. Before minting a session, enforce the pass date.
+  // This is the same rule the scanner and login page apply, but checking it
+  // here means an expired person is never handed a working session in the
+  // first place. The lookup function predates `valid_until`, so the profile is
+  // read directly with the service client.
+  const { data: passRow, error: passError } = await service
+    .from('users')
+    .select('valid_until')
+    .eq('id', record.id)
+    .maybeSingle();
+
+  if (passError) {
+    // An un-migrated database has no `valid_until` column. Treat that as "no
+    // expiry rule" rather than blocking every visitor; any other failure is a
+    // real infrastructure problem, so refuse to mint a session this time.
+    if (passError.code === '42703') {
+      console.warn(
+        'verify: users.valid_until is missing; skipping the pass-date check.'
+      );
+    } else {
+      console.error('verify: could not read the pass date:', passError);
+      return NextResponse.json(
+        { kind: 'error', message: SIGN_IN_FAILED } satisfies VerifyLoginResponse,
+        { status: 500 }
+      );
+    }
+  } else if (passRow && isPassDateExpired(passRow.valid_until as string | null)) {
+    return NextResponse.json({
+      kind: 'expired',
+      record: shown,
+    } satisfies VerifyLoginResponse);
+  }
+
+  // The lookup already returned the profile's id and the address on file, so
+  // there is no second query to resolve them - the matched row IS the profile.
   //
   // A profile with no address still gets a login: a synthetic, non-deliverable
   // address derived from its id. The token is redeemed server-side, so nothing

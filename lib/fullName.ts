@@ -10,7 +10,8 @@
  * `name` is deliberately NOT a generated column and is not derived in the
  * database. The roster rows hold full middle names ("Gemmalyn Ocbina Aranda"),
  * and recomputing from an initial would rewrite them all to "Gemmalyn O.
- * Aranda" and throw the middle name away. See migration 20260101000019.
+ * Aranda" and throw the middle name away. See the name-part columns in
+ * full_setup.sql.
  */
 
 /**
