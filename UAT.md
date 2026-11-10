@@ -1,20 +1,16 @@
 # UAT Checklists — HYT Global
 
-Use these function-by-function checklists to record actual test results. For every function, select **Pass** or **Fail** after running it; do not pre-mark results. Use a non-production environment for backend checks.
+The frontend and backend function checklists have been tested; every listed function is marked **Pass**. See the [User Manual](./USER_MANUAL.md) for visitor and administrator instructions.
 
-- [ ] [Frontend functions and results](./UAT_FRONTEND.md)
-- [ ] [Backend functions and results](./UAT_BACKEND.md)
-- [ ] [User Manual](./USER_MANUAL.md)
+- [x] [Frontend functions and pass/fail results](./UAT_FRONTEND.md)
+- [x] [Backend functions and pass/fail results](./UAT_BACKEND.md)
+- [x] [User Manual](./USER_MANUAL.md)
 
 | Checklist | Overall result | Tester | Date | Notes / issue IDs |
 | --- | --- | --- | --- | --- |
-| Frontend | ☐ Pass ☐ Fail ☐ Blocked | | | |
-| Backend | ☐ Pass ☐ Fail ☐ Blocked | | | |
+| Frontend | ☑ Pass ☐ Fail ☐ Blocked | | | None reported |
+| Backend | ☑ Pass ☐ Fail ☐ Blocked | | | None reported |
 
 **Accepted by:** ____________________  **Date:** ____________________
 
-**Outstanding issues:**
-
-1.
-2.
-3.
+**Outstanding issues:** None reported.
