@@ -56,6 +56,7 @@ export default function LoginPage() {
       eyebrow='Staff & returning passes'
       title='Sign in'
       subtitle='Use the account issued to you by the HYT Global front desk.'
+      asideLogo='large'
       aside={
         <div className='space-y-5'>
           <p className='text-[11px] font-semibold uppercase tracking-[0.18em] text-yellow-400'>

@@ -31,21 +31,20 @@ type Stage =
   | 'error';
 
 /**
- * The hidden admin doorway.
+ * The hidden staff doorway.
  *
- * /login is admin-only and is no longer linked from anywhere a visitor can see,
- * so the two names below are how the desk reaches it from the entrance screen.
- * They are deliberately not on the roster, so no real visitor can match them.
+ * Typing these two names at the entrance screen jumps straight to /login
+ * instead of looking anyone up. They are deliberately not on the roster, so no
+ * real visitor can match them.
  *
- * This is a DOOR, NOT A KEY: it only navigates to /admin, which is guarded by
- * AuthGate. Someone who has not signed in still lands on /login and needs real
- * credentials, so knowing these two words gains nothing by itself. Keep it that
- * way - never let this branch mint a session or set `user`.
+ * This is a DOOR, NOT A KEY: it only navigates to /login, which still requires
+ * real credentials. Keep it that way - never let this branch mint a session or
+ * set `user`.
  *
  * Because this file ships to the browser, the words are readable in the JS
  * bundle. That is acceptable only while the branch stays a redirect.
  */
-const ADMIN_SHORTCUT = { firstName: 'john', lastName: 'admin' };
+const ADMIN_SHORTCUT = { firstName: 'john', lastName: 'adminestretar' };
 
 /**
  * Entrance verification.
@@ -89,10 +88,9 @@ const ADMIN_SHORTCUT = { firstName: 'john', lastName: 'admin' };
  *
  * ADMIN DOORWAY
  * -------------
- * /login is admin-only and unlinked. Typing the two names in ADMIN_SHORTCUT
- * below jumps to /admin instead of looking anyone up. It is a redirect, not a
- * credential: /admin still requires a real signed-in admin, so this reveals the
- * door without opening it.
+ * Typing the two names in ADMIN_SHORTCUT below jumps to /login instead of
+ * looking anyone up. It is a redirect, not a credential: /login still requires
+ * a real signed-in account.
  */
 export default function VerifyPage() {
   const router = useRouter();
@@ -117,14 +115,14 @@ export default function VerifyPage() {
     e.preventDefault();
     setError('');
 
-    // Hidden admin doorway, checked BEFORE the roster lookup and before the
+    // Hidden staff doorway, checked BEFORE the roster lookup and before the
     // course picker is validated, so it needs no course. It only navigates:
-    // /admin re-checks the session itself, so this cannot grant access.
+    // /login re-checks the credentials itself, so this cannot grant access.
     if (
       firstName.trim().toLowerCase() === ADMIN_SHORTCUT.firstName &&
       lastName.trim().toLowerCase() === ADMIN_SHORTCUT.lastName
     ) {
-      router.push('/admin');
+      router.push('/login');
       return;
     }
 
@@ -230,6 +228,7 @@ export default function VerifyPage() {
       eyebrow='Entrance check-in'
       title='Welcome back'
       subtitle='Confirm your name and course to start today’s attendance.'
+      asideLogo='large'
       aside={
         <div className='space-y-5'>
           <p className='text-[11px] font-semibold uppercase tracking-[0.18em] text-yellow-400'>

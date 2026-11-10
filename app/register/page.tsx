@@ -395,6 +395,7 @@ export default function RegisterPage() {
       title='Create your pass'
       subtitle='Register once, then check in at the entrance with your name and course.'
       size='lg'
+      asideLogo='none'
       aside={
         <div className='space-y-5'>
           <Badge tone='brand' icon='fa-graduation-cap'>

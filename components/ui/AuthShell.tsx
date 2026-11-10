@@ -10,6 +10,14 @@ interface AuthShellProps {
   subtitle?: string;
   /** Optional explanatory column shown beside the card on wide screens. */
   aside?: ReactNode;
+  /**
+   * Logo shown above the aside column, outside the form card.
+   *
+   * `brand` is the small mark with the "HYT Global" wordmark beside it.
+   * `large` is a big, left-aligned, bare logo with no text attached.
+   * `none` removes it (used where the aside should start with its content).
+   */
+  asideLogo?: 'brand' | 'large' | 'none';
   children: ReactNode;
   footer?: ReactNode;
   cardClassName?: string;
@@ -32,6 +40,7 @@ export default function AuthShell({
   title,
   subtitle,
   aside,
+  asideLogo = 'brand',
   children,
   footer,
   cardClassName,
@@ -56,19 +65,30 @@ export default function AuthShell({
         >
           {aside && (
             <aside className='hidden lg:block'>
-              <div className='mb-8 flex items-center gap-3'>
-                <div className='flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl border border-navy-700 bg-navy-900'>
+              {asideLogo === 'brand' && (
+                <div className='mb-8 flex items-center gap-3'>
+                  <div className='flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl border border-navy-700 bg-navy-900'>
+                    <img
+                      src='/hyt_logo.png'
+                      alt='HYT Global'
+                      className='h-full w-full object-contain'
+                    />
+                  </div>
+                  <div>
+                    <p className='text-sm font-bold text-white'>HYT Global</p>
+                    <p className='text-xs text-navy-400'>Trainee check-in</p>
+                  </div>
+                </div>
+              )}
+              {asideLogo === 'large' && (
+                <div className='mb-8 flex h-48 w-48 items-center justify-center xl:h-56 xl:w-56'>
                   <img
                     src='/hyt_logo.png'
                     alt='HYT Global'
                     className='h-full w-full object-contain'
                   />
                 </div>
-                <div>
-                  <p className='text-sm font-bold text-white'>HYT Global</p>
-                  <p className='text-xs text-navy-400'>Trainee check-in</p>
-                </div>
-              </div>
+              )}
               {aside}
             </aside>
           )}
