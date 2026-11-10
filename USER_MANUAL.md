@@ -1,314 +1,169 @@
 # HYT-Global VMS — User Manual
 
-A guide to using the HYT-Global VMS visitor management system. It covers the visitor
-journey first, then the administrator tools.
+This guide covers the visitor journey and administrator tools in the current HYT Wayfinder application. For acceptance testing, see the [Frontend UAT](./UAT_FRONTEND.md) and [Backend UAT](./UAT_BACKEND.md); [UAT.md](./UAT.md) links to both.
 
 ---
 
 ## 1. What the system does
 
-HYT-Global VMS replaces the paper sign-in sheet with two separate records:
+The system keeps two kinds of visit records separate:
 
-1. **Attendance — who is in the building.** One QR code at the ground floor
-   entrance. Scanning it checks a visitor in; scanning it again checks them out.
-2. **Room presence — who is in which room.** One QR code on each room door.
-   Scanning it records that the visitor entered that room. It never affects
-   attendance.
+1. **Attendance** records whether a visitor is in the building. Scan the single entrance QR code to start attendance; scan it again to check out.
+2. **Room visits** record which room a checked-in visitor is in. Scan a room-door QR code to enter a room. A room scan never starts or ends attendance.
 
-Keeping the two apart means a room scan can never accidentally check someone out
-of the building, and "who is in Room 304 right now" is based on real scans.
+Scanning another room moves the open room visit. Scanning the room you are already in again closes that room visit. When checking out while recorded in a room, the app asks for confirmation before closing both records.
 
 ---
 
-## 2. Roles
+## 2. Roles and visitor types
 
-| Role | What they can do |
+| Role | Access |
 | --- | --- |
-| **Visitor** | Register, sign in, check in/out, scan room doors, see their own visit status |
-| **Admin** | Everything a visitor can do, plus the dashboard, records, room visits, occupancy, room management, user management and form options |
+| **Visitor** | Verify or register, sign in, check in/out, scan room doors, and view their own visit status |
+| **Admin** | Visitor capabilities plus the dashboard, records, room occupancy, room/user management, form options and QR station |
 
-There is exactly **one administrator** account. It is created once by the
-database owner and cannot be duplicated or edited from the normal user screen.
+There is one administrator account. It is provisioned by the database owner; the visitor-management screen does not create or manage admins.
 
-Visitor types (Trainee, Trainer, VIP, Guest, Contractor, Intern, Observer) are
-descriptive labels, not permissions. They do not change what a person can do.
+Visitor types such as Trainee, Trainer, VIP, Guest, Contractor, Intern and Observer describe a visitor. They do not grant different permissions.
 
 ---
 
 ## 3. Visitor guide
 
-### 3.1 Before you arrive
+### 3.1 Verify a roster record or register
 
-The front desk may register you, or you can register yourself at `/register`.
+At the entrance, open `/verify` (the entrance poster may link there). Enter the first name, last name and course associated with the roster record.
 
-To register yourself:
+- An eligible approved/recognized record is verified by the server, which establishes a session and sends you to `/check-in`. Check-in starts automatically there; no email link is sent.
+- A pending or declined record is not checked in. Follow the on-screen instruction and contact the front desk.
+- An expired roster pass cannot start a new visit. Ask the front desk to renew it.
+- If no record matches, or more than one record matches, follow the on-screen instructions. An ambiguous match is sent to the front desk rather than selecting someone else's record.
+- A roster record does not need an email address for this verification flow.
 
-1. Open the HYT-Global VMS link given to you by the front desk.
-2. Choose **Register** / **Create your pass**.
-3. Enter your first name, last name, middle initial (optional), email, contact
-   number, course, visitor type, purpose and assigned room.
-4. Submit. If email confirmation is enabled, check your inbox and confirm the
-   address.
-5. Sign in with the email and password you chose.
+If you are a new visitor, choose **Register for a pass** or open `/register`. Complete the requested profile and visit-intent fields, including course, visitor type, purpose and assigned room. Self-registration gives the pass an end date of the registering day. Follow the confirmation and sign-in instructions shown by the app. Do not register a second time if the front desk says a roster record already exists.
 
-Your pass is valid for the registering day by default. The front desk can extend
-it for longer stays.
+### 3.2 Check in at the entrance
 
-> If you were part of a pre-loaded orientation cohort, the office may already
-> have your record. Confirm your details with the front desk instead of
-> registering twice.
+Visitors can also sign in at `/login` with their account credentials. On `/check-in`, allow camera access and scan the entrance poster. A successful scan starts attendance. The screen shows your current status, assigned room (if any), and the next step.
 
-### 3.2 Entering the building
-
-1. At the ground floor entrance, scan the attendance QR code with your phone, or
-   open `/verify` and confirm your **first name**, **last name** and **course**.
-2. If your record is clear, follow the sign-in link or continue to `/check-in`.
-3. On the check-in screen, scan the entrance code if it is not already scanned.
-   Your attendance visit starts.
-4. Your assigned room and purpose are shown on the screen.
-
-The entrance code looks like:
+The attendance code is:
 
 ```text
 HYT-KIOSK-CHECKIN-STATION
 ```
 
-### 3.3 Entering a room
+Keep this code at the ground-floor entrance only. It is the only QR code that starts or ends attendance.
 
-1. While checked in, scan the QR code posted on the room door.
-2. The system records that you are inside that room.
-3. Scanning a different room moves you: the previous room closes and the new one
-   opens.
-4. Scanning the same room again closes your visit to that room.
+### 3.3 Record a room visit
 
-Room codes look like:
+While checked in, scan the QR code on the room door. The app confirms the room it recorded. To move rooms, scan the new room's code. Scanning the same room again closes that room visit. Room scans require active attendance; if you are not checked in, the app refuses the scan and tells you to scan the entrance code first.
+
+A current room code looks like:
 
 ```text
 HYT-ROOM-01:ROOM-304
 ```
 
-Older posters printed as `HYT-KIOSK-01-CHECKIN-STATION:ROOM-304` still work.
+Some older room posters use a legacy format and are still accepted by the current scanner. Replace damaged or unreadable posters by printing the current code from `/station`.
 
-> A room scan requires an active attendance visit. If you have not checked in at
-> the entrance, the scan is refused.
+### 3.4 Check out
 
-### 3.4 Leaving the building
+Scan the entrance code again when leaving. If the app records you in a room, it names that room and asks whether you want to check out:
 
-1. Scan the ground floor attendance code again.
-2. If you are still recorded inside a room, the app names that room and asks you
-   to confirm.
-3. Confirm to close both the room visit and the attendance visit.
-4. Cancel to stay checked in and in the room.
+- **Confirm** to end attendance and close the open room visit.
+- **Cancel** to remain checked in and recorded in that room.
 
-### 3.5 If your pass has expired
+If you are not recorded in a room, the entrance scan checks you out directly.
 
-If your pass expires, signing in shows `/pass-expired`. Your record and previous
-visits are kept, but new check-ins are paused. Ask the front desk to renew the
-pass.
+### 3.5 Expired pass
 
-### 3.6 Common messages
+An expired pass pauses new check-ins and room scans. It does not erase your account or visit history, and expiration alone does not mean your account has been archived. Ask the front desk or administrator to renew the pass. Once it is renewed, sign in again if requested.
 
-| Message | Meaning | What to do |
+### 3.6 Common scanner messages
+
+| Message or situation | Meaning | What to do |
 | --- | --- | --- |
-| "Check in at the entrance first" | You scanned a room without an active attendance visit | Scan the ground floor code first |
-| "Not an HYT QR code" | The code is not one of ours | Use the official poster or ask the front desk |
-| "Awaiting review" | Your orientation record is not yet approved | Go to the front desk |
-| "No email on file" | The office has no address for you | Ask the front desk to add one |
-| "Your pass has expired" | The pass end date has passed | Ask the front desk to renew it |
+| Check in at the entrance first | There is no active attendance visit | Scan the ground-floor entrance code |
+| Not an HYT QR code | The scanned value is not a recognized attendance or room code | Use an official poster or ask the front desk |
+| Room code not recognized | The code does not resolve to a configured room | Ask an admin to check the room and poster |
+| Pass expired | New visit actions are paused | Ask the front desk to renew your pass |
+| Camera permission denied | The browser cannot use the camera | Allow camera access in browser settings and retry |
 
 ---
 
 ## 4. Administrator guide
 
-### 4.1 Signing in
+### 4.1 Sign in and navigate
 
-Open `/login` and use the administrator account issued to you. Visitors cannot
-reach admin pages; the app redirects them away.
+Open `/login` with the administrator account. Visitors cannot access admin pages. Main routes include:
 
-The admin console is organised into four groups:
+| Route | Purpose |
+| --- | --- |
+| `/admin` | Dashboard and current activity |
+| `/admin/records` | Building attendance history and exports |
+| `/admin/room-records` | Room visit history |
+| `/occupancy` | Current room occupancy; expand a room to see its occupants |
+| `/admin/rooms` | Add, rename, deactivate and reactivate rooms |
+| `/admin/users` | Manage visitor accounts and pass dates |
+| `/admin/lookups` | Manage purposes, visitor types and courses |
+| `/station` | Display and print entrance and room QR codes |
 
-- **Overview** — Dashboard
-- **Activity** — Attendance Records, Room Visits, Room Occupancy
-- **Manage** — Manage Rooms, Manage Users, Form Options
-- **Tools** — QR Station
+### 4.2 Dashboard, occupancy and records
 
-### 4.2 Dashboard
+Use `/admin` for an overview of current building activity. `/occupancy` shows who is currently recorded in each room; click a room to expand its occupant list. Attendance is listed separately at `/admin/records`. Room entry history is listed at `/admin/room-records` and is linked to the attendance visit under which it occurred.
 
-`/admin` shows:
+Attendance records provide search/filtering and export options. Database-derived status and duration are not editable fields.
 
-- how many people are currently in the building;
-- which rooms are occupied and by whom;
-- recent check-ins and check-outs.
+### 4.3 QR station and posters
 
-Use it as the at-a-glance view during an event.
+`/station` displays the one attendance code and the codes for active rooms. Print the entrance code once for the ground-floor entrance and one room code for each active room door. The attendance code must not be used as a room-door poster. Reprint damaged or outdated room posters from the station.
 
-### 4.3 QR Station
+### 4.4 Manage rooms
 
-`/station` is the lobby kiosk. It displays:
+At `/admin/rooms`, add a room with its number, display name and floor; rename it; or deactivate/reactivate it. Deactivated rooms are omitted from active pickers, while historical visits remain associated with the room. Rooms are not deleted through the UI.
 
-- the **attendance code** to print and post at the ground floor entrance;
-- one **room code** per active room, to print and post on each door;
-- a live headcount per room on the room posters.
+The seeded rooms are Room 201, Room 202, Rooms 301–304, Rooms 401–404 and Roofdeck. The Hilot and Massage course defaults map to Room 101 if that room is added.
 
-Print the attendance code exactly once. Print one room code per room. If a poster
-is damaged, reprint it from `/station`.
+### 4.5 Manage visitors
 
-### 4.4 Attendance records
+At `/admin/users`, search, filter and sort visitor accounts. Admins can create and edit visitors, adjust their profile/visit-intent fields and pass expiry, and archive or restore accounts. Archiving retains visit history. The admin account is not managed from this screen.
 
-`/admin/records` lists every building check-in and check-out.
+Creating or archiving requires the server-side `SUPABASE_SERVICE_ROLE_KEY`. Never expose this key in browser code or name it with the `NEXT_PUBLIC_` prefix. A pass date left blank for an admin-created visitor means no expiry; an explicitly supplied date is retained. Self-registration defaults to the end of that day.
 
-- Search by visitor name or course.
-- Filter by date and status.
-- Export the current view to CSV or PDF.
-- Duration and status are calculated by the database; they cannot be edited.
+### 4.6 Manage form options
 
-Use this page to answer "who was in the building, and when".
+At `/admin/lookups`, manage purposes, visitor types and courses. Active options appear in relevant forms. Renaming an item preserves the linked history. If an item is referenced by records, deletion may be rejected by database constraints; deactivate it instead where appropriate. Courses can have a default room assignment.
 
-### 4.5 Room visits
+### 4.7 Entrance verification
 
-`/admin/room-records` lists room entries grouped by room, with dates and
-durations. Each room visit is linked to the attendance visit it happened under,
-so a person's full trail is reconstructable: building → rooms → building exit.
-
-### 4.6 Room occupancy
-
-`/occupancy` shows who is inside each room right now. Click a room to expand the
-list of people currently recorded there.
-
-### 4.7 Managing rooms
-
-`/admin/rooms` lets you:
-
-- **Add** a room with its room number, display name and floor.
-- **Rename** a room. History stays linked because visits reference the room by
-  id, not by name.
-- **Deactivate** a room. It disappears from the registration and admin pickers,
-  but past visits remain.
-- **Reactivate** a room when it is available again.
-
-Rooms are never deleted, so visit history is never destroyed.
-
-The seeded rooms are Room 201, Room 202, Rooms 301–304, Rooms 401–404 and
-Roofdeck. If you use the Hilot or Massage courses, create **Room 101** so their
-default room mapping takes effect.
-
-### 4.8 Managing users
-
-`/admin/users` lists visitor accounts.
-
-**Finding someone**
-
-- Search by name or email.
-- Filter by role, visitor type, course or pass status.
-- Sort by name, course or pass expiry.
-
-**Creating an account**
-
-1. Choose **Add user**.
-2. Enter the visitor's details, course, visitor type, purpose and assigned room.
-3. Set a pass expiry date, or leave the field empty for a one-day pass.
-4. Save. The login and profile are created together.
-
-Creating and archiving require `SUPABASE_SERVICE_ROLE_KEY` to be configured on
-the server. Without it, those actions return a clear error and read/update still
-work.
-
-**Editing an account**
-
-Open the visitor and change their details, classification, assigned room or pass
-expiry. Save. Changes persist immediately.
-
-**Renewing a pass**
-
-Use the pass expiry control to set a new end date. The expired flag clears as
-soon as the new date is in the future.
-
-**Archiving and restoring**
-
-Archiving hides an account from active lists but keeps all attendance and room
-history. Restore it if the person returns.
-
-The administrator account is hidden from this page on purpose. It cannot be
-edited, archived or duplicated here.
-
-### 4.9 Form options
-
-`/admin/lookups` manages the three lookup lists used across the forms:
-
-- **Purposes** — why someone is visiting (Interview, Orientation, Meeting, …)
-- **Visitor types** — Trainee, Trainer, VIP, Guest, Contractor, Intern, Observer
-- **Courses** — the programmes offered by the institute
-
-You can add, rename, deactivate and delete items.
-
-- Deleting an item that is referenced by attendance is refused. Deactivate it
-  instead: it disappears from the pickers but stays on historical records.
-- Renaming an item keeps history intact.
-- Courses also carry a default room. Set it when you want visitors on that
-  course to be assigned a room automatically.
-
-### 4.10 Pass expiry
-
-Every visitor has a pass end date.
-
-- **Self-registration** defaults to the end of the registering day.
-- **Admin-created accounts** use the date you choose.
-- **No date / NULL** means the pass never expires.
-- A pass is valid for the whole of its expiry day.
-
-Expired passes are refused at sign-in and check-in, but attendance history is
-kept. Renew the pass to let the person back in.
-
-### 4.11 Entrance verification
-
-The public `/verify` page lets a person confirm their first name, last name and
-course. It shows one of three verdicts:
-
-- **Approved / recognized** — offer the sign-in path.
-- **Awaiting review** — send them to the front desk.
-- **Declined** — no entry.
-
-This page is identification only. It never hands out a session just because
-someone typed a name. If a record has no email on file, the page sends the person
-to the front desk instead of promising a link that cannot arrive.
+`/verify` matches first name, last name and course against roster data. It is not a visitor-facing email-link flow: for an eligible record, the server verifies the record and establishes a session, then the visitor is sent to `/check-in`, where attendance starts automatically. Pending, declined, expired, unknown and ambiguous results follow separate outcomes. Apply the project's approved identity-verification procedures when operating this flow.
 
 ---
 
-## 5. Troubleshooting
+## 5. Setup and troubleshooting
 
-| Problem | Likely cause | Fix |
+Use the repository's [README](./README.md), [Supabase setup](./SUPABASE_SETUP.md) and [Vercel deployment guide](./VERCEL_DEPLOYMENT.md) for deployment instructions. The current fresh-project schema setup is `supabase/migrations/20260101000000_full_setup.sql`. Required Supabase client variables are `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`; admin account creation/archive also needs server-only `SUPABASE_SERVICE_ROLE_KEY`. Configure `NEXT_PUBLIC_APP_URL` as required by the deployment and printed QR URL setup.
+
+| Problem | Likely cause | Next step |
 | --- | --- | --- |
-| Room or purpose picker is empty before sign-in | Database setup not applied, or read policy missing | Run `supabase/migrations/20260101000000_full_setup.sql` |
-| "Permission denied for table users" | Service role key missing, or grants not applied | Set `SUPABASE_SERVICE_ROLE_KEY`; re-run the setup file |
-| Create/archive user returns 501 | Service role key missing | Add the key to the server environment and restart |
-| New table not visible in the API | PostgREST schema cache | Run `NOTIFY pgrst, 'reload schema';` |
-| Can't add a second admin | Enforced by design | Use the single existing admin |
-| Room scan refused | No active check-in | Scan the ground floor entrance code first |
-| Visitor can't sign in | Expired pass, unconfirmed email, or no email on file | Renew the pass, confirm the address, or add an email |
-| Old room poster not recognised | Damaged or non-HYT code | Reprint from `/station` |
+| Room or purpose picker is empty | Database setup or lookup read access is missing | Check the schema setup and Supabase policies |
+| Admin create/archive reports a configuration error | Server role key is missing or unavailable | Check server environment configuration; never put the key in the browser |
+| Room scan is refused | No active attendance, or code is not mapped to an active/configured room | Scan the entrance code first or ask an admin to check the room/poster |
+| Verification reports ambiguous match | More than one roster person matches the supplied name and course | Ask the front desk to identify the correct record |
+| Visitor pass has expired | Pass date is no longer valid for new visit actions | Have an admin renew it |
+| Camera does not start | Permission denied, unsupported camera, or insecure origin | Allow permission and use HTTPS or localhost |
 
 ---
 
 ## 6. Good practices
 
-- Keep the attendance code posted at the entrance and nowhere else.
-- Print one room code per room and replace damaged posters from `/station`.
-- Check the dashboard at the start and end of each event to catch anyone still
-  checked in.
-- Renew passes before an event rather than during check-in.
-- Archive accounts when people leave; do not try to delete them.
-- Deactivate unused rooms and lookups instead of deleting them, so history stays
-  readable.
-- Export attendance records after each event for your paper/audit file.
-
----
+- Keep the attendance poster at the entrance and room posters on their corresponding doors.
+- Check the dashboard and occupancy at the start and end of an event.
+- Renew visitor passes before the next visit when possible.
+- Archive visitors who should no longer have access; do not remove historical visit records.
+- Deactivate unused rooms and lookup options rather than deleting referenced data.
+- Export attendance records as needed for the event's audit process.
 
 ## 7. Getting help
 
-Contact the HYT Global front desk or the system administrator. When reporting a
-problem, include:
-
-- the page or QR code involved;
-- the exact message shown;
-- the visitor's name (if relevant);
-- the date and time.
+Contact the HYT Global front desk or system administrator. Include the page or QR code involved, the exact message shown, the date/time, and the visitor's name only when needed and through an approved channel.
