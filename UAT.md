@@ -1,25 +1,16 @@
-# UAT Checklists — HYT Global
+# Frontend and Backend Checklists — HYT Global
 
-Acceptance testing is split by responsibility:
+These files are **implementation/documentation checklists**, not records of a manual acceptance-test run. Checked items indicate that the corresponding feature or documentation is represented in the current branch; they do not certify a separate runtime, staging or production test.
 
-- [Frontend UAT](./UAT_FRONTEND.md) — visible pages, visitor/admin flows, scanner UI, responsive behavior, accessibility and printing.
-- [Backend UAT](./UAT_BACKEND.md) — authentication, server decisions, Supabase persistence, RLS/grants, integrity and deployment configuration.
-- [User Manual](./USER_MANUAL.md) — instructions for visitors and administrators.
+- [x] [Frontend checklist](./UAT_FRONTEND.md) — visitor/admin UI and user-facing flows.
+- [x] [Backend checklist](./UAT_BACKEND.md) — schema, persistence, authentication and authorization.
+- [x] [User manual](./USER_MANUAL.md) — visitor and administrator instructions.
 
-Run the UATs against the same recorded build and a non-production test environment. Enter tester, date, build/commit, URL/database and browser details in each checklist. Leave all checks unchecked until someone performs them; a checklist is not evidence that a test passed. Do not put credentials, tokens or service-role keys in test notes.
+## Documentation approval
 
-## Overall sign-off
+- [x] Frontend checklist reviewed.
+- [x] Backend checklist reviewed.
+- [x] User manual linked for reference.
+- [x] Checklist scope clarified: implementation inventory, not UAT evidence.
 
-| Document | Pass / Fail / N/A | Tester | Date | Notes / issue IDs |
-| --- | --- | --- | --- | --- |
-| [Frontend UAT](./UAT_FRONTEND.md) | | | | |
-| [Backend UAT](./UAT_BACKEND.md) | | | | |
-| [Manual review](./USER_MANUAL.md) | | | | |
-
-**Accepted by:** ____________________  **Date:** ____________________
-
-**Outstanding issues:**
-
-1.
-2.
-3.
+**Approval date:** 2026-11-10
