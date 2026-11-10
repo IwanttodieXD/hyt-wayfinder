@@ -1,16 +1,20 @@
-# Frontend and Backend Checklists — HYT Global
+# UAT Checklists — HYT Global
 
-These files are **implementation/documentation checklists**, not records of a manual acceptance-test run. Checked items indicate that the corresponding feature or documentation is represented in the current branch; they do not certify a separate runtime, staging or production test.
+Use these function-by-function checklists to record actual test results. For every function, select **Pass** or **Fail** after running it; do not pre-mark results. Use a non-production environment for backend checks.
 
-- [x] [Frontend checklist](./UAT_FRONTEND.md) — visitor/admin UI and user-facing flows.
-- [x] [Backend checklist](./UAT_BACKEND.md) — schema, persistence, authentication and authorization.
-- [x] [User manual](./USER_MANUAL.md) — visitor and administrator instructions.
+- [ ] [Frontend functions and results](./UAT_FRONTEND.md)
+- [ ] [Backend functions and results](./UAT_BACKEND.md)
+- [ ] [User Manual](./USER_MANUAL.md)
 
-## Documentation approval
+| Checklist | Overall result | Tester | Date | Notes / issue IDs |
+| --- | --- | --- | --- | --- |
+| Frontend | ☐ Pass ☐ Fail ☐ Blocked | | | |
+| Backend | ☐ Pass ☐ Fail ☐ Blocked | | | |
 
-- [x] Frontend checklist reviewed.
-- [x] Backend checklist reviewed.
-- [x] User manual linked for reference.
-- [x] Checklist scope clarified: implementation inventory, not UAT evidence.
+**Accepted by:** ____________________  **Date:** ____________________
 
-**Approval date:** 2026-11-10
+**Outstanding issues:**
+
+1.
+2.
+3.

@@ -1,50 +1,79 @@
-# Frontend Checklist — HYT Global
+# Frontend UAT Checklist — HYT Global
 
-**Status: Complete / approved** for the frontend features represented in the current `final` branch. Checked items document implemented user-facing functionality; they do not claim a separate manual UAT session was run.
+Use this checklist to test **visible application functions** in a browser. For every row, mark exactly one result after testing; leave both blank until tested. Record failures and steps to reproduce in Notes. See [Backend UAT](./UAT_BACKEND.md) for server, database and authorization checks.
 
-## Visitor experience
+| Field | Value |
+| --- | --- |
+| Tester | |
+| Date | |
+| Build / commit | |
+| Test URL | |
+| Browser / device | |
 
-- [x] Public entrance route `/` leads into the verification flow at `/verify`.
-- [x] Verification form collects first name, last name and course and presents distinct outcomes for eligible, pending, declined, expired, unknown and ambiguous records.
-- [x] New visitors can access `/register`; registration fields and lookup pickers are available.
-- [x] Visitors can sign in at `/login` and access the check-in experience.
-- [x] Protected visitor pages resolve authentication before showing protected content.
-- [x] Expired-pass messaging explains that new visit actions are paused and directs the visitor to request renewal.
-- [x] `/visitor` leads into the visitor check-in experience.
+## Visitor functions
 
-## QR and check-in interface
+| # | Function to test | Pass | Fail | Notes / issue |
+| --- | --- | :---: | :---: | --- |
+| 1 | Open `/` and reach the entrance verification page | ☐ | ☐ | |
+| 2 | Submit `/verify` with first name, last name and course | ☐ | ☐ | |
+| 3 | Submit the verification form with required fields missing and see useful validation | ☐ | ☐ | |
+| 4 | Verify an eligible roster record and reach the visitor check-in flow | ☐ | ☐ | |
+| 5 | Verify pending, declined or expired records and see the appropriate guidance | ☐ | ☐ | |
+| 6 | Verify an unknown or ambiguous record and see the appropriate next step | ☐ | ☐ | |
+| 7 | Open `/register`, load the available pickers and complete registration | ☐ | ☐ | |
+| 8 | Submit invalid registration details and receive clear feedback | ☐ | ☐ | |
+| 9 | Sign in at `/login` with valid credentials | ☐ | ☐ | |
+| 10 | Submit invalid login credentials and receive a readable error | ☐ | ☐ | |
+| 11 | Open `/check-in` and start the camera scanner when permission is available | ☐ | ☐ | |
+| 12 | Deny camera permission and receive a useful recovery message | ☐ | ☐ | |
+| 13 | Scan the entrance code while checked out and see checked-in status | ☐ | ☐ | |
+| 14 | Scan a room-door code while checked in and see room feedback | ☐ | ☐ | |
+| 15 | Scan a different room code and see the new current room | ☐ | ☐ | |
+| 16 | Scan the same room code again and see the expected already-in-room response | ☐ | ☐ | |
+| 17 | Scan the entrance code while in a room and see a confirmation naming that room | ☐ | ☐ | |
+| 18 | Cancel the check-out confirmation and remain checked in | ☐ | ☐ | |
+| 19 | Confirm check-out and see the checked-out state | ☐ | ☐ | |
+| 20 | Scan an unknown QR code and receive an understandable error | ☐ | ☐ | |
+| 21 | Toggle between camera and personal QR display | ☐ | ☐ | |
+| 22 | View visitor status, assigned-room information and next-step guidance | ☐ | ☐ | |
+| 23 | View expired-pass guidance and understand how to request renewal | ☐ | ☐ | |
 
-- [x] `/check-in` presents the camera scanner and handles camera start/error states.
-- [x] The scanner distinguishes entrance attendance codes from room-door codes and a personal QR code.
-- [x] The entrance code starts attendance when the visitor is checked out and checks out when scanned again.
-- [x] Room scans require active attendance and provide room-specific feedback.
-- [x] Scanning another room represents a room move; scanning the same room gives the already-in-room outcome.
-- [x] Checking out while recorded in a room prompts for confirmation and names the room.
-- [x] The visitor view displays attendance status, assigned-room information and next-step guidance.
-- [x] The scanner and visitor view adapt to mobile viewport sizing.
+## Administrator functions
 
-## Administrator interface
+| # | Function to test | Pass | Fail | Notes / issue |
+| --- | --- | :---: | :---: | --- |
+| 24 | Open `/admin` as an administrator and view the dashboard | ☐ | ☐ | |
+| 25 | Open `/admin/records`, search/filter records and use available exports | ☐ | ☐ | |
+| 26 | Open `/admin/room-records` and inspect room visit history | ☐ | ☐ | |
+| 27 | Open `/occupancy` and expand a room to inspect occupants | ☐ | ☐ | |
+| 28 | Open `/admin/rooms` and add or rename a test room | ☐ | ☐ | |
+| 29 | Deactivate and reactivate a room through the UI | ☐ | ☐ | |
+| 30 | Open `/admin/users` and search/filter the visitor list | ☐ | ☐ | |
+| 31 | Create or edit a test visitor through the UI | ☐ | ☐ | |
+| 32 | Archive and restore a test visitor through the UI | ☐ | ☐ | |
+| 33 | Open `/admin/lookups` and use the available purpose/type/course controls | ☐ | ☐ | |
+| 34 | Open `/station` and view the entrance and room QR codes | ☐ | ☐ | |
 
-- [x] `/admin` provides the administrator dashboard.
-- [x] `/admin/records` presents attendance records and available search/filter/export controls.
-- [x] `/admin/room-records` presents room-visit history.
-- [x] `/occupancy` presents current room occupancy with expandable room details.
-- [x] `/admin/rooms` supports room management, including deactivation/reactivation rather than UI deletion.
-- [x] `/admin/users` provides visitor management, including create/edit/archive/restore UI.
-- [x] `/admin/lookups` provides purpose, visitor-type and course management UI.
-- [x] `/station` presents attendance and room QR codes for display/printing.
-- [x] Admin navigation and protected-route behavior distinguish administrator access from visitor access.
+## Usability and presentation
 
-## Presentation and documentation
+| # | Function to test | Pass | Fail | Notes / issue |
+| --- | --- | :---: | :---: | --- |
+| 35 | Use visitor and admin pages on a phone-sized viewport | ☐ | ☐ | |
+| 36 | Use key forms and dialogs with keyboard navigation | ☐ | ☐ | |
+| 37 | Toggle the theme and confirm text and controls remain readable | ☐ | ☐ | |
+| 38 | Open an unknown route and use the recovery link on the not-found page | ☐ | ☐ | |
+| 39 | Print `/station` and confirm QR labels/layout are usable | ☐ | ☐ | |
 
-- [x] Theme controls and responsive layouts are provided by the application.
-- [x] Scanner feedback, validation and confirmation dialogs communicate key actions.
-- [x] `/station` includes a print-oriented QR layout.
-- [x] User-facing routes and flows are described in [`USER_MANUAL.md`](./USER_MANUAL.md).
-- [x] This checklist is separated from backend behavior and database/security checks.
+## Frontend sign-off
 
-## Approval
+| Result | Selection |
+| --- | --- |
+| Overall | ☐ Pass ☐ Fail ☐ Blocked |
+| Tester | |
+| Date | |
 
-- [x] Frontend feature checklist reviewed and approved for the current branch.
+**Outstanding issues / retest notes:**
 
-**Approval date:** 2026-11-10
+1.
+2.
+3.
