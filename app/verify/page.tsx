@@ -228,7 +228,7 @@ export default function VerifyPage() {
       eyebrow='Entrance check-in'
       title='Welcome back'
       subtitle='Confirm your name and course to start today’s attendance.'
-      asideLogo='large'
+      asideLogo='none'
       aside={
         <div className='space-y-5'>
           <p className='text-[11px] font-semibold uppercase tracking-[0.18em] text-yellow-400'>
