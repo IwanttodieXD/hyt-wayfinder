@@ -1,6 +1,6 @@
-# Frontend UAT Checklist — HYT Global
+# Frontend and Backend UAT Checklist — HYT Global
 
-Use this checklist to test the application's visible functions in a browser. Mark each item after testing and add details for any failure or retest.
+Use this checklist to verify both the visible application behavior and the underlying system responses for the HYT Global flow. Mark each item after testing and record any retest or issue in the notes column.
 
 | Field | Value |
 | --- | --- |
@@ -9,67 +9,84 @@ Use this checklist to test the application's visible functions in a browser. Mar
 | Build / commit | |
 | Test URL | |
 | Browser / device | |
+| API / environment | |
 
-## Visitor functions
-
-| # | Function to test | Pass | Fail | Notes / issue |
-| --- | --- | :---: | :---: | --- |
-| 1 | Open `/` and confirm the entrance verification page loads | ☐ | ☐ | |
-| 2 | Submit `/verify` with a visitor's name and course; confirm the matching visitor record is found | ☐ | ☐ | |
-| 3 | Submit verification with required fields missing; confirm the form identifies what needs attention | ☐ | ☐ | |
-| 4 | Verify an eligible visitor and confirm they can continue to check-in | ☐ | ☐ | |
-| 5 | Verify pending, declined, or expired records; confirm the page explains the visitor's status and next step | ☐ | ☐ | |
-| 6 | Verify an unknown or ambiguous record; confirm the page explains what to do next | ☐ | ☐ | |
-| 7 | Open `/register`, confirm the available selection lists load, and submit a valid registration | ☐ | ☐ | |
-| 8 | Submit invalid registration details; confirm clear validation or error feedback appears | ☐ | ☐ | |
-| 9 | Sign in at `/login` with valid credentials and confirm the visitor reaches the appropriate page | ☐ | ☐ | |
-| 10 | Sign in with invalid credentials; confirm a readable error appears and the form remains usable | ☐ | ☐ | |
-| 11 | Open `/check-in` and start the camera scanner; confirm the camera preview works when permission is granted | ☐ | ☐ | |
-| 12 | Deny camera permission; confirm the page explains the problem and offers a way to continue or retry | ☐ | ☐ | |
-| 13 | While checked out, scan the entrance QR code; confirm the visitor becomes checked in | ☐ | ☐ | |
-| 14 | While checked in, scan a room QR code; confirm the room visit is recorded and room feedback appears | ☐ | ☐ | |
-| 15 | Scan a different room QR code; confirm the current room changes to the new room | ☐ | ☐ | |
-| 16 | Scan the same room QR code again; confirm the page explains that the visitor is already in that room | ☐ | ☐ | |
-| 17 | While in a room, scan the entrance QR code; confirm the check-out prompt names the current room | ☐ | ☐ | |
-| 18 | Cancel the check-out prompt; confirm the visitor remains checked in and in the same room | ☐ | ☐ | |
-| 19 | Confirm check-out; confirm the visitor is checked out and no longer shown as occupying a room | ☐ | ☐ | |
-| 20 | Scan an unknown QR code; confirm an understandable error appears without changing visitor status | ☐ | ☐ | |
-| 21 | Switch between the camera scanner and personal QR display; confirm each view opens and can be switched back | ☐ | ☐ | |
-| 22 | View visitor status and assigned-room information; confirm the displayed details and next steps are clear | ☐ | ☐ | |
-| 23 | View an expired pass; confirm the page explains how to request renewal | ☐ | ☐ | |
-
-## Administrator functions
+## Frontend user functions
 
 | # | Function to test | Pass | Fail | Notes / issue |
 | --- | --- | :---: | :---: | --- |
-| 24 | Open `/admin` as an administrator; confirm the dashboard loads and shows current summary information | ☐ | ☐ | |
-| 25 | Open `/admin/records`; search and filter records, then use an available export | ☐ | ☐ | |
-| 26 | Open `/admin/room-records`; inspect room visit history and confirm record details are displayed | ☐ | ☐ | |
-| 27 | Open `/occupancy`; expand a room and confirm its current occupants are shown | ☐ | ☐ | |
-| 28 | Open `/admin/rooms`; add or rename a test room and confirm the change appears in the room list | ☐ | ☐ | |
-| 29 | Deactivate a test room and reactivate it; confirm its status updates in the interface | ☐ | ☐ | |
-| 30 | Open `/admin/users`; search and filter the visitor list | ☐ | ☐ | |
-| 31 | Create or edit a test visitor; confirm the saved details appear in the visitor list | ☐ | ☐ | |
-| 32 | Archive a test visitor and restore them; confirm the visitor's status updates each time | ☐ | ☐ | |
-| 33 | Open `/admin/lookups`; view and use the purpose, type, and course controls | ☐ | ☐ | |
-| 34 | Open `/station`; confirm entrance and room QR codes and their labels are displayed | ☐ | ☐ | |
+| 1 | Open `/` and confirm the entrance verification page loads correctly | ☐ | ☐ | |
+| 2 | Submit `/verify` with valid visitor details and confirm the matching record is found | ☐ | ☐ | |
+| 3 | Submit `/verify` with missing required fields and confirm validation messages appear | ☐ | ☐ | |
+| 4 | Verify a pending, declined, or expired record and confirm the correct guidance is displayed | ☐ | ☐ | |
+| 5 | Verify an unknown or ambiguous record and confirm the next step is clear | ☐ | ☐ | |
+| 6 | Open `/register`, load the available pickers, and complete a valid registration | ☐ | ☐ | |
+| 7 | Submit invalid registration data and confirm the user sees clear error feedback | ☐ | ☐ | |
+| 8 | Sign in at `/login` with valid credentials and confirm access is granted | ☐ | ☐ | |
+| 9 | Sign in with invalid credentials and confirm a readable error is shown | ☐ | ☐ | |
+| 10 | Open `/check-in` and start the camera scanner when permission is granted | ☐ | ☐ | |
+| 11 | Deny camera permission and confirm the recovery message is clear and usable | ☐ | ☐ | |
+| 12 | Scan an entrance QR code while checked out and confirm the visitor becomes checked in | ☐ | ☐ | |
+| 13 | Scan a room QR code while checked in and confirm room feedback is displayed | ☐ | ☐ | |
+| 14 | Scan a different room QR code and confirm the current room changes appropriately | ☐ | ☐ | |
+| 15 | Scan the same room QR code again and confirm the already-in-room message appears | ☐ | ☐ | |
+| 16 | Scan the entrance QR code while already in a room and confirm the checkout prompt names the room | ☐ | ☐ | |
+| 17 | Cancel the checkout prompt and confirm the visitor remains checked in | ☐ | ☐ | |
+| 18 | Confirm checkout and confirm the visitor is checked out successfully | ☐ | ☐ | |
+| 19 | Scan an unknown QR code and confirm the error message is understandable and non-destructive | ☐ | ☐ | |
+| 20 | Toggle between camera mode and personal QR display and confirm both states work | ☐ | ☐ | |
+| 21 | View visitor status and assigned room details and confirm the information is accurate and readable | ☐ | ☐ | |
+| 22 | View expired-pass guidance and confirm the request-renewal path is understandable | ☐ | ☐ | |
+| 23 | Open `/admin` and confirm the dashboard loads with the expected summary information | ☐ | ☐ | |
+| 24 | Open `/admin/records`, search/filter records, and use an available export | ☐ | ☐ | |
+| 25 | Open `/admin/room-records` and inspect room visit history for accuracy | ☐ | ☐ | |
+| 26 | Open `/occupancy`, expand a room, and confirm occupant details are displayed correctly | ☐ | ☐ | |
+| 27 | Open `/admin/rooms`, add or rename a test room, and confirm the change appears in the UI | ☐ | ☐ | |
+| 28 | Deactivate and reactivate a room and confirm the status changes are visible | ☐ | ☐ | |
+| 29 | Open `/admin/users` and search/filter the visitor list correctly | ☐ | ☐ | |
+| 30 | Create or edit a test visitor and confirm the saved data appears in the UI | ☐ | ☐ | |
+| 31 | Archive and restore a visitor and confirm status changes are reflected correctly | ☐ | ☐ | |
+| 32 | Open `/admin/lookups` and use the purpose, type, and course controls as expected | ☐ | ☐ | |
+| 33 | Open `/station` and confirm the entrance and room QR labels are visible and usable | ☐ | ☐ | |
+| 34 | Use the main visitor/admin pages on a phone-sized viewport and confirm layout remains usable | ☐ | ☐ | |
+| 35 | Navigate key forms and dialogs using a keyboard and confirm focus is visible and functional | ☐ | ☐ | |
+| 36 | Toggle the app theme and confirm text and controls remain readable | ☐ | ☐ | |
+| 37 | Open an unknown route and confirm the not-found page includes a working recovery link | ☐ | ☐ | |
+| 38 | Print `/station` and confirm QR labels and layout remain usable on paper | ☐ | ☐ | |
 
-## Usability and presentation
+## Backend and service validation
 
-| # | Function to test | Pass | Fail | Notes / issue |
+| # | Backend function to test | Pass | Fail | Notes / issue |
 | --- | --- | :---: | :---: | --- |
-| 35 | Use visitor and admin pages at a phone-sized viewport; confirm content and actions remain accessible | ☐ | ☐ | |
-| 36 | Navigate key forms and dialogs using the keyboard; confirm focus is visible and actions work | ☐ | ☐ | |
-| 37 | Toggle the theme; confirm text, controls, and status messages remain readable | ☐ | ☐ | |
-| 38 | Open an unknown route; confirm the not-found page offers a working recovery link | ☐ | ☐ | |
-| 39 | Print `/station`; confirm the QR codes, labels, and layout are usable on paper | ☐ | ☐ | |
+| 39 | Visitor verification API returns the correct status for eligible, pending, declined, expired, and unknown records | ☐ | ☐ | |
+| 40 | Registration API validates missing and invalid input and returns clear error responses | ☐ | ☐ | |
+| 41 | Login API authenticates valid users and rejects invalid credentials with the expected response | ☐ | ☐ | |
+| 42 | Check-in API creates the correct visitor status update when an entrance QR code is scanned | ☐ | ☐ | |
+| 43 | Room-scan API updates the visitor's current room when a valid room code is used | ☐ | ☐ | |
+| 44 | Duplicate room scan is handled correctly and returns the expected already-in-room response | ☐ | ☐ | |
+| 45 | Checkout API correctly ends the active visit and clears room occupancy when confirmed | ☐ | ☐ | |
+| 46 | Cancelling checkout keeps the active check-in state intact in the backend data | ☐ | ☐ | |
+| 47 | Unknown or malformed QR code requests return a safe error response without changing user state | ☐ | ☐ | |
+| 48 | Visitor status and room assignment data are consistent across pages and API responses | ☐ | ☐ | |
+| 49 | Expired pass logic correctly marks the visitor and returns the proper guidance in the response payload | ☐ | ☐ | |
+| 50 | Admin dashboard endpoints return accurate summary counts and record totals | ☐ | ☐ | |
+| 51 | Record search/filter and export endpoints return the expected data for valid queries | ☐ | ☐ | |
+| 52 | Room-visit history endpoint returns the correct visit log and room details | ☐ | ☐ | |
+| 53 | Occupancy endpoint correctly lists active occupants for each room | ☐ | ☐ | |
+| 54 | Room management API adds, updates, activates, and deactivates rooms correctly | ☐ | ☐ | |
+| 55 | Visitor management API creates, edits, archives, and restores visitors without data inconsistency | ☐ | ☐ | |
+| 56 | Lookup endpoints return valid purpose, type, and course options for the UI controls | ☐ | ☐ | |
+| 57 | Station QR-code generation endpoint returns valid entrance and room QR payloads | ☐ | ☐ | |
+| 58 | Data integrity checks confirm room, visit, and visitor tables remain consistent after each main flow | ☐ | ☐ | |
+| 59 | Error handling and logging are working for failed backend operations and invalid requests | ☐ | ☐ | |
 
-## Frontend sign-off
+## Combined sign-off
 
 | Result | Selection |
 | --- | --- |
 | Overall | ☐ Pass ☐ Fail ☐ Blocked |
-| Tester | |
+| Frontend tester | |
+| Backend tester | |
 | Date | |
 
 **Outstanding issues / retest notes:**
